@@ -12,7 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppTreinosRouteImport } from './routes/app.treinos'
+import { Route as AppNutricaoRouteImport } from './routes/app.nutricao'
+import { Route as AppTreinosIdRouteImport } from './routes/app.treinos.$id'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -29,37 +32,81 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppIndexRoute = AppIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppTreinosRoute = AppTreinosRouteImport.update({
   id: '/treinos',
   path: '/treinos',
   getParentRoute: () => AppRoute,
+} as any)
+const AppNutricaoRoute = AppNutricaoRouteImport.update({
+  id: '/nutricao',
+  path: '/nutricao',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTreinosIdRoute = AppTreinosIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppTreinosRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
-  '/app/treinos': typeof AppTreinosRoute
+  '/app/nutricao': typeof AppNutricaoRoute
+  '/app/treinos': typeof AppTreinosRouteWithChildren
+  '/app/': typeof AppIndexRoute
+  '/app/treinos/$id': typeof AppTreinosIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
-  '/app/treinos': typeof AppTreinosRoute
+  '/app/nutricao': typeof AppNutricaoRoute
+  '/app/treinos': typeof AppTreinosRouteWithChildren
+  '/app': typeof AppIndexRoute
+  '/app/treinos/$id': typeof AppTreinosIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
-  '/app/treinos': typeof AppTreinosRoute
+  '/app/nutricao': typeof AppNutricaoRoute
+  '/app/treinos': typeof AppTreinosRouteWithChildren
+  '/app/': typeof AppIndexRoute
+  '/app/treinos/$id': typeof AppTreinosIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/app' | '/auth' | '/app/treinos'
+  fullPaths:
+    | '/'
+    | '/app'
+    | '/auth'
+    | '/app/nutricao'
+    | '/app/treinos'
+    | '/app/'
+    | '/app/treinos/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/app' | '/auth' | '/app/treinos'
-  id: '__root__' | '/' | '/app' | '/auth' | '/app/treinos'
+  to:
+    | '/'
+    | '/auth'
+    | '/app/nutricao'
+    | '/app/treinos'
+    | '/app'
+    | '/app/treinos/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/app'
+    | '/auth'
+    | '/app/nutricao'
+    | '/app/treinos'
+    | '/app/'
+    | '/app/treinos/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -91,6 +138,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/app/': {
+      id: '/app/'
+      path: '/'
+      fullPath: '/app/'
+      preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/treinos': {
       id: '/app/treinos'
       path: '/treinos'
@@ -98,15 +152,45 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTreinosRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/nutricao': {
+      id: '/app/nutricao'
+      path: '/nutricao'
+      fullPath: '/app/nutricao'
+      preLoaderRoute: typeof AppNutricaoRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/treinos/$id': {
+      id: '/app/treinos/$id'
+      path: '/$id'
+      fullPath: '/app/treinos/$id'
+      preLoaderRoute: typeof AppTreinosIdRouteImport
+      parentRoute: typeof AppTreinosRoute
+    }
   }
 }
 
+interface AppTreinosRouteChildren {
+  AppTreinosIdRoute: typeof AppTreinosIdRoute
+}
+
+const AppTreinosRouteChildren: AppTreinosRouteChildren = {
+  AppTreinosIdRoute: AppTreinosIdRoute,
+}
+
+const AppTreinosRouteWithChildren = AppTreinosRoute._addFileChildren(
+  AppTreinosRouteChildren,
+)
+
 interface AppRouteChildren {
-  AppTreinosRoute: typeof AppTreinosRoute
+  AppNutricaoRoute: typeof AppNutricaoRoute
+  AppTreinosRoute: typeof AppTreinosRouteWithChildren
+  AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
-  AppTreinosRoute: AppTreinosRoute,
+  AppNutricaoRoute: AppNutricaoRoute,
+  AppTreinosRoute: AppTreinosRouteWithChildren,
+  AppIndexRoute: AppIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
