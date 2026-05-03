@@ -1,0 +1,69 @@
+import { createFileRoute, Outlet, Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { useAuth } from "@/lib/auth-context";
+import { Home, Dumbbell, Apple, LogOut } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+export const Route = createFileRoute("/app")({
+  component: AppLayout,
+});
+
+function AppLayout() {
+  const { user, loading, signOut } = useAuth();
+  const navigate = useNavigate();
+  const path = useRouterState({ select: (s) => s.location.pathname });
+
+  useEffect(() => {
+    if (!loading && !user) navigate({ to: "/auth" });
+  }, [user, loading, navigate]);
+
+  if (loading || !user) {
+    return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Carregando…</div>;
+  }
+
+  const tabs = [
+    { to: "/app", icon: Home, label: "Hoje" },
+    { to: "/app/treinos", icon: Dumbbell, label: "Treinos" },
+    { to: "/app/nutricao", icon: Apple, label: "Nutrição" },
+  ] as const;
+
+  return (
+    <div className="min-h-screen bg-background pb-24">
+      <header className="sticky top-0 z-10 backdrop-blur-md bg-background/80 border-b">
+        <div className="max-w-3xl mx-auto px-5 py-3 flex items-center justify-between">
+          <Link to="/app" className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
+              <Apple className="h-4 w-4 text-primary-foreground" />
+            </div>
+            <span className="font-display font-bold">Verde</span>
+          </Link>
+          <Button variant="ghost" size="sm" onClick={async () => { await signOut(); navigate({ to: "/" }); }}>
+            <LogOut className="h-4 w-4" />
+          </Button>
+        </div>
+      </header>
+
+      <main className="max-w-3xl mx-auto px-5 py-6">
+        <Outlet />
+      </main>
+
+      <nav className="fixed bottom-0 inset-x-0 z-10 border-t bg-card/95 backdrop-blur-md">
+        <div className="max-w-3xl mx-auto px-5 py-2 flex items-center justify-around">
+          {tabs.map(({ to, icon: Icon, label }) => {
+            const active = to === "/app" ? path === "/app" : path.startsWith(to);
+            return (
+              <Link key={to} to={to} className={cn(
+                "flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-colors",
+                active ? "text-primary" : "text-muted-foreground hover:text-foreground"
+              )}>
+                <Icon className="h-5 w-5" />
+                <span className="text-[10px] font-medium">{label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+    </div>
+  );
+}
