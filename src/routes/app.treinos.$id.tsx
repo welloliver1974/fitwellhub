@@ -68,7 +68,8 @@ function WorkoutDetail() {
 
   const updateSet = async (setId: string, field: "reps" | "weight_kg", value: number) => {
     setSets((prev) => prev.map((s) => s.id === setId ? { ...s, [field]: value } : s));
-    await supabase.from("sets").update({ [field]: value }).eq("id", setId);
+    const update = field === "reps" ? { reps: value } : { weight_kg: value };
+    await supabase.from("sets").update(update).eq("id", setId);
   };
 
   const removeSet = async (setId: string) => {
