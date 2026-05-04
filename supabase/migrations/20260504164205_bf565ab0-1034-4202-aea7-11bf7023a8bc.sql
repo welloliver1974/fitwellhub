@@ -1,0 +1,1 @@
+ALTER TABLE public.meals DROP CONSTRAINT meals_meal_type_check;
