@@ -64,7 +64,7 @@ function WorkoutsPage() {
       ) : (
         <div className="space-y-2">
           {workouts.map((w) => (
-            <Link key={w.id} to="/app/treinos/$id" params={{ id: w.id }}>
+            <Link key={w.id} to="/app/treinos/$id" params={{ id: w.id }} className="block">
               <Card className="p-4 flex items-center justify-between hover:bg-secondary/50 transition-colors">
                 <div>
                   <p className="font-medium">{w.name}</p>
