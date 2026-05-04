@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Plus, ChevronRight, Dumbbell } from "lucide-react";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/app/treinos")({
+export const Route = createFileRoute("/app/treinos/")({
   component: WorkoutsPage,
 });
 
