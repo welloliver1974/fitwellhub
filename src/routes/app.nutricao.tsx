@@ -115,6 +115,13 @@ function NutricaoPage() {
     await load();
   };
 
+  const removeMeal = async (mealId: string) => {
+    if (!confirm("Excluir esta refeição e todos os alimentos?")) return;
+    await supabase.from("meal_items").delete().eq("meal_id", mealId);
+    await supabase.from("meals").delete().eq("id", mealId);
+    await load();
+  };
+
   const grouped = MEAL_TYPES.map((type) => {
     const meal = meals.find((m) => m.meal_type === type);
     const its = meal ? items.filter((i) => i.meal_id === meal.id) : [];
@@ -179,7 +186,17 @@ function NutricaoPage() {
         <div className="space-y-4">
           {grouped.map(({ type, items: its }) => (
             <div key={type}>
-              <h2 className="text-xs uppercase tracking-wide text-muted-foreground mb-2 px-1">{type}</h2>
+              <div className="flex items-center justify-between mb-2 px-1">
+                <h2 className="text-xs uppercase tracking-wide text-muted-foreground">{type}</h2>
+                {(() => {
+                  const meal = meals.find((m) => m.meal_type === type);
+                  return meal ? (
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeMeal(meal.id)}>
+                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                    </Button>
+                  ) : null;
+                })()}
+              </div>
               <Card className="divide-y">
                 {its.map((i) => (
                   <div key={i.id} className="p-3 flex items-center justify-between gap-3">
