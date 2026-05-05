@@ -35,10 +35,14 @@ export const Route = createRootRoute({
       { name: "description", content: "Acompanhe seus treinos de musculação e refeições com dados nutricionais por IA." },
       { name: "author", content: "Lovable" },
       { property: "og:title", content: "Verde — Treino & Nutrição" },
-      { property: "og:description", content: "Treinos, séries e diário alimentar com dados nutricionais por IA." },
+      { property: "og:description", content: "Acompanhe seus treinos de musculação e refeições com dados nutricionais por IA." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "Verde — Treino & Nutrição" },
+      { name: "twitter:description", content: "Acompanhe seus treinos de musculação e refeições com dados nutricionais por IA." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/f5f18780-260c-40c8-83f5-499370a53254/id-preview-c4138755--abc69c38-0d4a-46eb-96b3-f0416eff75a9.lovable.app-1777947093532.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/f5f18780-260c-40c8-83f5-499370a53254/id-preview-c4138755--abc69c38-0d4a-46eb-96b3-f0416eff75a9.lovable.app-1777947093532.png" },
     ],
     links: [
       {
