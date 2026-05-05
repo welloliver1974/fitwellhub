@@ -187,20 +187,28 @@ function TodayPage() {
           </div>
         </Link>
 
-        <Link to={todayWorkout ? "/app/treinos/$id" : "/app/treinos"} params={todayWorkout ? { id: todayWorkout.id } : undefined as never}>
-          <div className="rounded-2xl border bg-card p-4 h-full hover:bg-secondary/50 transition-colors">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs">
-              <Dumbbell className="h-4 w-4" /> Treino de hoje
-            </div>
-            <p className="text-base font-display font-bold mt-2 truncate">
-              {todayWorkout ? todayWorkout.name : "Nenhum"}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {todayWorkout ? "Abrir →" : "Criar treino →"}
-            </p>
-          </div>
-        </Link>
+        {todayWorkout ? (
+          <Link to="/app/treinos/$id" params={{ id: todayWorkout.id }}>
+            <WorkoutCard name={todayWorkout.name} action="Abrir →" />
+          </Link>
+        ) : (
+          <Link to="/app/treinos">
+            <WorkoutCard name="Nenhum" action="Criar treino →" />
+          </Link>
+        )}
       </div>
+    </div>
+  );
+}
+
+function WorkoutCard({ name, action }: { name: string; action: string }) {
+  return (
+    <div className="rounded-2xl border bg-card p-4 h-full hover:bg-secondary/50 transition-colors">
+      <div className="flex items-center gap-2 text-muted-foreground text-xs">
+        <Dumbbell className="h-4 w-4" /> Treino de hoje
+      </div>
+      <p className="text-base font-display font-bold mt-2 truncate">{name}</p>
+      <p className="text-xs text-muted-foreground mt-1">{action}</p>
     </div>
   );
 }
