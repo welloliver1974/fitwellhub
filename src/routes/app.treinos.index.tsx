@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, ChevronRight, Dumbbell } from "lucide-react";
+import { Plus, ChevronRight, Dumbbell, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/treinos/")({
@@ -34,6 +34,20 @@ function WorkoutsPage() {
     if (error) return toast.error(error.message);
     setName(""); setOpen(false);
     toast.success("Treino criado");
+    load();
+  };
+
+  const remove = async (id: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm("Excluir este treino e todos os exercícios?")) return;
+    const { data: exs } = await supabase.from("exercises").select("id").eq("workout_id", id);
+    const exIds = (exs ?? []).map((x) => x.id);
+    if (exIds.length) await supabase.from("sets").delete().in("exercise_id", exIds);
+    await supabase.from("exercises").delete().eq("workout_id", id);
+    const { error } = await supabase.from("workouts").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Treino excluído");
     load();
   };
 
@@ -70,7 +84,12 @@ function WorkoutsPage() {
                   <p className="font-medium">{w.name}</p>
                   <p className="text-xs text-muted-foreground">{new Date(w.workout_date + "T00:00").toLocaleDateString("pt-BR")}</p>
                 </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="icon" onClick={(e) => remove(w.id, e)}>
+                    <Trash2 className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </div>
               </Card>
             </Link>
           ))}
