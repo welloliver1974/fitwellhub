@@ -39,6 +39,11 @@ function NutricaoPage() {
   const [query, setQuery] = useState("");
   const [grams, setGrams] = useState(100);
   const [loading, setLoading] = useState(false);
+  const [manual, setManual] = useState(false);
+  const [mCal, setMCal] = useState<number | "">("");
+  const [mProt, setMProt] = useState<number | "">("");
+  const [mCarb, setMCarb] = useState<number | "">("");
+  const [mFat, setMFat] = useState<number | "">("");
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -73,7 +78,15 @@ function NutricaoPage() {
     if (!user || !query.trim()) return;
     setLoading(true);
     try {
-      const macros = await lookupNutrition({ data: { query: query.trim(), grams } });
+      const macros = manual
+        ? {
+            name: query.trim(),
+            calories: Number(mCal) || 0,
+            protein_g: Number(mProt) || 0,
+            carbs_g: Number(mCarb) || 0,
+            fat_g: Number(mFat) || 0,
+          }
+        : await lookupNutrition({ data: { query: query.trim(), grams } });
 
       let meal = meals.find((m) => m.meal_type === mealType);
       if (!meal) {
@@ -101,6 +114,7 @@ function NutricaoPage() {
       toast.success(`${macros.name} adicionado`);
       setQuery("");
       setGrams(100);
+      setMCal(""); setMProt(""); setMCarb(""); setMFat("");
       setOpen(false);
       await load();
     } catch (e) {
@@ -169,8 +183,40 @@ function NutricaoPage() {
                 <Label>Porção (g)</Label>
                 <Input type="number" value={grams} onChange={(e) => setGrams(Number(e.target.value))} />
               </div>
+              <div className="flex items-center justify-between pt-1">
+                <Label htmlFor="manual-macros" className="text-xs text-muted-foreground cursor-pointer">
+                  Inserir macros manualmente (rótulo)
+                </Label>
+                <input
+                  id="manual-macros"
+                  type="checkbox"
+                  checked={manual}
+                  onChange={(e) => setManual(e.target.checked)}
+                  className="h-4 w-4"
+                />
+              </div>
+              {manual && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Kcal</Label>
+                    <Input type="number" value={mCal} onChange={(e) => setMCal(e.target.value === "" ? "" : Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Proteína (g)</Label>
+                    <Input type="number" value={mProt} onChange={(e) => setMProt(e.target.value === "" ? "" : Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Carbo (g)</Label>
+                    <Input type="number" value={mCarb} onChange={(e) => setMCarb(e.target.value === "" ? "" : Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Gordura (g)</Label>
+                    <Input type="number" value={mFat} onChange={(e) => setMFat(e.target.value === "" ? "" : Number(e.target.value))} />
+                  </div>
+                </div>
+              )}
               <Button onClick={addFood} disabled={loading || !query.trim()} className="w-full">
-                {loading ? "Calculando macros…" : "Adicionar"}
+                {loading ? "Calculando macros…" : manual ? "Adicionar" : "Calcular com IA e adicionar"}
               </Button>
             </div>
           </DialogContent>
