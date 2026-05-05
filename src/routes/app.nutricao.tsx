@@ -1,14 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Sparkles, Trash2, Apple } from "lucide-react";
+import { Plus, Sparkles, Trash2, Apple, Star, Copy, Pencil } from "lucide-react";
 import { lookupNutrition } from "@/server/nutrition.functions";
 import { toast } from "sonner";
 
@@ -16,7 +16,7 @@ export const Route = createFileRoute("/app/nutricao")({
   component: NutricaoPage,
 });
 
-type Meal = { id: string; meal_type: string };
+type Meal = { id: string; meal_type: string; meal_date: string };
 type Item = {
   id: string;
   meal_id: string;
@@ -34,6 +34,7 @@ function NutricaoPage() {
   const { user } = useAuth();
   const [meals, setMeals] = useState<Meal[]>([]);
   const [items, setItems] = useState<Item[]>([]);
+  const [recent, setRecent] = useState<Item[]>([]);
   const [open, setOpen] = useState(false);
   const [mealType, setMealType] = useState(MEAL_TYPES[0]);
   const [query, setQuery] = useState("");
@@ -45,13 +46,17 @@ function NutricaoPage() {
   const [mCarb, setMCarb] = useState<number | "">("");
   const [mFat, setMFat] = useState<number | "">("");
 
+  // edit quantity
+  const [editItem, setEditItem] = useState<Item | null>(null);
+  const [editGrams, setEditGrams] = useState(100);
+
   const today = new Date().toISOString().slice(0, 10);
 
   const load = async () => {
     if (!user) return;
     const { data: ms } = await supabase
       .from("meals")
-      .select("id,meal_type")
+      .select("id,meal_type,meal_date")
       .eq("user_id", user.id)
       .eq("meal_date", today)
       .order("created_at");
@@ -67,12 +72,39 @@ function NutricaoPage() {
     } else {
       setItems([]);
     }
+
+    // load recent unique foods (last 30 days)
+    const { data: recentRaw } = await supabase
+      .from("meal_items")
+      .select("id,meal_id,name,grams,calories,protein_g,carbs_g,fat_g,created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(60);
+    const seen = new Set<string>();
+    const uniq: Item[] = [];
+    for (const r of recentRaw ?? []) {
+      const k = (r.name as string).toLowerCase().trim();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      uniq.push(r as Item);
+      if (uniq.length >= 8) break;
+    }
+    setRecent(uniq);
   };
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [user]);
+
+  const ensureMeal = async (type: string): Promise<Meal> => {
+    const existing = meals.find((m) => m.meal_type === type);
+    if (existing) return existing;
+    const { data: newMeal, error } = await supabase
+      .from("meals")
+      .insert({ user_id: user!.id, meal_type: type, meal_date: today })
+      .select("id,meal_type,meal_date")
+      .single();
+    if (error) throw error;
+    return newMeal as Meal;
+  };
 
   const addFood = async () => {
     if (!user || !query.trim()) return;
@@ -88,17 +120,7 @@ function NutricaoPage() {
           }
         : await lookupNutrition({ data: { query: query.trim(), grams } });
 
-      let meal = meals.find((m) => m.meal_type === mealType);
-      if (!meal) {
-        const { data: newMeal, error } = await supabase
-          .from("meals")
-          .insert({ user_id: user.id, meal_type: mealType, meal_date: today })
-          .select("id,meal_type")
-          .single();
-        if (error) throw error;
-        meal = newMeal as Meal;
-      }
-
+      const meal = await ensureMeal(mealType);
       const { error: e2 } = await supabase.from("meal_items").insert({
         user_id: user.id,
         meal_id: meal.id,
@@ -112,8 +134,7 @@ function NutricaoPage() {
       if (e2) throw e2;
 
       toast.success(`${macros.name} adicionado`);
-      setQuery("");
-      setGrams(100);
+      setQuery(""); setGrams(100);
       setMCal(""); setMProt(""); setMCarb(""); setMFat("");
       setOpen(false);
       await load();
@@ -121,6 +142,27 @@ function NutricaoPage() {
       toast.error(e instanceof Error ? e.message : "Erro ao buscar alimento");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const addRecent = async (it: Item) => {
+    if (!user) return;
+    try {
+      const meal = await ensureMeal(mealType);
+      await supabase.from("meal_items").insert({
+        user_id: user.id,
+        meal_id: meal.id,
+        name: it.name,
+        grams: Number(it.grams),
+        calories: Number(it.calories),
+        protein_g: Number(it.protein_g),
+        carbs_g: Number(it.carbs_g),
+        fat_g: Number(it.fat_g),
+      });
+      toast.success(`${it.name} adicionado em ${mealType}`);
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro");
     }
   };
 
@@ -136,11 +178,64 @@ function NutricaoPage() {
     await load();
   };
 
-  const grouped = MEAL_TYPES.map((type) => {
+  const duplicateYesterday = async (type: string) => {
+    if (!user) return;
+    const y = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const { data: yMeal } = await supabase
+      .from("meals")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("meal_date", y)
+      .eq("meal_type", type)
+      .maybeSingle();
+    if (!yMeal) return toast.error(`Sem ${type.toLowerCase()} ontem`);
+    const { data: yItems } = await supabase.from("meal_items").select("*").eq("meal_id", yMeal.id);
+    if (!yItems || yItems.length === 0) return toast.error("Refeição vazia");
+
+    const meal = await ensureMeal(type);
+    const rows = yItems.map((it) => ({
+      user_id: user.id,
+      meal_id: meal.id,
+      name: it.name,
+      grams: it.grams,
+      calories: it.calories,
+      protein_g: it.protein_g,
+      carbs_g: it.carbs_g,
+      fat_g: it.fat_g,
+    }));
+    await supabase.from("meal_items").insert(rows);
+    toast.success(`${type} de ontem copiado`);
+    load();
+  };
+
+  const openEdit = (it: Item) => {
+    setEditItem(it);
+    setEditGrams(Number(it.grams));
+  };
+
+  const saveEdit = async () => {
+    if (!editItem || editGrams <= 0) return;
+    const ratio = editGrams / Number(editItem.grams);
+    const { error } = await supabase.from("meal_items").update({
+      grams: editGrams,
+      calories: Number(editItem.calories) * ratio,
+      protein_g: Number(editItem.protein_g) * ratio,
+      carbs_g: Number(editItem.carbs_g) * ratio,
+      fat_g: Number(editItem.fat_g) * ratio,
+    }).eq("id", editItem.id);
+    if (error) return toast.error(error.message);
+    toast.success("Quantidade ajustada");
+    setEditItem(null);
+    load();
+  };
+
+  const grouped = useMemo(() => MEAL_TYPES.map((type) => {
     const meal = meals.find((m) => m.meal_type === type);
     const its = meal ? items.filter((i) => i.meal_id === meal.id) : [];
     return { type, items: its };
-  }).filter((g) => g.items.length > 0);
+  }), [meals, items]);
+
+  const visibleGroups = grouped.filter((g) => g.items.length > 0);
 
   return (
     <div className="space-y-5">
@@ -155,7 +250,7 @@ function NutricaoPage() {
               <Plus className="h-4 w-4 mr-1" /> Alimento
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-primary" /> Adicionar alimento
@@ -171,10 +266,29 @@ function NutricaoPage() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {recent.length > 0 && (
+                <div>
+                  <Label className="flex items-center gap-1.5"><Star className="h-3 w-3" /> Recentes</Label>
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {recent.map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => { addRecent(r); setOpen(false); }}
+                        className="text-xs px-2.5 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
+                      >
+                        {r.name} <span className="text-muted-foreground">·{r.grams}g</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <Label>Alimento</Label>
                 <Input
-                  placeholder="Ex: arroz branco cozido, peito de frango grelhado…"
+                  placeholder="Ex: arroz branco cozido…"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
@@ -197,22 +311,10 @@ function NutricaoPage() {
               </div>
               {manual && (
                 <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label className="text-xs">Kcal</Label>
-                    <Input type="number" value={mCal} onChange={(e) => setMCal(e.target.value === "" ? "" : Number(e.target.value))} />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Proteína (g)</Label>
-                    <Input type="number" value={mProt} onChange={(e) => setMProt(e.target.value === "" ? "" : Number(e.target.value))} />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Carbo (g)</Label>
-                    <Input type="number" value={mCarb} onChange={(e) => setMCarb(e.target.value === "" ? "" : Number(e.target.value))} />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Gordura (g)</Label>
-                    <Input type="number" value={mFat} onChange={(e) => setMFat(e.target.value === "" ? "" : Number(e.target.value))} />
-                  </div>
+                  <div><Label className="text-xs">Kcal</Label><Input type="number" value={mCal} onChange={(e) => setMCal(e.target.value === "" ? "" : Number(e.target.value))} /></div>
+                  <div><Label className="text-xs">Proteína (g)</Label><Input type="number" value={mProt} onChange={(e) => setMProt(e.target.value === "" ? "" : Number(e.target.value))} /></div>
+                  <div><Label className="text-xs">Carbo (g)</Label><Input type="number" value={mCarb} onChange={(e) => setMCarb(e.target.value === "" ? "" : Number(e.target.value))} /></div>
+                  <div><Label className="text-xs">Gordura (g)</Label><Input type="number" value={mFat} onChange={(e) => setMFat(e.target.value === "" ? "" : Number(e.target.value))} /></div>
                 </div>
               )}
               <Button onClick={addFood} disabled={loading || !query.trim()} className="w-full">
@@ -223,10 +325,37 @@ function NutricaoPage() {
         </Dialog>
       </div>
 
-      {grouped.length === 0 ? (
+      {/* Edit quantity dialog */}
+      <Dialog open={!!editItem} onOpenChange={(o) => !o && setEditItem(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Ajustar quantidade</DialogTitle></DialogHeader>
+          {editItem && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">{editItem.name}</p>
+              <div>
+                <Label>Porção (g)</Label>
+                <Input type="number" value={editGrams} onChange={(e) => setEditGrams(Number(e.target.value))} autoFocus />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Macros serão recalculados proporcionalmente.
+              </p>
+            </div>
+          )}
+          <DialogFooter><Button onClick={saveEdit}>Salvar</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {visibleGroups.length === 0 ? (
         <Card className="p-10 text-center">
           <Apple className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-          <p className="text-muted-foreground">Nenhuma refeição registrada hoje.</p>
+          <p className="text-muted-foreground mb-4">Nenhuma refeição registrada hoje.</p>
+          <div className="flex flex-wrap gap-2 justify-center">
+            {MEAL_TYPES.map((t) => (
+              <Button key={t} variant="outline" size="sm" onClick={() => duplicateYesterday(t)}>
+                <Copy className="h-3 w-3 mr-1" /> {t} de ontem
+              </Button>
+            ))}
+          </div>
         </Card>
       ) : (
         <div className="space-y-4">
@@ -234,30 +363,40 @@ function NutricaoPage() {
             <div key={type}>
               <div className="flex items-center justify-between mb-2 px-1">
                 <h2 className="text-xs uppercase tracking-wide text-muted-foreground">{type}</h2>
-                {(() => {
-                  const meal = meals.find((m) => m.meal_type === type);
-                  return meal ? (
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeMeal(meal.id)}>
-                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                    </Button>
-                  ) : null;
-                })()}
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="icon" className="h-6 w-6" title="Copiar de ontem" onClick={() => duplicateYesterday(type)}>
+                    <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                  </Button>
+                  {its.length > 0 && (() => {
+                    const meal = meals.find((m) => m.meal_type === type);
+                    return meal ? (
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeMeal(meal.id)}>
+                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Button>
+                    ) : null;
+                  })()}
+                </div>
               </div>
-              <Card className="divide-y">
-                {its.map((i) => (
-                  <div key={i.id} className="p-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-medium truncate">{i.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {i.grams}g · {Math.round(Number(i.calories))} kcal · P {Math.round(Number(i.protein_g))} · C {Math.round(Number(i.carbs_g))} · G {Math.round(Number(i.fat_g))}
-                      </p>
+              {its.length > 0 && (
+                <Card className="divide-y">
+                  {its.map((i) => (
+                    <div key={i.id} className="p-3 flex items-center justify-between gap-3">
+                      <button className="min-w-0 flex-1 text-left" onClick={() => openEdit(i)}>
+                        <p className="font-medium truncate">{i.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {i.grams}g · {Math.round(Number(i.calories))} kcal · P {Math.round(Number(i.protein_g))} · C {Math.round(Number(i.carbs_g))} · G {Math.round(Number(i.fat_g))}
+                        </p>
+                      </button>
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(i)} title="Ajustar quantidade">
+                        <Pencil className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => removeItem(i.id)}>
+                        <Trash2 className="h-4 w-4 text-muted-foreground" />
+                      </Button>
                     </div>
-                    <Button variant="ghost" size="icon" onClick={() => removeItem(i.id)}>
-                      <Trash2 className="h-4 w-4 text-muted-foreground" />
-                    </Button>
-                  </div>
-                ))}
-              </Card>
+                  ))}
+                </Card>
+              )}
             </div>
           ))}
         </div>
