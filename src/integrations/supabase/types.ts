@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      body_weights: {
+        Row: {
+          created_at: string
+          id: string
+          log_date: string
+          user_id: string
+          weight_kg: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          log_date?: string
+          user_id: string
+          weight_kg: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          log_date?: string
+          user_id?: string
+          weight_kg?: number
+        }
+        Relationships: []
+      }
       exercises: {
         Row: {
           created_at: string
@@ -208,6 +232,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      water_logs: {
+        Row: {
+          created_at: string
+          id: string
+          log_date: string
+          ml: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          log_date?: string
+          ml?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          log_date?: string
+          ml?: number
+          user_id?: string
+        }
+        Relationships: []
       }
       workouts: {
         Row: {

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, ChevronRight, Dumbbell, Trash2 } from "lucide-react";
+import { Plus, ChevronRight, Dumbbell, Trash2, Copy } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/treinos/")({
@@ -51,6 +51,27 @@ function WorkoutsPage() {
     load();
   };
 
+  const duplicate = async (w: Workout, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: newW, error } = await supabase.from("workouts")
+      .insert({ name: w.name, user_id: user.id, workout_date: today })
+      .select("id").single();
+    if (error || !newW) return toast.error(error?.message ?? "Erro");
+    const { data: exs } = await supabase.from("exercises")
+      .select("name,position,notes").eq("workout_id", w.id).order("position");
+    if (exs && exs.length) {
+      await supabase.from("exercises").insert(
+        exs.map((ex) => ({ ...ex, user_id: user.id, workout_id: newW.id }))
+      );
+    }
+    toast.success("Treino duplicado para hoje");
+    load();
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -85,6 +106,9 @@ function WorkoutsPage() {
                   <p className="text-xs text-muted-foreground">{new Date(w.workout_date + "T00:00").toLocaleDateString("pt-BR")}</p>
                 </div>
                 <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="icon" onClick={(e) => duplicate(w, e)} title="Duplicar para hoje">
+                    <Copy className="h-4 w-4 text-muted-foreground" />
+                  </Button>
                   <Button variant="ghost" size="icon" onClick={(e) => remove(w.id, e)}>
                     <Trash2 className="h-4 w-4 text-muted-foreground" />
                   </Button>

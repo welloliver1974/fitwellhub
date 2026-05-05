@@ -14,7 +14,9 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppTreinosRouteImport } from './routes/app.treinos'
+import { Route as AppPesoRouteImport } from './routes/app.peso'
 import { Route as AppNutricaoRouteImport } from './routes/app.nutricao'
+import { Route as AppMetasRouteImport } from './routes/app.metas'
 import { Route as AppTreinosIndexRouteImport } from './routes/app.treinos.index'
 import { Route as AppTreinosIdRouteImport } from './routes/app.treinos.$id'
 
@@ -43,9 +45,19 @@ const AppTreinosRoute = AppTreinosRouteImport.update({
   path: '/treinos',
   getParentRoute: () => AppRoute,
 } as any)
+const AppPesoRoute = AppPesoRouteImport.update({
+  id: '/peso',
+  path: '/peso',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppNutricaoRoute = AppNutricaoRouteImport.update({
   id: '/nutricao',
   path: '/nutricao',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMetasRoute = AppMetasRouteImport.update({
+  id: '/metas',
+  path: '/metas',
   getParentRoute: () => AppRoute,
 } as any)
 const AppTreinosIndexRoute = AppTreinosIndexRouteImport.update({
@@ -63,7 +75,9 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
+  '/app/metas': typeof AppMetasRoute
   '/app/nutricao': typeof AppNutricaoRoute
+  '/app/peso': typeof AppPesoRoute
   '/app/treinos': typeof AppTreinosRouteWithChildren
   '/app/': typeof AppIndexRoute
   '/app/treinos/$id': typeof AppTreinosIdRoute
@@ -72,7 +86,9 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/app/metas': typeof AppMetasRoute
   '/app/nutricao': typeof AppNutricaoRoute
+  '/app/peso': typeof AppPesoRoute
   '/app': typeof AppIndexRoute
   '/app/treinos/$id': typeof AppTreinosIdRoute
   '/app/treinos': typeof AppTreinosIndexRoute
@@ -82,7 +98,9 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
+  '/app/metas': typeof AppMetasRoute
   '/app/nutricao': typeof AppNutricaoRoute
+  '/app/peso': typeof AppPesoRoute
   '/app/treinos': typeof AppTreinosRouteWithChildren
   '/app/': typeof AppIndexRoute
   '/app/treinos/$id': typeof AppTreinosIdRoute
@@ -94,7 +112,9 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/auth'
+    | '/app/metas'
     | '/app/nutricao'
+    | '/app/peso'
     | '/app/treinos'
     | '/app/'
     | '/app/treinos/$id'
@@ -103,7 +123,9 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/app/metas'
     | '/app/nutricao'
+    | '/app/peso'
     | '/app'
     | '/app/treinos/$id'
     | '/app/treinos'
@@ -112,7 +134,9 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/auth'
+    | '/app/metas'
     | '/app/nutricao'
+    | '/app/peso'
     | '/app/treinos'
     | '/app/'
     | '/app/treinos/$id'
@@ -162,11 +186,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTreinosRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/peso': {
+      id: '/app/peso'
+      path: '/peso'
+      fullPath: '/app/peso'
+      preLoaderRoute: typeof AppPesoRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/nutricao': {
       id: '/app/nutricao'
       path: '/nutricao'
       fullPath: '/app/nutricao'
       preLoaderRoute: typeof AppNutricaoRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/metas': {
+      id: '/app/metas'
+      path: '/metas'
+      fullPath: '/app/metas'
+      preLoaderRoute: typeof AppMetasRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/treinos/': {
@@ -201,13 +239,17 @@ const AppTreinosRouteWithChildren = AppTreinosRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppMetasRoute: typeof AppMetasRoute
   AppNutricaoRoute: typeof AppNutricaoRoute
+  AppPesoRoute: typeof AppPesoRoute
   AppTreinosRoute: typeof AppTreinosRouteWithChildren
   AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppMetasRoute: AppMetasRoute,
   AppNutricaoRoute: AppNutricaoRoute,
+  AppPesoRoute: AppPesoRoute,
   AppTreinosRoute: AppTreinosRouteWithChildren,
   AppIndexRoute: AppIndexRoute,
 }
