@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { Card } from "@/components/ui/card";
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Timer, TrendingUp, Pause, Play } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/treinos/$id")({
@@ -26,6 +26,29 @@ function WorkoutDetail() {
   const [sets, setSets] = useState<Set[]>([]);
   const [open, setOpen] = useState(false);
   const [exName, setExName] = useState("");
+  const [restSec, setRestSec] = useState(0);
+  const [restRunning, setRestRunning] = useState(false);
+  const [restPreset, setRestPreset] = useState(90);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (restRunning && restSec > 0) {
+      intervalRef.current = setInterval(() => {
+        setRestSec((s) => {
+          if (s <= 1) {
+            setRestRunning(false);
+            try { new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=").play().catch(()=>{}); } catch {}
+            toast.success("Descanso terminado");
+            return 0;
+          }
+          return s - 1;
+        });
+      }, 1000);
+    }
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [restRunning]);
+
+  const startRest = (sec: number) => { setRestPreset(sec); setRestSec(sec); setRestRunning(true); };
 
   const load = async () => {
     const { data: w } = await supabase.from("workouts").select("id,name,workout_date").eq("id", id).maybeSingle();
@@ -63,6 +86,7 @@ function WorkoutDetail() {
       weight_kg: last?.weight_kg ?? 0,
     });
     if (error) return toast.error(error.message);
+    startRest(restPreset);
     load();
   };
 
@@ -110,6 +134,26 @@ function WorkoutDetail() {
         </Dialog>
       </div>
 
+      {/* Rest timer */}
+      <Card className="p-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Timer className="h-5 w-5 text-primary" />
+          <span className="font-display text-2xl font-bold tabular-nums">
+            {Math.floor(restSec / 60).toString().padStart(2, "0")}:{(restSec % 60).toString().padStart(2, "0")}
+          </span>
+        </div>
+        <div className="flex items-center gap-1 flex-wrap justify-end">
+          {[60, 90, 120, 180].map((s) => (
+            <Button key={s} variant={restPreset === s ? "default" : "outline"} size="sm" onClick={() => startRest(s)}>{s}s</Button>
+          ))}
+          {restRunning ? (
+            <Button size="icon" variant="ghost" onClick={() => setRestRunning(false)}><Pause className="h-4 w-4" /></Button>
+          ) : restSec > 0 ? (
+            <Button size="icon" variant="ghost" onClick={() => setRestRunning(true)}><Play className="h-4 w-4" /></Button>
+          ) : null}
+        </div>
+      </Card>
+
       {exercises.length === 0 ? (
         <Card className="p-10 text-center text-muted-foreground">Nenhum exercício ainda.</Card>
       ) : (
@@ -120,9 +164,14 @@ function WorkoutDetail() {
               <Card key={ex.id} className="p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-display font-semibold">{ex.name}</h3>
-                  <Button variant="ghost" size="icon" onClick={() => removeExercise(ex.id)}>
-                    <Trash2 className="h-4 w-4 text-muted-foreground" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Link to="/app/exercicios/$name" params={{ name: encodeURIComponent(ex.name) }}>
+                      <Button variant="ghost" size="icon" title="Histórico"><TrendingUp className="h-4 w-4 text-muted-foreground" /></Button>
+                    </Link>
+                    <Button variant="ghost" size="icon" onClick={() => removeExercise(ex.id)}>
+                      <Trash2 className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                  </div>
                 </div>
 
                 {exSets.length > 0 && (
