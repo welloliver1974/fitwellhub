@@ -14,10 +14,12 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppTreinosRouteImport } from './routes/app.treinos'
+import { Route as AppTemplatesRouteImport } from './routes/app.templates'
 import { Route as AppPesoRouteImport } from './routes/app.peso'
 import { Route as AppNutricaoRouteImport } from './routes/app.nutricao'
 import { Route as AppMetasRouteImport } from './routes/app.metas'
 import { Route as AppTreinosIndexRouteImport } from './routes/app.treinos.index'
+import { Route as AppTemplatesIndexRouteImport } from './routes/app.templates.index'
 import { Route as AppTreinosIdRouteImport } from './routes/app.treinos.$id'
 
 const AuthRoute = AuthRouteImport.update({
@@ -45,6 +47,11 @@ const AppTreinosRoute = AppTreinosRouteImport.update({
   path: '/treinos',
   getParentRoute: () => AppRoute,
 } as any)
+const AppTemplatesRoute = AppTemplatesRouteImport.update({
+  id: '/templates',
+  path: '/templates',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppPesoRoute = AppPesoRouteImport.update({
   id: '/peso',
   path: '/peso',
@@ -65,6 +72,11 @@ const AppTreinosIndexRoute = AppTreinosIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppTreinosRoute,
 } as any)
+const AppTemplatesIndexRoute = AppTemplatesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppTemplatesRoute,
+} as any)
 const AppTreinosIdRoute = AppTreinosIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -78,9 +90,11 @@ export interface FileRoutesByFullPath {
   '/app/metas': typeof AppMetasRoute
   '/app/nutricao': typeof AppNutricaoRoute
   '/app/peso': typeof AppPesoRoute
+  '/app/templates': typeof AppTemplatesRouteWithChildren
   '/app/treinos': typeof AppTreinosRouteWithChildren
   '/app/': typeof AppIndexRoute
   '/app/treinos/$id': typeof AppTreinosIdRoute
+  '/app/templates/': typeof AppTemplatesIndexRoute
   '/app/treinos/': typeof AppTreinosIndexRoute
 }
 export interface FileRoutesByTo {
@@ -91,6 +105,7 @@ export interface FileRoutesByTo {
   '/app/peso': typeof AppPesoRoute
   '/app': typeof AppIndexRoute
   '/app/treinos/$id': typeof AppTreinosIdRoute
+  '/app/templates': typeof AppTemplatesIndexRoute
   '/app/treinos': typeof AppTreinosIndexRoute
 }
 export interface FileRoutesById {
@@ -101,9 +116,11 @@ export interface FileRoutesById {
   '/app/metas': typeof AppMetasRoute
   '/app/nutricao': typeof AppNutricaoRoute
   '/app/peso': typeof AppPesoRoute
+  '/app/templates': typeof AppTemplatesRouteWithChildren
   '/app/treinos': typeof AppTreinosRouteWithChildren
   '/app/': typeof AppIndexRoute
   '/app/treinos/$id': typeof AppTreinosIdRoute
+  '/app/templates/': typeof AppTemplatesIndexRoute
   '/app/treinos/': typeof AppTreinosIndexRoute
 }
 export interface FileRouteTypes {
@@ -115,9 +132,11 @@ export interface FileRouteTypes {
     | '/app/metas'
     | '/app/nutricao'
     | '/app/peso'
+    | '/app/templates'
     | '/app/treinos'
     | '/app/'
     | '/app/treinos/$id'
+    | '/app/templates/'
     | '/app/treinos/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -128,6 +147,7 @@ export interface FileRouteTypes {
     | '/app/peso'
     | '/app'
     | '/app/treinos/$id'
+    | '/app/templates'
     | '/app/treinos'
   id:
     | '__root__'
@@ -137,9 +157,11 @@ export interface FileRouteTypes {
     | '/app/metas'
     | '/app/nutricao'
     | '/app/peso'
+    | '/app/templates'
     | '/app/treinos'
     | '/app/'
     | '/app/treinos/$id'
+    | '/app/templates/'
     | '/app/treinos/'
   fileRoutesById: FileRoutesById
 }
@@ -186,6 +208,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTreinosRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/templates': {
+      id: '/app/templates'
+      path: '/templates'
+      fullPath: '/app/templates'
+      preLoaderRoute: typeof AppTemplatesRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/peso': {
       id: '/app/peso'
       path: '/peso'
@@ -214,6 +243,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTreinosIndexRouteImport
       parentRoute: typeof AppTreinosRoute
     }
+    '/app/templates/': {
+      id: '/app/templates/'
+      path: '/'
+      fullPath: '/app/templates/'
+      preLoaderRoute: typeof AppTemplatesIndexRouteImport
+      parentRoute: typeof AppTemplatesRoute
+    }
     '/app/treinos/$id': {
       id: '/app/treinos/$id'
       path: '/$id'
@@ -223,6 +259,18 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface AppTemplatesRouteChildren {
+  AppTemplatesIndexRoute: typeof AppTemplatesIndexRoute
+}
+
+const AppTemplatesRouteChildren: AppTemplatesRouteChildren = {
+  AppTemplatesIndexRoute: AppTemplatesIndexRoute,
+}
+
+const AppTemplatesRouteWithChildren = AppTemplatesRoute._addFileChildren(
+  AppTemplatesRouteChildren,
+)
 
 interface AppTreinosRouteChildren {
   AppTreinosIdRoute: typeof AppTreinosIdRoute
@@ -242,6 +290,7 @@ interface AppRouteChildren {
   AppMetasRoute: typeof AppMetasRoute
   AppNutricaoRoute: typeof AppNutricaoRoute
   AppPesoRoute: typeof AppPesoRoute
+  AppTemplatesRoute: typeof AppTemplatesRouteWithChildren
   AppTreinosRoute: typeof AppTreinosRouteWithChildren
   AppIndexRoute: typeof AppIndexRoute
 }
@@ -250,6 +299,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppMetasRoute: AppMetasRoute,
   AppNutricaoRoute: AppNutricaoRoute,
   AppPesoRoute: AppPesoRoute,
+  AppTemplatesRoute: AppTemplatesRouteWithChildren,
   AppTreinosRoute: AppTreinosRouteWithChildren,
   AppIndexRoute: AppIndexRoute,
 }
@@ -264,3 +314,12 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
