@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, ChevronRight, Dumbbell, Trash2, Copy } from "lucide-react";
+import { Plus, ChevronRight, Dumbbell, Trash2, Copy, Layers } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/treinos/")({
@@ -76,6 +76,8 @@ function WorkoutsPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Treinos</h1>
+        <div className="flex gap-2">
+        <Link to="/app/templates"><Button size="sm" variant="outline" className="rounded-full"><Layers className="h-4 w-4 mr-1" />Templates</Button></Link>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button size="sm" className="rounded-full"><Plus className="h-4 w-4 mr-1" />Novo</Button>
@@ -89,6 +91,7 @@ function WorkoutsPage() {
             <DialogFooter><Button onClick={create} className="rounded-full">Criar</Button></DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {workouts.length === 0 ? (
