@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Sparkles, Trash2, Apple, Star, Copy, Pencil } from "lucide-react";
+import { Plus, Sparkles, Trash2, Apple, Star, Copy, Pencil, ChefHat, BarChart3 } from "lucide-react";
 import { lookupNutrition } from "@/server/nutrition.functions";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/nutricao")({
@@ -244,6 +245,9 @@ function NutricaoPage() {
           <h1 className="text-3xl font-display font-bold">Nutrição</h1>
           <p className="text-sm text-muted-foreground">Diário alimentar de hoje</p>
         </div>
+        <div className="flex items-center gap-1">
+          <Link to="/app/nutricao-historico"><Button size="icon" variant="ghost" title="Visão geral"><BarChart3 className="h-5 w-5" /></Button></Link>
+          <Link to="/app/receitas"><Button size="icon" variant="ghost" title="Receitas"><ChefHat className="h-5 w-5" /></Button></Link>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button size="sm" className="rounded-full">
