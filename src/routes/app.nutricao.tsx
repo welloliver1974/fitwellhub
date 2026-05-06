@@ -327,6 +327,7 @@ function NutricaoPage() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Edit quantity dialog */}
