@@ -74,3 +74,123 @@ export const lookupNutrition = createServerFn({ method: "POST" })
       fat_g: number;
     };
   });
+
+const photoSchema = z.object({
+  imageBase64: z.string().min(50),
+});
+
+const photoMacrosTool = {
+  type: "object",
+  properties: {
+    items: {
+      type: "array",
+      description: "Alimentos identificados na foto",
+      items: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Nome em português" },
+          grams: { type: "number", description: "Estimativa de gramas visíveis no prato" },
+          calories: { type: "number" },
+          protein_g: { type: "number" },
+          carbs_g: { type: "number" },
+          fat_g: { type: "number" },
+        },
+        required: ["name", "grams", "calories", "protein_g", "carbs_g", "fat_g"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["items"],
+  additionalProperties: false,
+};
+
+export const analyzePhoto = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => photoSchema.parse(d))
+  .handler(async ({ data }) => {
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) throw new Error("LOVABLE_API_KEY não configurada");
+
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          {
+            role: "system",
+            content:
+              "Você é nutricionista. Identifique cada alimento visível na foto do prato, estime gramas e macros (kcal, proteína, carboidrato, gordura) por item. Use a tabela TACO como referência. Retorne APENAS via tool call.",
+          },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Analise este prato e estime macros por item." },
+              { type: "image_url", image_url: { url: data.imageBase64 } },
+            ],
+          },
+        ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "report_plate",
+              description: "Reporta itens identificados no prato",
+              parameters: photoMacrosTool,
+            },
+          },
+        ],
+        tool_choice: { type: "function", function: { name: "report_plate" } },
+      }),
+    });
+
+    if (res.status === 429) throw new Error("Muitas requisições. Aguarde um instante.");
+    if (res.status === 402) throw new Error("Créditos de IA esgotados.");
+    if (!res.ok) throw new Error(`Erro IA: ${res.status}`);
+
+    const json = await res.json();
+    const call = json.choices?.[0]?.message?.tool_calls?.[0];
+    if (!call) throw new Error("Resposta inválida da IA");
+    const args = JSON.parse(call.function.arguments);
+    return args as {
+      items: Array<{
+        name: string;
+        grams: number;
+        calories: number;
+        protein_g: number;
+        carbs_g: number;
+        fat_g: number;
+      }>;
+    };
+  });
+
+const coachSchema = z.object({
+  summary: z.string().max(8000),
+});
+
+export const coachAdvice = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => coachSchema.parse(d))
+  .handler(async ({ data }) => {
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) throw new Error("LOVABLE_API_KEY não configurada");
+
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          {
+            role: "system",
+            content:
+              "Você é um coach pessoal de treino e nutrição. Analise os dados da última semana do usuário e retorne 3-5 insights curtos, práticos e motivadores em português. Use markdown simples (negrito e listas). Seja direto, sem clichês.",
+          },
+          { role: "user", content: data.summary },
+        ],
+      }),
+    });
+    if (res.status === 429) throw new Error("Muitas requisições. Aguarde.");
+    if (res.status === 402) throw new Error("Créditos de IA esgotados.");
+    if (!res.ok) throw new Error(`Erro IA: ${res.status}`);
+    const json = await res.json();
+    return { text: (json.choices?.[0]?.message?.content as string) ?? "" };
+  });

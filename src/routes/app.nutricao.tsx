@@ -8,8 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Sparkles, Trash2, Apple, Star, Copy, Pencil, ChefHat, BarChart3 } from "lucide-react";
-import { lookupNutrition } from "@/server/nutrition.functions";
+import { Plus, Sparkles, Trash2, Apple, Star, Copy, Pencil, ChefHat, BarChart3, Camera, Loader2 } from "lucide-react";
+import { lookupNutrition, analyzePhoto } from "@/server/nutrition.functions";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 
@@ -50,6 +50,12 @@ function NutricaoPage() {
   // edit quantity
   const [editItem, setEditItem] = useState<Item | null>(null);
   const [editGrams, setEditGrams] = useState(100);
+
+  // photo analysis
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const [photoMeal, setPhotoMeal] = useState(MEAL_TYPES[1]);
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const [photoItems, setPhotoItems] = useState<Array<{ name: string; grams: number; calories: number; protein_g: number; carbs_g: number; fat_g: number; selected: boolean }>>([]);
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -179,6 +185,52 @@ function NutricaoPage() {
     await load();
   };
 
+  const onPickPhoto = async (file: File) => {
+    setPhotoLoading(true);
+    setPhotoItems([]);
+    try {
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result as string);
+        r.onerror = reject;
+        r.readAsDataURL(file);
+      });
+      const res = await analyzePhoto({ data: { imageBase64: dataUrl } });
+      setPhotoItems(res.items.map((i) => ({ ...i, selected: true })));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao analisar foto");
+    } finally {
+      setPhotoLoading(false);
+    }
+  };
+
+  const confirmPhotoItems = async () => {
+    if (!user) return;
+    const sel = photoItems.filter((i) => i.selected);
+    if (sel.length === 0) return;
+    try {
+      const meal = await ensureMeal(photoMeal);
+      const rows = sel.map((i) => ({
+        user_id: user.id,
+        meal_id: meal.id,
+        name: i.name,
+        grams: i.grams,
+        calories: i.calories,
+        protein_g: i.protein_g,
+        carbs_g: i.carbs_g,
+        fat_g: i.fat_g,
+      }));
+      const { error } = await supabase.from("meal_items").insert(rows);
+      if (error) throw error;
+      toast.success(`${sel.length} itens adicionados em ${photoMeal}`);
+      setPhotoOpen(false);
+      setPhotoItems([]);
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro");
+    }
+  };
+
   const duplicateYesterday = async (type: string) => {
     if (!user) return;
     const y = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
@@ -248,6 +300,9 @@ function NutricaoPage() {
         <div className="flex items-center gap-1">
           <Link to="/app/nutricao-historico"><Button size="icon" variant="ghost" title="Visão geral"><BarChart3 className="h-5 w-5" /></Button></Link>
           <Link to="/app/receitas"><Button size="icon" variant="ghost" title="Receitas"><ChefHat className="h-5 w-5" /></Button></Link>
+          <Button size="icon" variant="ghost" title="Foto do prato" onClick={() => setPhotoOpen(true)}>
+            <Camera className="h-5 w-5" />
+          </Button>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button size="sm" className="rounded-full">
@@ -329,6 +384,69 @@ function NutricaoPage() {
         </Dialog>
         </div>
       </div>
+
+      {/* Photo analyze dialog */}
+      <Dialog open={photoOpen} onOpenChange={(o) => { setPhotoOpen(o); if (!o) setPhotoItems([]); }}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Camera className="h-4 w-4 text-primary" /> Foto do prato
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Refeição</Label>
+              <Select value={photoMeal} onValueChange={setPhotoMeal}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MEAL_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-xl p-6 cursor-pointer hover:bg-secondary/30 transition-colors">
+              {photoLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5 text-muted-foreground" />}
+              <span className="text-sm text-muted-foreground">
+                {photoLoading ? "Analisando…" : "Tirar foto ou enviar imagem"}
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                disabled={photoLoading}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) onPickPhoto(f);
+                }}
+              />
+            </label>
+            {photoItems.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Itens detectados</p>
+                {photoItems.map((i, idx) => (
+                  <div key={idx} className="flex items-start gap-2 rounded-lg border p-2">
+                    <input
+                      type="checkbox"
+                      checked={i.selected}
+                      onChange={(e) => setPhotoItems((arr) => arr.map((x, j) => j === idx ? { ...x, selected: e.target.checked } : x))}
+                      className="mt-1 h-4 w-4"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{i.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {Math.round(i.grams)}g · {Math.round(i.calories)} kcal · P {Math.round(i.protein_g)} · C {Math.round(i.carbs_g)} · G {Math.round(i.fat_g)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                <Button onClick={confirmPhotoItems} className="w-full">
+                  Adicionar selecionados
+                </Button>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit quantity dialog */}
       <Dialog open={!!editItem} onOpenChange={(o) => !o && setEditItem(null)}>
