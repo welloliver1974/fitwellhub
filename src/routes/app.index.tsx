@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Flame, Beef, Wheat, Droplet, GlassWater, Scale, Target, Plus, Minus, Dumbbell } from "lucide-react";
+import { Flame, Beef, Wheat, Droplet, GlassWater, Scale, Target, Plus, Minus, Dumbbell, Sparkles, FileDown } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/")({
@@ -196,6 +196,27 @@ function TodayPage() {
             <WorkoutCard name="Nenhum" action="Criar treino →" />
           </Link>
         )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Link to="/app/coach">
+          <div className="rounded-2xl border bg-card p-4 h-full hover:bg-secondary/50 transition-colors">
+            <div className="flex items-center gap-2 text-muted-foreground text-xs">
+              <Sparkles className="h-4 w-4" /> Coach IA
+            </div>
+            <p className="text-base font-display font-bold mt-2">Análise da semana</p>
+            <p className="text-xs text-muted-foreground mt-1">Insights personalizados →</p>
+          </div>
+        </Link>
+        <Link to="/app/relatorio">
+          <div className="rounded-2xl border bg-card p-4 h-full hover:bg-secondary/50 transition-colors">
+            <div className="flex items-center gap-2 text-muted-foreground text-xs">
+              <FileDown className="h-4 w-4" /> Relatório
+            </div>
+            <p className="text-base font-display font-bold mt-2">Exportar PDF</p>
+            <p className="text-xs text-muted-foreground mt-1">7 dias completos →</p>
+          </div>
+        </Link>
       </div>
     </div>
   );
