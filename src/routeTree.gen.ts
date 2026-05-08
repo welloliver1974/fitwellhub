@@ -21,6 +21,7 @@ import { Route as AppPesoRouteImport } from './routes/app.peso'
 import { Route as AppNutricaoHistoricoRouteImport } from './routes/app.nutricao-historico'
 import { Route as AppNutricaoRouteImport } from './routes/app.nutricao'
 import { Route as AppMetasRouteImport } from './routes/app.metas'
+import { Route as AppLembretesRouteImport } from './routes/app.lembretes'
 import { Route as AppExerciciosRouteImport } from './routes/app.exercicios'
 import { Route as AppCoachRouteImport } from './routes/app.coach'
 import { Route as AppChatRouteImport } from './routes/app.chat'
@@ -93,6 +94,11 @@ const AppMetasRoute = AppMetasRouteImport.update({
   path: '/metas',
   getParentRoute: () => AppRoute,
 } as any)
+const AppLembretesRoute = AppLembretesRouteImport.update({
+  id: '/lembretes',
+  path: '/lembretes',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppExerciciosRoute = AppExerciciosRouteImport.update({
   id: '/exercicios',
   path: '/exercicios',
@@ -156,6 +162,7 @@ export interface FileRoutesByFullPath {
   '/app/chat': typeof AppChatRoute
   '/app/coach': typeof AppCoachRoute
   '/app/exercicios': typeof AppExerciciosRouteWithChildren
+  '/app/lembretes': typeof AppLembretesRoute
   '/app/metas': typeof AppMetasRoute
   '/app/nutricao': typeof AppNutricaoRoute
   '/app/nutricao-historico': typeof AppNutricaoHistoricoRoute
@@ -180,6 +187,7 @@ export interface FileRoutesByTo {
   '/app/chat': typeof AppChatRoute
   '/app/coach': typeof AppCoachRoute
   '/app/exercicios': typeof AppExerciciosRouteWithChildren
+  '/app/lembretes': typeof AppLembretesRoute
   '/app/metas': typeof AppMetasRoute
   '/app/nutricao': typeof AppNutricaoRoute
   '/app/nutricao-historico': typeof AppNutricaoHistoricoRoute
@@ -203,6 +211,7 @@ export interface FileRoutesById {
   '/app/chat': typeof AppChatRoute
   '/app/coach': typeof AppCoachRoute
   '/app/exercicios': typeof AppExerciciosRouteWithChildren
+  '/app/lembretes': typeof AppLembretesRoute
   '/app/metas': typeof AppMetasRoute
   '/app/nutricao': typeof AppNutricaoRoute
   '/app/nutricao-historico': typeof AppNutricaoHistoricoRoute
@@ -230,6 +239,7 @@ export interface FileRouteTypes {
     | '/app/chat'
     | '/app/coach'
     | '/app/exercicios'
+    | '/app/lembretes'
     | '/app/metas'
     | '/app/nutricao'
     | '/app/nutricao-historico'
@@ -254,6 +264,7 @@ export interface FileRouteTypes {
     | '/app/chat'
     | '/app/coach'
     | '/app/exercicios'
+    | '/app/lembretes'
     | '/app/metas'
     | '/app/nutricao'
     | '/app/nutricao-historico'
@@ -276,6 +287,7 @@ export interface FileRouteTypes {
     | '/app/chat'
     | '/app/coach'
     | '/app/exercicios'
+    | '/app/lembretes'
     | '/app/metas'
     | '/app/nutricao'
     | '/app/nutricao-historico'
@@ -385,6 +397,13 @@ declare module '@tanstack/react-router' {
       path: '/metas'
       fullPath: '/app/metas'
       preLoaderRoute: typeof AppMetasRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/lembretes': {
+      id: '/app/lembretes'
+      path: '/lembretes'
+      fullPath: '/app/lembretes'
+      preLoaderRoute: typeof AppLembretesRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/exercicios': {
@@ -537,6 +556,7 @@ interface AppRouteChildren {
   AppChatRoute: typeof AppChatRoute
   AppCoachRoute: typeof AppCoachRoute
   AppExerciciosRoute: typeof AppExerciciosRouteWithChildren
+  AppLembretesRoute: typeof AppLembretesRoute
   AppMetasRoute: typeof AppMetasRoute
   AppNutricaoRoute: typeof AppNutricaoRoute
   AppNutricaoHistoricoRoute: typeof AppNutricaoHistoricoRoute
@@ -552,6 +572,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppChatRoute: AppChatRoute,
   AppCoachRoute: AppCoachRoute,
   AppExerciciosRoute: AppExerciciosRouteWithChildren,
+  AppLembretesRoute: AppLembretesRoute,
   AppMetasRoute: AppMetasRoute,
   AppNutricaoRoute: AppNutricaoRoute,
   AppNutricaoHistoricoRoute: AppNutricaoHistoricoRoute,
