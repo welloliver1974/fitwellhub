@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { ArrowLeft, Plus, Trash2, Timer, TrendingUp, Pause, Play } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Timer, TrendingUp, Pause, Play, Sparkles, Maximize2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/treinos/$id")({
@@ -24,6 +24,7 @@ function WorkoutDetail() {
   const [workout, setWorkout] = useState<Workout | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [sets, setSets] = useState<Set[]>([]);
+  const [history, setHistory] = useState<Record<string, { reps: number; weight_kg: number; date: string }>>({});
   const [open, setOpen] = useState(false);
   const [exName, setExName] = useState("");
   const [restSec, setRestSec] = useState(0);
@@ -60,6 +61,33 @@ function WorkoutDetail() {
       const { data: ss } = await supabase.from("sets").select("*").in("exercise_id", exIds).order("set_number");
       setSets((ss ?? []) as Set[]);
     } else setSets([]);
+
+    // Load best/last set per exercise name from previous workouts
+    if (user && (ex ?? []).length) {
+      const names = Array.from(new Set((ex ?? []).map((e) => e.name)));
+      const { data: prev } = await supabase
+        .from("exercises")
+        .select("id,name,workout_id,workouts!inner(workout_date)")
+        .eq("user_id", user.id)
+        .in("name", names)
+        .neq("workout_id", id);
+      const prevIds = (prev ?? []).map((p: any) => p.id);
+      if (prevIds.length) {
+        const { data: prevSets } = await supabase.from("sets").select("exercise_id,reps,weight_kg").in("exercise_id", prevIds);
+        const exMap: Record<string, { name: string; date: string }> = {};
+        (prev ?? []).forEach((p: any) => { exMap[p.id] = { name: p.name, date: p.workouts.workout_date }; });
+        const best: Record<string, { reps: number; weight_kg: number; date: string }> = {};
+        (prevSets ?? []).forEach((s: any) => {
+          const meta = exMap[s.exercise_id]; if (!meta) return;
+          const cur = best[meta.name];
+          const w = Number(s.weight_kg);
+          if (!cur || w > cur.weight_kg || (w === cur.weight_kg && Number(s.reps) > cur.reps)) {
+            best[meta.name] = { reps: Number(s.reps), weight_kg: w, date: meta.date };
+          }
+        });
+        setHistory(best);
+      } else setHistory({});
+    }
   };
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
@@ -108,6 +136,13 @@ function WorkoutDetail() {
 
   if (!workout) return <p className="text-muted-foreground">Carregando…</p>;
 
+  const suggestion = (name: string) => {
+    const h = history[name];
+    if (!h) return null;
+    const next = h.reps >= 10 ? h.weight_kg + 2.5 : h.weight_kg;
+    return { last: h, next };
+  };
+
   return (
     <div className="space-y-5">
       <Link to="/app/treinos" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
@@ -119,6 +154,10 @@ function WorkoutDetail() {
           <h1 className="text-3xl font-display font-bold">{workout.name}</h1>
           <p className="text-sm text-muted-foreground">{new Date(workout.workout_date + "T00:00").toLocaleDateString("pt-BR")}</p>
         </div>
+        <div className="flex items-center gap-1">
+        <Link to="/app/treinos/$id/foco" params={{ id }}>
+          <Button size="icon" variant="outline" title="Modo foco"><Maximize2 className="h-4 w-4" /></Button>
+        </Link>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button size="sm" className="rounded-full"><Plus className="h-4 w-4 mr-1" />Exercício</Button>
@@ -132,6 +171,7 @@ function WorkoutDetail() {
             <DialogFooter><Button onClick={addExercise} className="rounded-full">Adicionar</Button></DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Rest timer */}
@@ -173,6 +213,20 @@ function WorkoutDetail() {
                     </Button>
                   </div>
                 </div>
+
+                {(() => {
+                  const sug = suggestion(ex.name);
+                  if (!sug) return null;
+                  return (
+                    <div className="mb-3 flex items-center gap-2 rounded-lg bg-primary/10 border border-primary/20 px-3 py-2 text-xs">
+                      <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
+                      <span className="text-muted-foreground">
+                        Última: <strong className="text-foreground">{sug.last.reps}×{sug.last.weight_kg}kg</strong>
+                        {sug.next > sug.last.weight_kg && <> · tente <strong className="text-primary">{sug.next}kg</strong></>}
+                      </span>
+                    </div>
+                  );
+                })()}
 
                 {exSets.length > 0 && (
                   <div className="space-y-2 mb-3">
