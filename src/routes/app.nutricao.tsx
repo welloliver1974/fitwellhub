@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Sparkles, Trash2, Apple, Star, Copy, Pencil, ChefHat, BarChart3, Camera, Loader2 } from "lucide-react";
+import { Plus, Sparkles, Trash2, Apple, Star, Copy, Pencil, ChefHat, BarChart3, Camera, Loader2, Heart } from "lucide-react";
 import { lookupNutrition, analyzePhoto } from "@/server/nutrition.functions";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
@@ -36,6 +36,7 @@ function NutricaoPage() {
   const [meals, setMeals] = useState<Meal[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [recent, setRecent] = useState<Item[]>([]);
+  const [favorites, setFavorites] = useState<Array<{ id: string; name: string; grams: number; calories: number; protein_g: number; carbs_g: number; fat_g: number }>>([]);
   const [open, setOpen] = useState(false);
   const [mealType, setMealType] = useState(MEAL_TYPES[0]);
   const [query, setQuery] = useState("");
@@ -97,6 +98,13 @@ function NutricaoPage() {
       if (uniq.length >= 8) break;
     }
     setRecent(uniq);
+
+    const { data: favs } = await supabase
+      .from("favorite_foods")
+      .select("id,name,grams,calories,protein_g,carbs_g,fat_g")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+    setFavorites((favs ?? []) as any);
   };
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [user]);
@@ -171,6 +179,41 @@ function NutricaoPage() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro");
     }
+  };
+
+  const toggleFavorite = async (it: Item) => {
+    if (!user) return;
+    const existing = favorites.find((f) => f.name.toLowerCase().trim() === it.name.toLowerCase().trim());
+    if (existing) {
+      await supabase.from("favorite_foods").delete().eq("id", existing.id);
+      toast.success("Removido dos favoritos");
+    } else {
+      await supabase.from("favorite_foods").insert({
+        user_id: user.id,
+        name: it.name,
+        grams: Number(it.grams),
+        calories: Number(it.calories),
+        protein_g: Number(it.protein_g),
+        carbs_g: Number(it.carbs_g),
+        fat_g: Number(it.fat_g),
+      });
+      toast.success("Favoritado ⭐");
+    }
+    load();
+  };
+
+  const isFav = (name: string) => favorites.some((f) => f.name.toLowerCase().trim() === name.toLowerCase().trim());
+
+  const addFavoriteToMeal = async (f: typeof favorites[number]) => {
+    if (!user) return;
+    const meal = await ensureMeal(mealType);
+    await supabase.from("meal_items").insert({
+      user_id: user.id, meal_id: meal.id,
+      name: f.name, grams: f.grams,
+      calories: f.calories, protein_g: f.protein_g, carbs_g: f.carbs_g, fat_g: f.fat_g,
+    });
+    toast.success(`${f.name} adicionado em ${mealType}`);
+    load();
   };
 
   const removeItem = async (id: string) => {
