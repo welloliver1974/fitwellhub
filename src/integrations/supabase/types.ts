@@ -38,6 +38,30 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       exercises: {
         Row: {
           created_at: string
@@ -75,6 +99,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      favorite_foods: {
+        Row: {
+          calories: number
+          carbs_g: number
+          created_at: string
+          fat_g: number
+          grams: number
+          id: string
+          name: string
+          protein_g: number
+          user_id: string
+        }
+        Insert: {
+          calories?: number
+          carbs_g?: number
+          created_at?: string
+          fat_g?: number
+          grams?: number
+          id?: string
+          name: string
+          protein_g?: number
+          user_id: string
+        }
+        Update: {
+          calories?: number
+          carbs_g?: number
+          created_at?: string
+          fat_g?: number
+          grams?: number
+          id?: string
+          name?: string
+          protein_g?: number
+          user_id?: string
+        }
+        Relationships: []
       }
       goals: {
         Row: {
@@ -254,6 +314,36 @@ export type Database = {
           id?: string
           name?: string
           servings?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      reminders: {
+        Row: {
+          created_at: string
+          days_of_week: number[]
+          enabled: boolean
+          id: string
+          kind: string
+          time_of_day: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          days_of_week?: number[]
+          enabled?: boolean
+          id?: string
+          kind: string
+          time_of_day: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          days_of_week?: number[]
+          enabled?: boolean
+          id?: string
+          kind?: string
+          time_of_day?: string
           user_id?: string
         }
         Relationships: []
