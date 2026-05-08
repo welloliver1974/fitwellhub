@@ -8,10 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Sparkles, Trash2, Apple, Star, Copy, Pencil, ChefHat, BarChart3, Camera, Loader2, Heart } from "lucide-react";
+import { Plus, Sparkles, Trash2, Apple, Star, Copy, Pencil, ChefHat, BarChart3, Camera, Loader2, Heart, Barcode } from "lucide-react";
 import { lookupNutrition, analyzePhoto } from "@/server/nutrition.functions";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { BarcodeScanner } from "@/components/BarcodeScanner";
 
 export const Route = createFileRoute("/app/nutricao")({
   component: NutricaoPage,
@@ -58,7 +59,40 @@ function NutricaoPage() {
   const [photoLoading, setPhotoLoading] = useState(false);
   const [photoItems, setPhotoItems] = useState<Array<{ name: string; grams: number; calories: number; protein_g: number; carbs_g: number; fat_g: number; selected: boolean }>>([]);
 
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanLoading, setScanLoading] = useState(false);
+
   const today = new Date().toISOString().slice(0, 10);
+
+  const onBarcode = async (code: string) => {
+    setScanOpen(false);
+    setScanLoading(true);
+    try {
+      const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`);
+      const j = await r.json();
+      if (j.status !== 1 || !j.product) {
+        toast.error("Produto não encontrado. Adicione manualmente.");
+        return;
+      }
+      const p = j.product;
+      const n = p.nutriments ?? {};
+      const name = p.product_name_pt || p.product_name || `EAN ${code}`;
+      const g = 100;
+      setQuery(name);
+      setGrams(g);
+      setManual(true);
+      setMCal(Math.round(Number(n["energy-kcal_100g"] ?? n["energy-kcal"] ?? 0)));
+      setMProt(Math.round((Number(n["proteins_100g"] ?? 0)) * 10) / 10);
+      setMCarb(Math.round((Number(n["carbohydrates_100g"] ?? 0)) * 10) / 10);
+      setMFat(Math.round((Number(n["fat_100g"] ?? 0)) * 10) / 10);
+      setOpen(true);
+      toast.success(`${name} encontrado`);
+    } catch (e) {
+      toast.error("Erro ao buscar produto");
+    } finally {
+      setScanLoading(false);
+    }
+  };
 
   const load = async () => {
     if (!user) return;
@@ -343,6 +377,9 @@ function NutricaoPage() {
         <div className="flex items-center gap-1">
           <Link to="/app/nutricao-historico"><Button size="icon" variant="ghost" title="Visão geral"><BarChart3 className="h-5 w-5" /></Button></Link>
           <Link to="/app/receitas"><Button size="icon" variant="ghost" title="Receitas"><ChefHat className="h-5 w-5" /></Button></Link>
+          <Button size="icon" variant="ghost" title="Código de barras" onClick={() => setScanOpen(true)} disabled={scanLoading}>
+            {scanLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Barcode className="h-5 w-5" />}
+          </Button>
           <Button size="icon" variant="ghost" title="Foto do prato" onClick={() => setPhotoOpen(true)}>
             <Camera className="h-5 w-5" />
           </Button>
@@ -508,6 +545,8 @@ function NutricaoPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <BarcodeScanner open={scanOpen} onClose={() => setScanOpen(false)} onDetected={onBarcode} />
 
       {/* Edit quantity dialog */}
       <Dialog open={!!editItem} onOpenChange={(o) => !o && setEditItem(null)}>
