@@ -113,6 +113,30 @@
   --shadow-soft: 0 8px 32px -12px oklch(0.82 0.18 165 / 0.35);
 }
 
+/* Light mode override (Dark Athletic continues as default in :root) */
+.light {
+  --background: oklch(0.985 0.005 180);
+  --foreground: oklch(0.18 0.01 180);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.01 180);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.01 180);
+  --primary: oklch(0.65 0.16 165);
+  --primary-foreground: oklch(0.99 0.005 180);
+  --secondary: oklch(0.94 0.012 180);
+  --secondary-foreground: oklch(0.20 0.01 180);
+  --muted: oklch(0.95 0.01 180);
+  --muted-foreground: oklch(0.45 0.01 180);
+  --accent: oklch(0.78 0.16 160);
+  --accent-foreground: oklch(0.18 0.01 180);
+  --border: oklch(0.90 0.01 180);
+  --input: oklch(0.92 0.01 180);
+  --ring: oklch(0.65 0.16 165);
+  --sidebar: oklch(0.98 0.005 180);
+  --sidebar-foreground: oklch(0.18 0.01 180);
+  --sidebar-border: oklch(0.90 0.01 180);
+}
+
 .dark {
   --background: oklch(0.18 0.015 145);
   --foreground: oklch(0.984 0.003 247.858);

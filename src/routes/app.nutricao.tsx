@@ -8,10 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Sparkles, Trash2, Apple, Star, Copy, Pencil, ChefHat, BarChart3, Camera, Loader2 } from "lucide-react";
+import { Plus, Sparkles, Trash2, Apple, Star, Copy, Pencil, ChefHat, BarChart3, Camera, Loader2, Heart, Barcode } from "lucide-react";
 import { lookupNutrition, analyzePhoto } from "@/server/nutrition.functions";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { BarcodeScanner } from "@/components/BarcodeScanner";
 
 export const Route = createFileRoute("/app/nutricao")({
   component: NutricaoPage,
@@ -36,6 +37,7 @@ function NutricaoPage() {
   const [meals, setMeals] = useState<Meal[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [recent, setRecent] = useState<Item[]>([]);
+  const [favorites, setFavorites] = useState<Array<{ id: string; name: string; grams: number; calories: number; protein_g: number; carbs_g: number; fat_g: number }>>([]);
   const [open, setOpen] = useState(false);
   const [mealType, setMealType] = useState(MEAL_TYPES[0]);
   const [query, setQuery] = useState("");
@@ -57,7 +59,40 @@ function NutricaoPage() {
   const [photoLoading, setPhotoLoading] = useState(false);
   const [photoItems, setPhotoItems] = useState<Array<{ name: string; grams: number; calories: number; protein_g: number; carbs_g: number; fat_g: number; selected: boolean }>>([]);
 
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanLoading, setScanLoading] = useState(false);
+
   const today = new Date().toISOString().slice(0, 10);
+
+  const onBarcode = async (code: string) => {
+    setScanOpen(false);
+    setScanLoading(true);
+    try {
+      const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`);
+      const j = await r.json();
+      if (j.status !== 1 || !j.product) {
+        toast.error("Produto não encontrado. Adicione manualmente.");
+        return;
+      }
+      const p = j.product;
+      const n = p.nutriments ?? {};
+      const name = p.product_name_pt || p.product_name || `EAN ${code}`;
+      const g = 100;
+      setQuery(name);
+      setGrams(g);
+      setManual(true);
+      setMCal(Math.round(Number(n["energy-kcal_100g"] ?? n["energy-kcal"] ?? 0)));
+      setMProt(Math.round((Number(n["proteins_100g"] ?? 0)) * 10) / 10);
+      setMCarb(Math.round((Number(n["carbohydrates_100g"] ?? 0)) * 10) / 10);
+      setMFat(Math.round((Number(n["fat_100g"] ?? 0)) * 10) / 10);
+      setOpen(true);
+      toast.success(`${name} encontrado`);
+    } catch (e) {
+      toast.error("Erro ao buscar produto");
+    } finally {
+      setScanLoading(false);
+    }
+  };
 
   const load = async () => {
     if (!user) return;
@@ -97,6 +132,13 @@ function NutricaoPage() {
       if (uniq.length >= 8) break;
     }
     setRecent(uniq);
+
+    const { data: favs } = await supabase
+      .from("favorite_foods")
+      .select("id,name,grams,calories,protein_g,carbs_g,fat_g")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+    setFavorites((favs ?? []) as any);
   };
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [user]);
@@ -171,6 +213,41 @@ function NutricaoPage() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro");
     }
+  };
+
+  const toggleFavorite = async (it: Item) => {
+    if (!user) return;
+    const existing = favorites.find((f) => f.name.toLowerCase().trim() === it.name.toLowerCase().trim());
+    if (existing) {
+      await supabase.from("favorite_foods").delete().eq("id", existing.id);
+      toast.success("Removido dos favoritos");
+    } else {
+      await supabase.from("favorite_foods").insert({
+        user_id: user.id,
+        name: it.name,
+        grams: Number(it.grams),
+        calories: Number(it.calories),
+        protein_g: Number(it.protein_g),
+        carbs_g: Number(it.carbs_g),
+        fat_g: Number(it.fat_g),
+      });
+      toast.success("Favoritado ⭐");
+    }
+    load();
+  };
+
+  const isFav = (name: string) => favorites.some((f) => f.name.toLowerCase().trim() === name.toLowerCase().trim());
+
+  const addFavoriteToMeal = async (f: typeof favorites[number]) => {
+    if (!user) return;
+    const meal = await ensureMeal(mealType);
+    await supabase.from("meal_items").insert({
+      user_id: user.id, meal_id: meal.id,
+      name: f.name, grams: f.grams,
+      calories: f.calories, protein_g: f.protein_g, carbs_g: f.carbs_g, fat_g: f.fat_g,
+    });
+    toast.success(`${f.name} adicionado em ${mealType}`);
+    load();
   };
 
   const removeItem = async (id: string) => {
@@ -300,6 +377,9 @@ function NutricaoPage() {
         <div className="flex items-center gap-1">
           <Link to="/app/nutricao-historico"><Button size="icon" variant="ghost" title="Visão geral"><BarChart3 className="h-5 w-5" /></Button></Link>
           <Link to="/app/receitas"><Button size="icon" variant="ghost" title="Receitas"><ChefHat className="h-5 w-5" /></Button></Link>
+          <Button size="icon" variant="ghost" title="Código de barras" onClick={() => setScanOpen(true)} disabled={scanLoading}>
+            {scanLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Barcode className="h-5 w-5" />}
+          </Button>
           <Button size="icon" variant="ghost" title="Foto do prato" onClick={() => setPhotoOpen(true)}>
             <Camera className="h-5 w-5" />
           </Button>
@@ -338,6 +418,24 @@ function NutricaoPage() {
                         className="text-xs px-2.5 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
                       >
                         {r.name} <span className="text-muted-foreground">·{r.grams}g</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {favorites.length > 0 && (
+                <div>
+                  <Label className="flex items-center gap-1.5"><Heart className="h-3 w-3 text-primary" /> Favoritos</Label>
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {favorites.map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => { addFavoriteToMeal(f); setOpen(false); }}
+                        className="text-xs px-2.5 py-1.5 rounded-full bg-primary/15 text-primary hover:bg-primary/25 transition-colors"
+                      >
+                        {f.name} <span className="opacity-60">·{Math.round(f.grams)}g</span>
                       </button>
                     ))}
                   </div>
@@ -448,6 +546,8 @@ function NutricaoPage() {
         </DialogContent>
       </Dialog>
 
+      <BarcodeScanner open={scanOpen} onClose={() => setScanOpen(false)} onDetected={onBarcode} />
+
       {/* Edit quantity dialog */}
       <Dialog open={!!editItem} onOpenChange={(o) => !o && setEditItem(null)}>
         <DialogContent>
@@ -512,6 +612,9 @@ function NutricaoPage() {
                       </button>
                       <Button variant="ghost" size="icon" onClick={() => openEdit(i)} title="Ajustar quantidade">
                         <Pencil className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => toggleFavorite(i)} title="Favoritar">
+                        <Heart className={`h-4 w-4 ${isFav(i.name) ? "fill-primary text-primary" : "text-muted-foreground"}`} />
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => removeItem(i.id)}>
                         <Trash2 className="h-4 w-4 text-muted-foreground" />

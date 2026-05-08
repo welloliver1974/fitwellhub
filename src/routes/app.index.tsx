@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Flame, Beef, Wheat, Droplet, GlassWater, Scale, Target, Plus, Minus, Dumbbell, Sparkles, FileDown } from "lucide-react";
 import { toast } from "sonner";
+import { Heatmap } from "@/components/Heatmap";
 
 export const Route = createFileRoute("/app/")({
   component: TodayPage,
@@ -218,6 +219,8 @@ function TodayPage() {
           </div>
         </Link>
       </div>
+
+      <Heatmap />
     </div>
   );
 }

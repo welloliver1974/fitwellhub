@@ -1,0 +1,87 @@
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+
+const inputSchema = z.object({
+  message: z.string().trim().min(1).max(2000),
+});
+
+export const sendChat = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => inputSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) throw new Error("LOVABLE_API_KEY não configurada");
+    const { supabase, userId } = context;
+
+    // Build context: last 7 days of meals/water/weight + goals + history
+    const today = new Date().toISOString().slice(0, 10);
+    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+
+    const [{ data: goals }, { data: meals }, { data: water }, { data: weights }, { data: history }] = await Promise.all([
+      supabase.from("goals").select("calories,protein_g,carbs_g,fat_g").eq("user_id", userId).maybeSingle(),
+      supabase.from("meals").select("id,meal_date").eq("user_id", userId).gte("meal_date", weekAgo),
+      supabase.from("water_logs").select("ml,log_date").eq("user_id", userId).gte("log_date", weekAgo),
+      supabase.from("body_weights").select("weight_kg,log_date").eq("user_id", userId).order("log_date", { ascending: false }).limit(5),
+      supabase.from("chat_messages").select("role,content").eq("user_id", userId).order("created_at", { ascending: false }).limit(20),
+    ]);
+
+    const ids = (meals ?? []).map((m) => m.id);
+    const byMeal: Record<string, string> = {};
+    (meals ?? []).forEach((m) => { byMeal[m.id] = m.meal_date; });
+    const dailyTotals: Record<string, { kcal: number; p: number; c: number; f: number }> = {};
+    if (ids.length) {
+      const { data: items } = await supabase.from("meal_items").select("meal_id,calories,protein_g,carbs_g,fat_g").in("meal_id", ids);
+      (items ?? []).forEach((i) => {
+        const d = byMeal[i.meal_id as string]; if (!d) return;
+        const cur = dailyTotals[d] ?? { kcal: 0, p: 0, c: 0, f: 0 };
+        cur.kcal += Number(i.calories || 0);
+        cur.p += Number(i.protein_g || 0);
+        cur.c += Number(i.carbs_g || 0);
+        cur.f += Number(i.fat_g || 0);
+        dailyTotals[d] = cur;
+      });
+    }
+    const waterByDay: Record<string, number> = {};
+    (water ?? []).forEach((w) => { waterByDay[w.log_date] = (waterByDay[w.log_date] ?? 0) + Number(w.ml); });
+
+    const ctxText = `
+Hoje: ${today}
+Metas: ${goals?.calories ?? 2000}kcal, P${goals?.protein_g ?? 140}g, C${goals?.carbs_g ?? 220}g, G${goals?.fat_g ?? 65}g
+Últimos 7 dias (kcal/P/C/G/água-ml):
+${Object.entries(dailyTotals).sort().map(([d, t]) => `${d}: ${Math.round(t.kcal)}/${Math.round(t.p)}/${Math.round(t.c)}/${Math.round(t.f)} | água ${waterByDay[d] ?? 0}ml`).join("\n")}
+Pesos recentes: ${(weights ?? []).map((w) => `${w.log_date}=${w.weight_kg}kg`).join(", ")}
+`.trim();
+
+    // Save user message
+    await supabase.from("chat_messages").insert({ user_id: userId, role: "user", content: data.message });
+
+    const recentHistory = (history ?? []).reverse();
+
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: [
+          {
+            role: "system",
+            content: `Você é um coach de nutrição e treino direto, motivador e baseado em ciência. Responda em português brasileiro, curto e objetivo (máx 4 parágrafos). Use os dados reais do usuário abaixo:\n\n${ctxText}`,
+          },
+          ...recentHistory.map((m) => ({ role: m.role, content: m.content })),
+          { role: "user", content: data.message },
+        ],
+      }),
+    });
+
+    if (res.status === 429) throw new Error("Limite de requisições atingido. Tente em alguns segundos.");
+    if (res.status === 402) throw new Error("Créditos esgotados na sua workspace Lovable AI.");
+    if (!res.ok) throw new Error("Falha na IA");
+
+    const j = await res.json();
+    const reply: string = j.choices?.[0]?.message?.content ?? "(sem resposta)";
+
+    await supabase.from("chat_messages").insert({ user_id: userId, role: "assistant", content: reply });
+
+    return { reply };
+  });
