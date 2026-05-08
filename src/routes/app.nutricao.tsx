@@ -387,6 +387,24 @@ function NutricaoPage() {
                 </div>
               )}
 
+              {favorites.length > 0 && (
+                <div>
+                  <Label className="flex items-center gap-1.5"><Heart className="h-3 w-3 text-primary" /> Favoritos</Label>
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {favorites.map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => { addFavoriteToMeal(f); setOpen(false); }}
+                        className="text-xs px-2.5 py-1.5 rounded-full bg-primary/15 text-primary hover:bg-primary/25 transition-colors"
+                      >
+                        {f.name} <span className="opacity-60">·{Math.round(f.grams)}g</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <Label>Alimento</Label>
                 <Input
@@ -555,6 +573,9 @@ function NutricaoPage() {
                       </button>
                       <Button variant="ghost" size="icon" onClick={() => openEdit(i)} title="Ajustar quantidade">
                         <Pencil className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => toggleFavorite(i)} title="Favoritar">
+                        <Heart className={`h-4 w-4 ${isFav(i.name) ? "fill-primary text-primary" : "text-muted-foreground"}`} />
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => removeItem(i.id)}>
                         <Trash2 className="h-4 w-4 text-muted-foreground" />
