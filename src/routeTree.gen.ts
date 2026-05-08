@@ -23,6 +23,7 @@ import { Route as AppNutricaoRouteImport } from './routes/app.nutricao'
 import { Route as AppMetasRouteImport } from './routes/app.metas'
 import { Route as AppExerciciosRouteImport } from './routes/app.exercicios'
 import { Route as AppCoachRouteImport } from './routes/app.coach'
+import { Route as AppChatRouteImport } from './routes/app.chat'
 import { Route as AppTreinosIndexRouteImport } from './routes/app.treinos.index'
 import { Route as AppTemplatesIndexRouteImport } from './routes/app.templates.index'
 import { Route as AppReceitasIndexRouteImport } from './routes/app.receitas.index'
@@ -30,6 +31,7 @@ import { Route as AppTreinosIdRouteImport } from './routes/app.treinos.$id'
 import { Route as AppTemplatesIdRouteImport } from './routes/app.templates.$id'
 import { Route as AppReceitasIdRouteImport } from './routes/app.receitas.$id'
 import { Route as AppExerciciosNameRouteImport } from './routes/app.exercicios.$name'
+import { Route as AppTreinosIdFocoRouteImport } from './routes/app.treinos.$id.foco'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -101,6 +103,11 @@ const AppCoachRoute = AppCoachRouteImport.update({
   path: '/coach',
   getParentRoute: () => AppRoute,
 } as any)
+const AppChatRoute = AppChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppTreinosIndexRoute = AppTreinosIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -136,11 +143,17 @@ const AppExerciciosNameRoute = AppExerciciosNameRouteImport.update({
   path: '/$name',
   getParentRoute: () => AppExerciciosRoute,
 } as any)
+const AppTreinosIdFocoRoute = AppTreinosIdFocoRouteImport.update({
+  id: '/foco',
+  path: '/foco',
+  getParentRoute: () => AppTreinosIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
+  '/app/chat': typeof AppChatRoute
   '/app/coach': typeof AppCoachRoute
   '/app/exercicios': typeof AppExerciciosRouteWithChildren
   '/app/metas': typeof AppMetasRoute
@@ -155,14 +168,16 @@ export interface FileRoutesByFullPath {
   '/app/exercicios/$name': typeof AppExerciciosNameRoute
   '/app/receitas/$id': typeof AppReceitasIdRoute
   '/app/templates/$id': typeof AppTemplatesIdRoute
-  '/app/treinos/$id': typeof AppTreinosIdRoute
+  '/app/treinos/$id': typeof AppTreinosIdRouteWithChildren
   '/app/receitas/': typeof AppReceitasIndexRoute
   '/app/templates/': typeof AppTemplatesIndexRoute
   '/app/treinos/': typeof AppTreinosIndexRoute
+  '/app/treinos/$id/foco': typeof AppTreinosIdFocoRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/app/chat': typeof AppChatRoute
   '/app/coach': typeof AppCoachRoute
   '/app/exercicios': typeof AppExerciciosRouteWithChildren
   '/app/metas': typeof AppMetasRoute
@@ -174,16 +189,18 @@ export interface FileRoutesByTo {
   '/app/exercicios/$name': typeof AppExerciciosNameRoute
   '/app/receitas/$id': typeof AppReceitasIdRoute
   '/app/templates/$id': typeof AppTemplatesIdRoute
-  '/app/treinos/$id': typeof AppTreinosIdRoute
+  '/app/treinos/$id': typeof AppTreinosIdRouteWithChildren
   '/app/receitas': typeof AppReceitasIndexRoute
   '/app/templates': typeof AppTemplatesIndexRoute
   '/app/treinos': typeof AppTreinosIndexRoute
+  '/app/treinos/$id/foco': typeof AppTreinosIdFocoRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
+  '/app/chat': typeof AppChatRoute
   '/app/coach': typeof AppCoachRoute
   '/app/exercicios': typeof AppExerciciosRouteWithChildren
   '/app/metas': typeof AppMetasRoute
@@ -198,10 +215,11 @@ export interface FileRoutesById {
   '/app/exercicios/$name': typeof AppExerciciosNameRoute
   '/app/receitas/$id': typeof AppReceitasIdRoute
   '/app/templates/$id': typeof AppTemplatesIdRoute
-  '/app/treinos/$id': typeof AppTreinosIdRoute
+  '/app/treinos/$id': typeof AppTreinosIdRouteWithChildren
   '/app/receitas/': typeof AppReceitasIndexRoute
   '/app/templates/': typeof AppTemplatesIndexRoute
   '/app/treinos/': typeof AppTreinosIndexRoute
+  '/app/treinos/$id/foco': typeof AppTreinosIdFocoRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -209,6 +227,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/auth'
+    | '/app/chat'
     | '/app/coach'
     | '/app/exercicios'
     | '/app/metas'
@@ -227,10 +246,12 @@ export interface FileRouteTypes {
     | '/app/receitas/'
     | '/app/templates/'
     | '/app/treinos/'
+    | '/app/treinos/$id/foco'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
+    | '/app/chat'
     | '/app/coach'
     | '/app/exercicios'
     | '/app/metas'
@@ -246,11 +267,13 @@ export interface FileRouteTypes {
     | '/app/receitas'
     | '/app/templates'
     | '/app/treinos'
+    | '/app/treinos/$id/foco'
   id:
     | '__root__'
     | '/'
     | '/app'
     | '/auth'
+    | '/app/chat'
     | '/app/coach'
     | '/app/exercicios'
     | '/app/metas'
@@ -269,6 +292,7 @@ export interface FileRouteTypes {
     | '/app/receitas/'
     | '/app/templates/'
     | '/app/treinos/'
+    | '/app/treinos/$id/foco'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -377,6 +401,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCoachRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/chat': {
+      id: '/app/chat'
+      path: '/chat'
+      fullPath: '/app/chat'
+      preLoaderRoute: typeof AppChatRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/treinos/': {
       id: '/app/treinos/'
       path: '/'
@@ -426,6 +457,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppExerciciosNameRouteImport
       parentRoute: typeof AppExerciciosRoute
     }
+    '/app/treinos/$id/foco': {
+      id: '/app/treinos/$id/foco'
+      path: '/foco'
+      fullPath: '/app/treinos/$id/foco'
+      preLoaderRoute: typeof AppTreinosIdFocoRouteImport
+      parentRoute: typeof AppTreinosIdRoute
+    }
   }
 }
 
@@ -469,13 +507,25 @@ const AppTemplatesRouteWithChildren = AppTemplatesRoute._addFileChildren(
   AppTemplatesRouteChildren,
 )
 
+interface AppTreinosIdRouteChildren {
+  AppTreinosIdFocoRoute: typeof AppTreinosIdFocoRoute
+}
+
+const AppTreinosIdRouteChildren: AppTreinosIdRouteChildren = {
+  AppTreinosIdFocoRoute: AppTreinosIdFocoRoute,
+}
+
+const AppTreinosIdRouteWithChildren = AppTreinosIdRoute._addFileChildren(
+  AppTreinosIdRouteChildren,
+)
+
 interface AppTreinosRouteChildren {
-  AppTreinosIdRoute: typeof AppTreinosIdRoute
+  AppTreinosIdRoute: typeof AppTreinosIdRouteWithChildren
   AppTreinosIndexRoute: typeof AppTreinosIndexRoute
 }
 
 const AppTreinosRouteChildren: AppTreinosRouteChildren = {
-  AppTreinosIdRoute: AppTreinosIdRoute,
+  AppTreinosIdRoute: AppTreinosIdRouteWithChildren,
   AppTreinosIndexRoute: AppTreinosIndexRoute,
 }
 
@@ -484,6 +534,7 @@ const AppTreinosRouteWithChildren = AppTreinosRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppChatRoute: typeof AppChatRoute
   AppCoachRoute: typeof AppCoachRoute
   AppExerciciosRoute: typeof AppExerciciosRouteWithChildren
   AppMetasRoute: typeof AppMetasRoute
@@ -498,6 +549,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppChatRoute: AppChatRoute,
   AppCoachRoute: AppCoachRoute,
   AppExerciciosRoute: AppExerciciosRouteWithChildren,
   AppMetasRoute: AppMetasRoute,
