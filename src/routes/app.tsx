@@ -1,10 +1,12 @@
 import { createFileRoute, Outlet, Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { Home, Dumbbell, Apple, LogOut, Sun, Moon, MessageCircle } from "lucide-react";
+import { Home, Dumbbell, Apple, LogOut, Sun, Moon, MessageCircle, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
+import { useReminders } from "@/lib/use-reminders";
+import { Link as RLink } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/app")({
   component: AppLayout,
@@ -15,6 +17,7 @@ function AppLayout() {
   const navigate = useNavigate();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const { theme, toggle } = useTheme();
+  useReminders();
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth" });
@@ -42,6 +45,9 @@ function AppLayout() {
             <span className="font-display font-bold">Verde</span>
           </Link>
           <div className="flex items-center gap-1">
+            <RLink to="/app/lembretes">
+              <Button variant="ghost" size="icon" title="Lembretes"><Bell className="h-4 w-4" /></Button>
+            </RLink>
             <Button variant="ghost" size="icon" onClick={toggle} title={theme === "dark" ? "Modo claro" : "Modo escuro"}>
               {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
