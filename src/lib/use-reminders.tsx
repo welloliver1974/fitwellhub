@@ -43,14 +43,22 @@ export function useReminders() {
           weight: "⚖️ Registre seu peso",
         };
         try {
-          new Notification(titles[r.kind] ?? "Lembrete", { body: "Toque para abrir o app", icon: "/icon-192.png" });
+          new Notification(titles[r.kind] ?? "Lembrete", {
+            body: "Toque para abrir o app",
+            icon: "/icon-192.png",
+          });
           localStorage.setItem(key, "1");
-        } catch {}
+        } catch (error) {
+          console.error("Failed to show reminder notification:", error);
+        }
       }
     };
 
     tick();
     const iv = setInterval(tick, 30_000);
-    return () => { active = false; clearInterval(iv); };
+    return () => {
+      active = false;
+      clearInterval(iv);
+    };
   }, [user]);
 }

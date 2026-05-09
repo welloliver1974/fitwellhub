@@ -5,7 +5,16 @@ import { useAuth } from "@/lib/auth-context";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+  Legend,
+} from "recharts";
 
 export const Route = createFileRoute("/app/nutricao-historico")({ component: NutHistoryPage });
 
@@ -23,7 +32,11 @@ function NutHistoryPage() {
       const since = new Date(Date.now() - range * 86400000).toISOString().slice(0, 10);
       const [{ data: g }, { data: meals }] = await Promise.all([
         supabase.from("goals").select("calories").eq("user_id", user.id).maybeSingle(),
-        supabase.from("meals").select("id,meal_date").eq("user_id", user.id).gte("meal_date", since),
+        supabase
+          .from("meals")
+          .select("id,meal_date")
+          .eq("user_id", user.id)
+          .gte("meal_date", since),
       ]);
       if (g) setGoal(g.calories);
       const ids = (meals ?? []).map((m) => m.id);
@@ -34,7 +47,10 @@ function NutHistoryPage() {
         map.set(d, { date: d, calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
       }
       if (ids.length) {
-        const { data: items } = await supabase.from("meal_items").select("meal_id,calories,protein_g,carbs_g,fat_g").in("meal_id", ids);
+        const { data: items } = await supabase
+          .from("meal_items")
+          .select("meal_id,calories,protein_g,carbs_g,fat_g")
+          .in("meal_id", ids);
         for (const it of items ?? []) {
           const d = dateByMeal.get(it.meal_id);
           if (!d || !map.has(d)) continue;
@@ -55,14 +71,29 @@ function NutHistoryPage() {
 
   return (
     <div className="space-y-5">
-      <Link to="/app/nutricao" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+      <Link
+        to="/app/nutricao"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+      >
         <ArrowLeft className="h-4 w-4" /> Nutrição
       </Link>
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-display font-bold">Visão geral</h1>
         <div className="flex gap-1">
-          <Button size="sm" variant={range === 7 ? "default" : "outline"} onClick={() => setRange(7)}>7d</Button>
-          <Button size="sm" variant={range === 30 ? "default" : "outline"} onClick={() => setRange(30)}>30d</Button>
+          <Button
+            size="sm"
+            variant={range === 7 ? "default" : "outline"}
+            onClick={() => setRange(7)}
+          >
+            7d
+          </Button>
+          <Button
+            size="sm"
+            variant={range === 30 ? "default" : "outline"}
+            onClick={() => setRange(30)}
+          >
+            30d
+          </Button>
         </div>
       </div>
 

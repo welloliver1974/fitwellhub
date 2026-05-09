@@ -5,10 +5,25 @@ import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { ArrowLeft, Plus, Scale, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from "recharts";
 
 export const Route = createFileRoute("/app/peso")({
   component: WeightPage,
@@ -35,7 +50,9 @@ function WeightPage() {
     setEntries((data ?? []).map((d) => ({ ...d, weight_kg: Number(d.weight_kg) })));
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [user]);
+  useEffect(() => {
+    load(); /* eslint-disable-next-line */
+  }, [user]);
 
   const save = async () => {
     const v = Number(weight.replace(",", "."));
@@ -63,7 +80,10 @@ function WeightPage() {
   const delta = last && first ? last.weight_kg - first.weight_kg : 0;
 
   const chartData = entries.map((e) => ({
-    date: new Date(e.log_date + "T00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+    date: new Date(e.log_date + "T00:00").toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+    }),
     peso: e.weight_kg,
   }));
 
@@ -78,10 +98,15 @@ function WeightPage() {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" className="rounded-full"><Plus className="h-4 w-4 mr-1" />Registrar</Button>
+            <Button size="sm" className="rounded-full">
+              <Plus className="h-4 w-4 mr-1" />
+              Registrar
+            </Button>
           </DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>Registrar peso</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>Registrar peso</DialogTitle>
+            </DialogHeader>
             <div className="space-y-3">
               <div>
                 <label className="text-xs text-muted-foreground">Data</label>
@@ -89,10 +114,19 @@ function WeightPage() {
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">Peso (kg)</label>
-                <Input type="number" step="0.1" placeholder="78.5" value={weight} onChange={(e) => setWeight(e.target.value)} autoFocus />
+                <Input
+                  type="number"
+                  step="0.1"
+                  placeholder="78.5"
+                  value={weight}
+                  onChange={(e) => setWeight(e.target.value)}
+                  autoFocus
+                />
               </div>
             </div>
-            <DialogFooter><Button onClick={save}>Salvar</Button></DialogFooter>
+            <DialogFooter>
+              <Button onClick={save}>Salvar</Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
@@ -107,7 +141,11 @@ function WeightPage() {
           <div className="grid grid-cols-3 gap-3">
             <StatCard label="Atual" value={`${last.weight_kg.toFixed(1)} kg`} />
             <StatCard label="Início" value={`${first.weight_kg.toFixed(1)} kg`} />
-            <StatCard label="Variação" value={`${delta >= 0 ? "+" : ""}${delta.toFixed(1)} kg`} accent={delta < 0 ? "text-emerald-600" : delta > 0 ? "text-amber-600" : ""} />
+            <StatCard
+              label="Variação"
+              value={`${delta >= 0 ? "+" : ""}${delta.toFixed(1)} kg`}
+              accent={delta < 0 ? "text-emerald-600" : delta > 0 ? "text-amber-600" : ""}
+            />
           </div>
 
           {entries.length >= 2 && (
@@ -120,7 +158,13 @@ function WeightPage() {
                     <XAxis dataKey="date" fontSize={10} />
                     <YAxis fontSize={10} domain={["auto", "auto"]} />
                     <Tooltip />
-                    <Line type="monotone" dataKey="peso" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
+                    <Line
+                      type="monotone"
+                      dataKey="peso"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -132,7 +176,13 @@ function WeightPage() {
               <div key={e.id} className="p-3 flex items-center justify-between">
                 <div>
                   <p className="font-medium">{e.weight_kg.toFixed(1)} kg</p>
-                  <p className="text-xs text-muted-foreground">{new Date(e.log_date + "T00:00").toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "short" })}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(e.log_date + "T00:00").toLocaleDateString("pt-BR", {
+                      weekday: "short",
+                      day: "2-digit",
+                      month: "short",
+                    })}
+                  </p>
                 </div>
                 <Button variant="ghost" size="icon" onClick={() => remove(e.id)}>
                   <Trash2 className="h-4 w-4 text-muted-foreground" />
@@ -146,7 +196,15 @@ function WeightPage() {
   );
 }
 
-function StatCard({ label, value, accent = "" }: { label: string; value: string; accent?: string }) {
+function StatCard({
+  label,
+  value,
+  accent = "",
+}: {
+  label: string;
+  value: string;
+  accent?: string;
+}) {
   return (
     <div className="rounded-2xl border bg-card p-3">
       <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>

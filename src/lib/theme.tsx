@@ -1,13 +1,18 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
 type Theme = "dark" | "light";
-const ThemeCtx = createContext<{ theme: Theme; toggle: () => void }>({ theme: "dark", toggle: () => {} });
+const ThemeCtx = createContext<{ theme: Theme; toggle: () => void }>({
+  theme: "dark",
+  toggle: () => {},
+});
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => {
-    const stored = (typeof window !== "undefined" ? localStorage.getItem("theme") : null) as Theme | null;
+    const stored = (
+      typeof window !== "undefined" ? localStorage.getItem("theme") : null
+    ) as Theme | null;
     const initial: Theme = stored ?? "dark";
     setTheme(initial);
     applyTheme(initial);
@@ -24,7 +29,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const next: Theme = theme === "dark" ? "light" : "dark";
     setTheme(next);
     applyTheme(next);
-    try { localStorage.setItem("theme", next); } catch {}
+    try {
+      localStorage.setItem("theme", next);
+    } catch (error) {
+      console.error("Failed to persist theme:", error);
+    }
   };
 
   return <ThemeCtx.Provider value={{ theme, toggle }}>{children}</ThemeCtx.Provider>;

@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Send, Sparkles, Loader2, Trash2 } from "lucide-react";
-import { sendChat } from "@/server/chat.functions";
+import { sendChat } from "@/server-fns/chat.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/chat")({
@@ -39,8 +39,12 @@ function ChatPage() {
     setMessages((data ?? []) as Msg[]);
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [user]);
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, sending]);
+  useEffect(() => {
+    load(); /* eslint-disable-next-line */
+  }, [user]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, sending]);
 
   const send = async (text: string) => {
     const t = text.trim();
@@ -48,10 +52,21 @@ function ChatPage() {
     setInput("");
     setSending(true);
     // optimistic
-    setMessages((p) => [...p, { id: "tmp-" + Date.now(), role: "user", content: t, created_at: new Date().toISOString() }]);
+    setMessages((p) => [
+      ...p,
+      { id: "tmp-" + Date.now(), role: "user", content: t, created_at: new Date().toISOString() },
+    ]);
     try {
       const r = await sendChat({ data: { message: t } });
-      setMessages((p) => [...p, { id: "tmp-r-" + Date.now(), role: "assistant", content: r.reply, created_at: new Date().toISOString() }]);
+      setMessages((p) => [
+        ...p,
+        {
+          id: "tmp-r-" + Date.now(),
+          role: "assistant",
+          content: r.reply,
+          created_at: new Date().toISOString(),
+        },
+      ]);
       load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro");
@@ -85,10 +100,16 @@ function ChatPage() {
       <div className="flex-1 overflow-y-auto space-y-3 pr-1">
         {messages.length === 0 && !sending && (
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">Pergunte qualquer coisa sobre nutrição, treino ou seus dados:</p>
+            <p className="text-sm text-muted-foreground">
+              Pergunte qualquer coisa sobre nutrição, treino ou seus dados:
+            </p>
             <div className="flex flex-wrap gap-2">
               {SUGGESTIONS.map((s) => (
-                <button key={s} onClick={() => send(s)} className="text-xs px-3 py-2 rounded-full bg-secondary hover:bg-secondary/80">
+                <button
+                  key={s}
+                  onClick={() => send(s)}
+                  className="text-xs px-3 py-2 rounded-full bg-secondary hover:bg-secondary/80"
+                >
                   {s}
                 </button>
               ))}
@@ -97,7 +118,9 @@ function ChatPage() {
         )}
         {messages.map((m) => (
           <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap ${m.role === "user" ? "bg-primary text-primary-foreground" : "bg-card border"}`}>
+            <div
+              className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap ${m.role === "user" ? "bg-primary text-primary-foreground" : "bg-card border"}`}
+            >
               {m.content}
             </div>
           </div>
@@ -112,8 +135,19 @@ function ChatPage() {
         <div ref={endRef} />
       </div>
 
-      <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="mt-3 flex gap-2 sticky bottom-0 bg-background pt-2">
-        <Input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Pergunte algo…" disabled={sending} />
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          send(input);
+        }}
+        className="mt-3 flex gap-2 sticky bottom-0 bg-background pt-2"
+      >
+        <Input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Pergunte algo…"
+          disabled={sending}
+        />
         <Button type="submit" size="icon" disabled={sending || !input.trim()}>
           <Send className="h-4 w-4" />
         </Button>

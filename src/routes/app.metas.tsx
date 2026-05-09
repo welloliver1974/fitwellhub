@@ -26,7 +26,11 @@ function GoalsPage() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data } = await supabase.from("goals").select("*").eq("user_id", user.id).maybeSingle();
+      const { data } = await supabase
+        .from("goals")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
       if (data) {
         setCalories(data.calories);
         setProtein(data.protein_g);
@@ -40,13 +44,16 @@ function GoalsPage() {
   const save = async () => {
     if (!user) return;
     setSaving(true);
-    const { error } = await supabase.from("goals").upsert({
-      user_id: user.id,
-      calories,
-      protein_g: protein,
-      carbs_g: carbs,
-      fat_g: fat,
-    }, { onConflict: "user_id" });
+    const { error } = await supabase.from("goals").upsert(
+      {
+        user_id: user.id,
+        calories,
+        protein_g: protein,
+        carbs_g: carbs,
+        fat_g: fat,
+      },
+      { onConflict: "user_id" },
+    );
     setSaving(false);
     if (error) return toast.error(error.message);
     toast.success("Metas atualizadas");
@@ -70,7 +77,12 @@ function GoalsPage() {
       </div>
 
       <Card className="p-5 space-y-4">
-        <Field label="Calorias (kcal)" value={calories} onChange={setCalories} icon={<Target className="h-4 w-4" />} />
+        <Field
+          label="Calorias (kcal)"
+          value={calories}
+          onChange={setCalories}
+          icon={<Target className="h-4 w-4" />}
+        />
         <Field label="Proteína (g)" value={protein} onChange={setProtein} />
         <Field label="Carboidratos (g)" value={carbs} onChange={setCarbs} />
         <Field label="Gorduras (g)" value={fat} onChange={setFat} />
@@ -92,11 +104,29 @@ function GoalsPage() {
   );
 }
 
-function Field({ label, value, onChange, icon }: { label: string; value: number; onChange: (n: number) => void; icon?: React.ReactNode }) {
+function Field({
+  label,
+  value,
+  onChange,
+  icon,
+}: {
+  label: string;
+  value: number;
+  onChange: (n: number) => void;
+  icon?: React.ReactNode;
+}) {
   return (
     <div>
-      <Label className="flex items-center gap-1.5">{icon}{label}</Label>
-      <Input type="number" value={value} onChange={(e) => onChange(Number(e.target.value) || 0)} className="mt-1.5" />
+      <Label className="flex items-center gap-1.5">
+        {icon}
+        {label}
+      </Label>
+      <Input
+        type="number"
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value) || 0)}
+        className="mt-1.5"
+      />
     </div>
   );
 }

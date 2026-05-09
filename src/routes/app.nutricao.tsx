@@ -6,10 +6,37 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Sparkles, Trash2, Apple, Star, Copy, Pencil, ChefHat, BarChart3, Camera, Loader2, Heart, Barcode } from "lucide-react";
-import { lookupNutrition, analyzePhoto } from "@/server/nutrition.functions";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Plus,
+  Sparkles,
+  Trash2,
+  Apple,
+  Star,
+  Copy,
+  Pencil,
+  ChefHat,
+  BarChart3,
+  Camera,
+  Loader2,
+  Heart,
+  Barcode,
+} from "lucide-react";
+import { lookupNutrition, analyzePhoto } from "@/server-fns/nutrition.functions";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
@@ -30,6 +57,16 @@ type Item = {
   fat_g: number;
 };
 
+type FavoriteFood = {
+  id: string;
+  name: string;
+  grams: number;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+};
+
 const MEAL_TYPES = ["Café da manhã", "Almoço", "Lanche", "Jantar", "Ceia"];
 
 function NutricaoPage() {
@@ -37,7 +74,7 @@ function NutricaoPage() {
   const [meals, setMeals] = useState<Meal[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [recent, setRecent] = useState<Item[]>([]);
-  const [favorites, setFavorites] = useState<Array<{ id: string; name: string; grams: number; calories: number; protein_g: number; carbs_g: number; fat_g: number }>>([]);
+  const [favorites, setFavorites] = useState<FavoriteFood[]>([]);
   const [open, setOpen] = useState(false);
   const [mealType, setMealType] = useState(MEAL_TYPES[0]);
   const [query, setQuery] = useState("");
@@ -57,7 +94,17 @@ function NutricaoPage() {
   const [photoOpen, setPhotoOpen] = useState(false);
   const [photoMeal, setPhotoMeal] = useState(MEAL_TYPES[1]);
   const [photoLoading, setPhotoLoading] = useState(false);
-  const [photoItems, setPhotoItems] = useState<Array<{ name: string; grams: number; calories: number; protein_g: number; carbs_g: number; fat_g: number; selected: boolean }>>([]);
+  const [photoItems, setPhotoItems] = useState<
+    Array<{
+      name: string;
+      grams: number;
+      calories: number;
+      protein_g: number;
+      carbs_g: number;
+      fat_g: number;
+      selected: boolean;
+    }>
+  >([]);
 
   const [scanOpen, setScanOpen] = useState(false);
   const [scanLoading, setScanLoading] = useState(false);
@@ -68,7 +115,9 @@ function NutricaoPage() {
     setScanOpen(false);
     setScanLoading(true);
     try {
-      const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`);
+      const r = await fetch(
+        `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`,
+      );
       const j = await r.json();
       if (j.status !== 1 || !j.product) {
         toast.error("Produto não encontrado. Adicione manualmente.");
@@ -82,9 +131,9 @@ function NutricaoPage() {
       setGrams(g);
       setManual(true);
       setMCal(Math.round(Number(n["energy-kcal_100g"] ?? n["energy-kcal"] ?? 0)));
-      setMProt(Math.round((Number(n["proteins_100g"] ?? 0)) * 10) / 10);
-      setMCarb(Math.round((Number(n["carbohydrates_100g"] ?? 0)) * 10) / 10);
-      setMFat(Math.round((Number(n["fat_100g"] ?? 0)) * 10) / 10);
+      setMProt(Math.round(Number(n["proteins_100g"] ?? 0) * 10) / 10);
+      setMCarb(Math.round(Number(n["carbohydrates_100g"] ?? 0) * 10) / 10);
+      setMFat(Math.round(Number(n["fat_100g"] ?? 0) * 10) / 10);
       setOpen(true);
       toast.success(`${name} encontrado`);
     } catch (e) {
@@ -138,10 +187,22 @@ function NutricaoPage() {
       .select("id,name,grams,calories,protein_g,carbs_g,fat_g")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
-    setFavorites((favs ?? []) as any);
+    setFavorites(
+  (favs ?? []) as Array<{
+    id: string;
+    name: string;
+    grams: number;
+    calories: number;
+    protein_g: number;
+    carbs_g: number;
+    fat_g: number;
+  }>,
+);
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [user]);
+  useEffect(() => {
+    load(); /* eslint-disable-next-line */
+  }, [user]);
 
   const ensureMeal = async (type: string): Promise<Meal> => {
     const existing = meals.find((m) => m.meal_type === type);
@@ -183,8 +244,12 @@ function NutricaoPage() {
       if (e2) throw e2;
 
       toast.success(`${macros.name} adicionado`);
-      setQuery(""); setGrams(100);
-      setMCal(""); setMProt(""); setMCarb(""); setMFat("");
+      setQuery("");
+      setGrams(100);
+      setMCal("");
+      setMProt("");
+      setMCarb("");
+      setMFat("");
       setOpen(false);
       await load();
     } catch (e) {
@@ -217,7 +282,9 @@ function NutricaoPage() {
 
   const toggleFavorite = async (it: Item) => {
     if (!user) return;
-    const existing = favorites.find((f) => f.name.toLowerCase().trim() === it.name.toLowerCase().trim());
+    const existing = favorites.find(
+      (f) => f.name.toLowerCase().trim() === it.name.toLowerCase().trim(),
+    );
     if (existing) {
       await supabase.from("favorite_foods").delete().eq("id", existing.id);
       toast.success("Removido dos favoritos");
@@ -236,15 +303,21 @@ function NutricaoPage() {
     load();
   };
 
-  const isFav = (name: string) => favorites.some((f) => f.name.toLowerCase().trim() === name.toLowerCase().trim());
+  const isFav = (name: string) =>
+    favorites.some((f) => f.name.toLowerCase().trim() === name.toLowerCase().trim());
 
-  const addFavoriteToMeal = async (f: typeof favorites[number]) => {
+  const addFavoriteToMeal = async (f: (typeof favorites)[number]) => {
     if (!user) return;
     const meal = await ensureMeal(mealType);
     await supabase.from("meal_items").insert({
-      user_id: user.id, meal_id: meal.id,
-      name: f.name, grams: f.grams,
-      calories: f.calories, protein_g: f.protein_g, carbs_g: f.carbs_g, fat_g: f.fat_g,
+      user_id: user.id,
+      meal_id: meal.id,
+      name: f.name,
+      grams: f.grams,
+      calories: f.calories,
+      protein_g: f.protein_g,
+      carbs_g: f.carbs_g,
+      fat_g: f.fat_g,
     });
     toast.success(`${f.name} adicionado em ${mealType}`);
     load();
@@ -346,24 +419,31 @@ function NutricaoPage() {
   const saveEdit = async () => {
     if (!editItem || editGrams <= 0) return;
     const ratio = editGrams / Number(editItem.grams);
-    const { error } = await supabase.from("meal_items").update({
-      grams: editGrams,
-      calories: Number(editItem.calories) * ratio,
-      protein_g: Number(editItem.protein_g) * ratio,
-      carbs_g: Number(editItem.carbs_g) * ratio,
-      fat_g: Number(editItem.fat_g) * ratio,
-    }).eq("id", editItem.id);
+    const { error } = await supabase
+      .from("meal_items")
+      .update({
+        grams: editGrams,
+        calories: Number(editItem.calories) * ratio,
+        protein_g: Number(editItem.protein_g) * ratio,
+        carbs_g: Number(editItem.carbs_g) * ratio,
+        fat_g: Number(editItem.fat_g) * ratio,
+      })
+      .eq("id", editItem.id);
     if (error) return toast.error(error.message);
     toast.success("Quantidade ajustada");
     setEditItem(null);
     load();
   };
 
-  const grouped = useMemo(() => MEAL_TYPES.map((type) => {
-    const meal = meals.find((m) => m.meal_type === type);
-    const its = meal ? items.filter((i) => i.meal_id === meal.id) : [];
-    return { type, items: its };
-  }), [meals, items]);
+  const grouped = useMemo(
+    () =>
+      MEAL_TYPES.map((type) => {
+        const meal = meals.find((m) => m.meal_type === type);
+        const its = meal ? items.filter((i) => i.meal_id === meal.id) : [];
+        return { type, items: its };
+      }),
+    [meals, items],
+  );
 
   const visibleGroups = grouped.filter((g) => g.items.length > 0);
 
@@ -375,116 +455,208 @@ function NutricaoPage() {
           <p className="text-sm text-muted-foreground">Diário alimentar de hoje</p>
         </div>
         <div className="flex items-center gap-1">
-          <Link to="/app/nutricao-historico"><Button size="icon" variant="ghost" title="Visão geral"><BarChart3 className="h-5 w-5" /></Button></Link>
-          <Link to="/app/receitas"><Button size="icon" variant="ghost" title="Receitas"><ChefHat className="h-5 w-5" /></Button></Link>
-          <Button size="icon" variant="ghost" title="Código de barras" onClick={() => setScanOpen(true)} disabled={scanLoading}>
-            {scanLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Barcode className="h-5 w-5" />}
+          <Link to="/app/nutricao-historico">
+            <Button size="icon" variant="ghost" title="Visão geral">
+              <BarChart3 className="h-5 w-5" />
+            </Button>
+          </Link>
+          <Link to="/app/receitas">
+            <Button size="icon" variant="ghost" title="Receitas">
+              <ChefHat className="h-5 w-5" />
+            </Button>
+          </Link>
+          <Button
+            size="icon"
+            variant="ghost"
+            title="Código de barras"
+            onClick={() => setScanOpen(true)}
+            disabled={scanLoading}
+          >
+            {scanLoading ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <Barcode className="h-5 w-5" />
+            )}
           </Button>
-          <Button size="icon" variant="ghost" title="Foto do prato" onClick={() => setPhotoOpen(true)}>
+          <Button
+            size="icon"
+            variant="ghost"
+            title="Foto do prato"
+            onClick={() => setPhotoOpen(true)}
+          >
             <Camera className="h-5 w-5" />
           </Button>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="rounded-full">
-              <Plus className="h-4 w-4 mr-1" /> Alimento
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-primary" /> Adicionar alimento
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3">
-              <div>
-                <Label>Refeição</Label>
-                <Select value={mealType} onValueChange={setMealType}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {MEAL_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {recent.length > 0 && (
-                <div>
-                  <Label className="flex items-center gap-1.5"><Star className="h-3 w-3" /> Recentes</Label>
-                  <div className="flex flex-wrap gap-1.5 mt-1.5">
-                    {recent.map((r) => (
-                      <button
-                        key={r.id}
-                        type="button"
-                        onClick={() => { addRecent(r); setOpen(false); }}
-                        className="text-xs px-2.5 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
-                      >
-                        {r.name} <span className="text-muted-foreground">·{r.grams}g</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {favorites.length > 0 && (
-                <div>
-                  <Label className="flex items-center gap-1.5"><Heart className="h-3 w-3 text-primary" /> Favoritos</Label>
-                  <div className="flex flex-wrap gap-1.5 mt-1.5">
-                    {favorites.map((f) => (
-                      <button
-                        key={f.id}
-                        type="button"
-                        onClick={() => { addFavoriteToMeal(f); setOpen(false); }}
-                        className="text-xs px-2.5 py-1.5 rounded-full bg-primary/15 text-primary hover:bg-primary/25 transition-colors"
-                      >
-                        {f.name} <span className="opacity-60">·{Math.round(f.grams)}g</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <Label>Alimento</Label>
-                <Input
-                  placeholder="Ex: arroz branco cozido…"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-              </div>
-              <div>
-                <Label>Porção (g)</Label>
-                <Input type="number" value={grams} onChange={(e) => setGrams(Number(e.target.value))} />
-              </div>
-              <div className="flex items-center justify-between pt-1">
-                <Label htmlFor="manual-macros" className="text-xs text-muted-foreground cursor-pointer">
-                  Inserir macros manualmente (rótulo)
-                </Label>
-                <input
-                  id="manual-macros"
-                  type="checkbox"
-                  checked={manual}
-                  onChange={(e) => setManual(e.target.checked)}
-                  className="h-4 w-4"
-                />
-              </div>
-              {manual && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div><Label className="text-xs">Kcal</Label><Input type="number" value={mCal} onChange={(e) => setMCal(e.target.value === "" ? "" : Number(e.target.value))} /></div>
-                  <div><Label className="text-xs">Proteína (g)</Label><Input type="number" value={mProt} onChange={(e) => setMProt(e.target.value === "" ? "" : Number(e.target.value))} /></div>
-                  <div><Label className="text-xs">Carbo (g)</Label><Input type="number" value={mCarb} onChange={(e) => setMCarb(e.target.value === "" ? "" : Number(e.target.value))} /></div>
-                  <div><Label className="text-xs">Gordura (g)</Label><Input type="number" value={mFat} onChange={(e) => setMFat(e.target.value === "" ? "" : Number(e.target.value))} /></div>
-                </div>
-              )}
-              <Button onClick={addFood} disabled={loading || !query.trim()} className="w-full">
-                {loading ? "Calculando macros…" : manual ? "Adicionar" : "Calcular com IA e adicionar"}
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="rounded-full">
+                <Plus className="h-4 w-4 mr-1" /> Alimento
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" /> Adicionar alimento
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div>
+                  <Label>Refeição</Label>
+                  <Select value={mealType} onValueChange={setMealType}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MEAL_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {recent.length > 0 && (
+                  <div>
+                    <Label className="flex items-center gap-1.5">
+                      <Star className="h-3 w-3" /> Recentes
+                    </Label>
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {recent.map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => {
+                            addRecent(r);
+                            setOpen(false);
+                          }}
+                          className="text-xs px-2.5 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
+                        >
+                          {r.name} <span className="text-muted-foreground">·{r.grams}g</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {favorites.length > 0 && (
+                  <div>
+                    <Label className="flex items-center gap-1.5">
+                      <Heart className="h-3 w-3 text-primary" /> Favoritos
+                    </Label>
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {favorites.map((f) => (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => {
+                            addFavoriteToMeal(f);
+                            setOpen(false);
+                          }}
+                          className="text-xs px-2.5 py-1.5 rounded-full bg-primary/15 text-primary hover:bg-primary/25 transition-colors"
+                        >
+                          {f.name} <span className="opacity-60">·{Math.round(f.grams)}g</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <Label>Alimento</Label>
+                  <Input
+                    placeholder="Ex: arroz branco cozido…"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label>Porção (g)</Label>
+                  <Input
+                    type="number"
+                    value={grams}
+                    onChange={(e) => setGrams(Number(e.target.value))}
+                  />
+                </div>
+                <div className="flex items-center justify-between pt-1">
+                  <Label
+                    htmlFor="manual-macros"
+                    className="text-xs text-muted-foreground cursor-pointer"
+                  >
+                    Inserir macros manualmente (rótulo)
+                  </Label>
+                  <input
+                    id="manual-macros"
+                    type="checkbox"
+                    checked={manual}
+                    onChange={(e) => setManual(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                </div>
+                {manual && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs">Kcal</Label>
+                      <Input
+                        type="number"
+                        value={mCal}
+                        onChange={(e) =>
+                          setMCal(e.target.value === "" ? "" : Number(e.target.value))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Proteína (g)</Label>
+                      <Input
+                        type="number"
+                        value={mProt}
+                        onChange={(e) =>
+                          setMProt(e.target.value === "" ? "" : Number(e.target.value))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Carbo (g)</Label>
+                      <Input
+                        type="number"
+                        value={mCarb}
+                        onChange={(e) =>
+                          setMCarb(e.target.value === "" ? "" : Number(e.target.value))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Gordura (g)</Label>
+                      <Input
+                        type="number"
+                        value={mFat}
+                        onChange={(e) =>
+                          setMFat(e.target.value === "" ? "" : Number(e.target.value))
+                        }
+                      />
+                    </div>
+                  </div>
+                )}
+                <Button onClick={addFood} disabled={loading || !query.trim()} className="w-full">
+                  {loading
+                    ? "Calculando macros…"
+                    : manual
+                      ? "Adicionar"
+                      : "Calcular com IA e adicionar"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
       {/* Photo analyze dialog */}
-      <Dialog open={photoOpen} onOpenChange={(o) => { setPhotoOpen(o); if (!o) setPhotoItems([]); }}>
+      <Dialog
+        open={photoOpen}
+        onOpenChange={(o) => {
+          setPhotoOpen(o);
+          if (!o) setPhotoItems([]);
+        }}
+      >
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -495,14 +667,24 @@ function NutricaoPage() {
             <div>
               <Label>Refeição</Label>
               <Select value={photoMeal} onValueChange={setPhotoMeal}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
-                  {MEAL_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  {MEAL_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
             <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-xl p-6 cursor-pointer hover:bg-secondary/30 transition-colors">
-              {photoLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5 text-muted-foreground" />}
+              {photoLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Camera className="h-5 w-5 text-muted-foreground" />
+              )}
               <span className="text-sm text-muted-foreground">
                 {photoLoading ? "Analisando…" : "Tirar foto ou enviar imagem"}
               </span>
@@ -520,19 +702,27 @@ function NutricaoPage() {
             </label>
             {photoItems.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Itens detectados</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Itens detectados
+                </p>
                 {photoItems.map((i, idx) => (
                   <div key={idx} className="flex items-start gap-2 rounded-lg border p-2">
                     <input
                       type="checkbox"
                       checked={i.selected}
-                      onChange={(e) => setPhotoItems((arr) => arr.map((x, j) => j === idx ? { ...x, selected: e.target.checked } : x))}
+                      onChange={(e) =>
+                        setPhotoItems((arr) =>
+                          arr.map((x, j) => (j === idx ? { ...x, selected: e.target.checked } : x)),
+                        )
+                      }
                       className="mt-1 h-4 w-4"
                     />
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">{i.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {Math.round(i.grams)}g · {Math.round(i.calories)} kcal · P {Math.round(i.protein_g)} · C {Math.round(i.carbs_g)} · G {Math.round(i.fat_g)}
+                        {Math.round(i.grams)}g · {Math.round(i.calories)} kcal · P{" "}
+                        {Math.round(i.protein_g)} · C {Math.round(i.carbs_g)} · G{" "}
+                        {Math.round(i.fat_g)}
                       </p>
                     </div>
                   </div>
@@ -551,20 +741,29 @@ function NutricaoPage() {
       {/* Edit quantity dialog */}
       <Dialog open={!!editItem} onOpenChange={(o) => !o && setEditItem(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Ajustar quantidade</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Ajustar quantidade</DialogTitle>
+          </DialogHeader>
           {editItem && (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">{editItem.name}</p>
               <div>
                 <Label>Porção (g)</Label>
-                <Input type="number" value={editGrams} onChange={(e) => setEditGrams(Number(e.target.value))} autoFocus />
+                <Input
+                  type="number"
+                  value={editGrams}
+                  onChange={(e) => setEditGrams(Number(e.target.value))}
+                  autoFocus
+                />
               </div>
               <p className="text-xs text-muted-foreground">
                 Macros serão recalculados proporcionalmente.
               </p>
             </div>
           )}
-          <DialogFooter><Button onClick={saveEdit}>Salvar</Button></DialogFooter>
+          <DialogFooter>
+            <Button onClick={saveEdit}>Salvar</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -587,17 +786,29 @@ function NutricaoPage() {
               <div className="flex items-center justify-between mb-2 px-1">
                 <h2 className="text-xs uppercase tracking-wide text-muted-foreground">{type}</h2>
                 <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon" className="h-6 w-6" title="Copiar de ontem" onClick={() => duplicateYesterday(type)}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    title="Copiar de ontem"
+                    onClick={() => duplicateYesterday(type)}
+                  >
                     <Copy className="h-3.5 w-3.5 text-muted-foreground" />
                   </Button>
-                  {its.length > 0 && (() => {
-                    const meal = meals.find((m) => m.meal_type === type);
-                    return meal ? (
-                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeMeal(meal.id)}>
-                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                      </Button>
-                    ) : null;
-                  })()}
+                  {its.length > 0 &&
+                    (() => {
+                      const meal = meals.find((m) => m.meal_type === type);
+                      return meal ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => removeMeal(meal.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                        </Button>
+                      ) : null;
+                    })()}
                 </div>
               </div>
               {its.length > 0 && (
@@ -607,14 +818,28 @@ function NutricaoPage() {
                       <button className="min-w-0 flex-1 text-left" onClick={() => openEdit(i)}>
                         <p className="font-medium truncate">{i.name}</p>
                         <p className="text-xs text-muted-foreground">
-                          {i.grams}g · {Math.round(Number(i.calories))} kcal · P {Math.round(Number(i.protein_g))} · C {Math.round(Number(i.carbs_g))} · G {Math.round(Number(i.fat_g))}
+                          {i.grams}g · {Math.round(Number(i.calories))} kcal · P{" "}
+                          {Math.round(Number(i.protein_g))} · C {Math.round(Number(i.carbs_g))} · G{" "}
+                          {Math.round(Number(i.fat_g))}
                         </p>
                       </button>
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(i)} title="Ajustar quantidade">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEdit(i)}
+                        title="Ajustar quantidade"
+                      >
                         <Pencil className="h-4 w-4 text-muted-foreground" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => toggleFavorite(i)} title="Favoritar">
-                        <Heart className={`h-4 w-4 ${isFav(i.name) ? "fill-primary text-primary" : "text-muted-foreground"}`} />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => toggleFavorite(i)}
+                        title="Favoritar"
+                      >
+                        <Heart
+                          className={`h-4 w-4 ${isFav(i.name) ? "fill-primary text-primary" : "text-muted-foreground"}`}
+                        />
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => removeItem(i.id)}>
                         <Trash2 className="h-4 w-4 text-muted-foreground" />

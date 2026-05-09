@@ -6,7 +6,14 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -24,20 +31,35 @@ function TemplateDetail() {
   const [name, setName] = useState("");
 
   const load = async () => {
-    const { data: t } = await supabase.from("workout_templates").select("id,name").eq("id", id).maybeSingle();
+    const { data: t } = await supabase
+      .from("workout_templates")
+      .select("id,name")
+      .eq("id", id)
+      .maybeSingle();
     setTpl(t as Tpl | null);
-    const { data: e } = await supabase.from("workout_template_exercises").select("id,name,position").eq("template_id", id).order("position");
+    const { data: e } = await supabase
+      .from("workout_template_exercises")
+      .select("id,name,position")
+      .eq("template_id", id)
+      .order("position");
     setExs((e ?? []) as Ex[]);
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
+  useEffect(() => {
+    load(); /* eslint-disable-next-line */
+  }, [id]);
 
   const add = async () => {
     if (!user || !name.trim()) return;
     const { error } = await supabase.from("workout_template_exercises").insert({
-      user_id: user.id, template_id: id, name: name.trim(), position: exs.length,
+      user_id: user.id,
+      template_id: id,
+      name: name.trim(),
+      position: exs.length,
     });
     if (error) return toast.error(error.message);
-    setName(""); setOpen(false); load();
+    setName("");
+    setOpen(false);
+    load();
   };
 
   const remove = async (exId: string) => {
@@ -49,25 +71,44 @@ function TemplateDetail() {
 
   return (
     <div className="space-y-5">
-      <Link to="/app/templates" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+      <Link
+        to="/app/templates"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+      >
         <ArrowLeft className="h-4 w-4" /> Templates
       </Link>
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-display font-bold">{tpl.name}</h1>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button size="sm" className="rounded-full"><Plus className="h-4 w-4 mr-1" />Exercício</Button></DialogTrigger>
+          <DialogTrigger asChild>
+            <Button size="sm" className="rounded-full">
+              <Plus className="h-4 w-4 mr-1" />
+              Exercício
+            </Button>
+          </DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>Novo exercício</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>Novo exercício</DialogTitle>
+            </DialogHeader>
             <div className="space-y-3">
               <Label>Nome</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Supino reto" autoFocus />
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Supino reto"
+                autoFocus
+              />
             </div>
-            <DialogFooter><Button onClick={add}>Adicionar</Button></DialogFooter>
+            <DialogFooter>
+              <Button onClick={add}>Adicionar</Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
       {exs.length === 0 ? (
-        <Card className="p-10 text-center text-muted-foreground">Adicione exercícios ao template.</Card>
+        <Card className="p-10 text-center text-muted-foreground">
+          Adicione exercícios ao template.
+        </Card>
       ) : (
         <Card className="divide-y">
           {exs.map((e) => (

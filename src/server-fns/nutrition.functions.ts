@@ -59,7 +59,10 @@ export const lookupNutrition = createServerFn({ method: "POST" })
     });
 
     if (res.status === 429) throw new Error("Muitas requisições. Aguarde um instante.");
-    if (res.status === 402) throw new Error("Créditos de IA esgotados. Adicione créditos em Settings → Workspace → Usage.");
+    if (res.status === 402)
+      throw new Error(
+        "Créditos de IA esgotados. Adicione créditos em Settings → Workspace → Usage.",
+      );
     if (!res.ok) throw new Error(`Erro IA: ${res.status}`);
 
     const json = await res.json();

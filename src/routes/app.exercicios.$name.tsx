@@ -4,7 +4,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, TrendingUp } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from "recharts";
 
 export const Route = createFileRoute("/app/exercicios/$name")({ component: ExerciseHistory });
 
@@ -20,10 +28,17 @@ function ExerciseHistory() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data: exs } = await supabase.from("exercises").select("id,workout_id").eq("user_id", user.id).ilike("name", decoded);
+      const { data: exs } = await supabase
+        .from("exercises")
+        .select("id,workout_id")
+        .eq("user_id", user.id)
+        .ilike("name", decoded);
       const exIds = (exs ?? []).map((e) => e.id);
       const wIds = Array.from(new Set((exs ?? []).map((e) => e.workout_id)));
-      if (!exIds.length) { setRows([]); return; }
+      if (!exIds.length) {
+        setRows([]);
+        return;
+      }
       const [{ data: sets }, { data: workouts }] = await Promise.all([
         supabase.from("sets").select("exercise_id,reps,weight_kg").in("exercise_id", exIds),
         supabase.from("workouts").select("id,workout_date").in("id", wIds),
@@ -49,7 +64,8 @@ function ExerciseHistory() {
       setRows(out);
       let best = { weight: 0, reps: 0, date: "" };
       for (const [date, ss] of sorted) {
-        for (const s of ss) if (s.weight > best.weight) best = { weight: s.weight, reps: s.reps, date };
+        for (const s of ss)
+          if (s.weight > best.weight) best = { weight: s.weight, reps: s.reps, date };
       }
       setPr(best.weight > 0 ? best : null);
     })();
@@ -59,7 +75,10 @@ function ExerciseHistory() {
 
   return (
     <div className="space-y-5">
-      <Link to="/app/treinos" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+      <Link
+        to="/app/treinos"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+      >
         <ArrowLeft className="h-4 w-4" /> Treinos
       </Link>
       <div>
@@ -72,14 +91,20 @@ function ExerciseHistory() {
           <TrendingUp className="h-8 w-8 text-primary" />
           <div>
             <p className="text-xs text-muted-foreground">Recorde pessoal</p>
-            <p className="text-xl font-display font-bold">{pr.weight} kg × {pr.reps}</p>
-            <p className="text-xs text-muted-foreground">{new Date(pr.date + "T00:00").toLocaleDateString("pt-BR")}</p>
+            <p className="text-xl font-display font-bold">
+              {pr.weight} kg × {pr.reps}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {new Date(pr.date + "T00:00").toLocaleDateString("pt-BR")}
+            </p>
           </div>
         </Card>
       )}
 
       {rows.length < 2 ? (
-        <Card className="p-10 text-center text-muted-foreground">Registre mais sessões para ver a evolução.</Card>
+        <Card className="p-10 text-center text-muted-foreground">
+          Registre mais sessões para ver a evolução.
+        </Card>
       ) : (
         <Card className="p-4">
           <p className="text-xs text-muted-foreground mb-3">Carga máxima (kg) por sessão</p>
@@ -90,7 +115,13 @@ function ExerciseHistory() {
                 <XAxis dataKey="label" fontSize={11} />
                 <YAxis fontSize={11} />
                 <Tooltip />
-                <Line type="monotone" dataKey="maxWeight" stroke="hsl(var(--primary))" strokeWidth={2} dot />
+                <Line
+                  type="monotone"
+                  dataKey="maxWeight"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={2}
+                  dot
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -101,8 +132,12 @@ function ExerciseHistory() {
         <Card className="divide-y">
           {[...rows].reverse().map((r) => (
             <div key={r.date} className="p-3 flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">{new Date(r.date + "T00:00").toLocaleDateString("pt-BR")}</span>
-              <span className="font-medium">{r.maxWeight}kg × {r.maxReps} · vol {Math.round(r.volume)}</span>
+              <span className="text-muted-foreground">
+                {new Date(r.date + "T00:00").toLocaleDateString("pt-BR")}
+              </span>
+              <span className="font-medium">
+                {r.maxWeight}kg × {r.maxReps} · vol {Math.round(r.volume)}
+              </span>
             </div>
           ))}
         </Card>

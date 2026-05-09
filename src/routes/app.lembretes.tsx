@@ -5,7 +5,13 @@ import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Bell, Trash2, Plus, BellOff } from "lucide-react";
@@ -15,7 +21,13 @@ export const Route = createFileRoute("/app/lembretes")({
   component: RemindersPage,
 });
 
-type Reminder = { id: string; kind: string; time_of_day: string; days_of_week: number[]; enabled: boolean };
+type Reminder = {
+  id: string;
+  kind: string;
+  time_of_day: string;
+  days_of_week: number[];
+  enabled: boolean;
+};
 
 const KINDS = [
   { v: "water", label: "💧 Água" },
@@ -39,10 +51,16 @@ function RemindersPage() {
 
   const load = async () => {
     if (!user) return;
-    const { data } = await supabase.from("reminders").select("*").eq("user_id", user.id).order("time_of_day");
+    const { data } = await supabase
+      .from("reminders")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("time_of_day");
     setItems((data ?? []) as Reminder[]);
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [user]);
+  useEffect(() => {
+    load(); /* eslint-disable-next-line */
+  }, [user]);
 
   const requestPerm = async () => {
     if (!("Notification" in window)) return toast.error("Navegador não suporta notificações");
@@ -55,7 +73,11 @@ function RemindersPage() {
     if (!user) return;
     if (days.length === 0) return toast.error("Selecione pelo menos 1 dia");
     const { error } = await supabase.from("reminders").insert({
-      user_id: user.id, kind, time_of_day: time, days_of_week: days, enabled: true,
+      user_id: user.id,
+      kind,
+      time_of_day: time,
+      days_of_week: days,
+      enabled: true,
     });
     if (error) return toast.error(error.message);
     toast.success("Lembrete criado");
@@ -73,7 +95,7 @@ function RemindersPage() {
   };
 
   const toggleDay = (d: number) => {
-    setDays((p) => p.includes(d) ? p.filter((x) => x !== d) : [...p, d].sort());
+    setDays((p) => (p.includes(d) ? p.filter((x) => x !== d) : [...p, d].sort()));
   };
 
   return (
@@ -82,7 +104,9 @@ function RemindersPage() {
         <h1 className="text-3xl font-display font-bold flex items-center gap-2">
           <Bell className="h-6 w-6 text-primary" /> Lembretes
         </h1>
-        <p className="text-sm text-muted-foreground">Notificações locais quando o app estiver aberto</p>
+        <p className="text-sm text-muted-foreground">
+          Notificações locais quando o app estiver aberto
+        </p>
       </div>
 
       {perm !== "granted" && (
@@ -91,7 +115,9 @@ function RemindersPage() {
             <p className="text-sm font-medium">Permitir notificações</p>
             <p className="text-xs text-muted-foreground">Necessário para receber os alertas</p>
           </div>
-          <Button size="sm" onClick={requestPerm}>Ativar</Button>
+          <Button size="sm" onClick={requestPerm}>
+            Ativar
+          </Button>
         </Card>
       )}
 
@@ -101,9 +127,15 @@ function RemindersPage() {
           <div>
             <Label className="text-xs">Tipo</Label>
             <Select value={kind} onValueChange={setKind}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {KINDS.map((k) => <SelectItem key={k.v} value={k.v}>{k.label}</SelectItem>)}
+                {KINDS.map((k) => (
+                  <SelectItem key={k.v} value={k.v}>
+                    {k.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -121,35 +153,43 @@ function RemindersPage() {
                 type="button"
                 onClick={() => toggleDay(i)}
                 className={`h-9 w-9 rounded-full text-sm font-medium ${days.includes(i) ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}
-              >{d}</button>
+              >
+                {d}
+              </button>
             ))}
           </div>
         </div>
-        <Button onClick={add} className="w-full"><Plus className="h-4 w-4 mr-1" /> Adicionar</Button>
+        <Button onClick={add} className="w-full">
+          <Plus className="h-4 w-4 mr-1" /> Adicionar
+        </Button>
       </Card>
 
       <div className="space-y-2">
         {items.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-6">Nenhum lembrete cadastrado.</p>
-        ) : items.map((r) => {
-          const k = KINDS.find((x) => x.v === r.kind);
-          return (
-            <Card key={r.id} className="p-3 flex items-center justify-between">
-              <div className="min-w-0">
-                <p className="font-medium truncate">{k?.label ?? r.kind}</p>
-                <p className="text-xs text-muted-foreground">
-                  {r.time_of_day.slice(0, 5)} · {r.days_of_week.map((d) => DAYS[d]).join(" ")}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Switch checked={r.enabled} onCheckedChange={() => toggle(r)} />
-                <Button variant="ghost" size="icon" onClick={() => del(r.id)}>
-                  <Trash2 className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              </div>
-            </Card>
-          );
-        })}
+          <p className="text-sm text-muted-foreground text-center py-6">
+            Nenhum lembrete cadastrado.
+          </p>
+        ) : (
+          items.map((r) => {
+            const k = KINDS.find((x) => x.v === r.kind);
+            return (
+              <Card key={r.id} className="p-3 flex items-center justify-between">
+                <div className="min-w-0">
+                  <p className="font-medium truncate">{k?.label ?? r.kind}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {r.time_of_day.slice(0, 5)} · {r.days_of_week.map((d) => DAYS[d]).join(" ")}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={r.enabled} onCheckedChange={() => toggle(r)} />
+                  <Button variant="ghost" size="icon" onClick={() => del(r.id)}>
+                    <Trash2 className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                </div>
+              </Card>
+            );
+          })
+        )}
       </div>
 
       <p className="text-[10px] text-muted-foreground text-center">

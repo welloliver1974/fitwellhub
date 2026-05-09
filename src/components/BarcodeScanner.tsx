@@ -23,19 +23,25 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
     (async () => {
       try {
         if (!videoRef.current) return;
-        const controls = await reader.decodeFromVideoDevice(undefined, videoRef.current, (result) => {
-          if (result) {
-            const code = result.getText();
-            controls.stop();
-            onDetected(code);
-          }
-        });
+        const controls = await reader.decodeFromVideoDevice(
+          undefined,
+          videoRef.current,
+          (result) => {
+            if (result) {
+              const code = result.getText();
+              controls.stop();
+              onDetected(code);
+            }
+          },
+        );
         controlsRef.current = controls;
       } catch (e) {
         setError(e instanceof Error ? e.message : "Câmera indisponível");
       }
     })();
-    return () => { controlsRef.current?.stop(); };
+    return () => {
+      controlsRef.current?.stop();
+    };
   }, [open, onDetected]);
 
   if (!open) return null;
@@ -44,7 +50,12 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
       <div className="flex items-center justify-between px-5 py-4 text-white">
         <p className="font-display font-semibold">Escanear código</p>
-        <Button variant="ghost" size="icon" onClick={onClose} className="text-white hover:bg-white/10">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClose}
+          className="text-white hover:bg-white/10"
+        >
           <X className="h-5 w-5" />
         </Button>
       </div>

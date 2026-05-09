@@ -4,7 +4,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Figtree:wght@400;500;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Figtree:wght@400;500;600;700&display=swap");
 
 /*
  * Design system definition.
@@ -72,19 +72,19 @@
 :root {
   --radius: 0.875rem;
   /* Dark Athletic palette — deep black + neon mint */
-  --background: oklch(0.16 0.005 180);          /* near-black */
+  --background: oklch(0.16 0.005 180); /* near-black */
   --foreground: oklch(0.97 0.01 180);
-  --card: oklch(0.20 0.008 180);                /* elevated surface */
+  --card: oklch(0.2 0.008 180); /* elevated surface */
   --card-foreground: oklch(0.97 0.01 180);
-  --popover: oklch(0.20 0.008 180);
+  --popover: oklch(0.2 0.008 180);
   --popover-foreground: oklch(0.97 0.01 180);
-  --primary: oklch(0.82 0.18 165);              /* neon mint #2dd4a8 */
+  --primary: oklch(0.82 0.18 165); /* neon mint #2dd4a8 */
   --primary-foreground: oklch(0.16 0.01 180);
   --secondary: oklch(0.26 0.01 180);
   --secondary-foreground: oklch(0.97 0.01 180);
   --muted: oklch(0.24 0.008 180);
   --muted-foreground: oklch(0.68 0.015 180);
-  --accent: oklch(0.88 0.18 160);               /* brighter mint #73ffb8 */
+  --accent: oklch(0.88 0.18 160); /* brighter mint #73ffb8 */
   --accent-foreground: oklch(0.16 0.01 180);
   --destructive: oklch(0.62 0.22 25);
   --destructive-foreground: oklch(0.98 0.01 180);
@@ -108,7 +108,7 @@
   --sidebar-accent-foreground: oklch(0.97 0.01 180);
   --sidebar-border: oklch(0.28 0.01 180);
   --sidebar-ring: oklch(0.82 0.18 165);
-  --gradient-hero: linear-gradient(135deg, oklch(0.20 0.008 180) 0%, oklch(0.30 0.05 165) 100%);
+  --gradient-hero: linear-gradient(135deg, oklch(0.2 0.008 180) 0%, oklch(0.3 0.05 165) 100%);
   --gradient-card: linear-gradient(180deg, oklch(0.22 0.008 180) 0%, oklch(0.18 0.008 180) 100%);
   --shadow-soft: 0 8px 32px -12px oklch(0.82 0.18 165 / 0.35);
 }
@@ -124,17 +124,17 @@
   --primary: oklch(0.65 0.16 165);
   --primary-foreground: oklch(0.99 0.005 180);
   --secondary: oklch(0.94 0.012 180);
-  --secondary-foreground: oklch(0.20 0.01 180);
+  --secondary-foreground: oklch(0.2 0.01 180);
   --muted: oklch(0.95 0.01 180);
   --muted-foreground: oklch(0.45 0.01 180);
   --accent: oklch(0.78 0.16 160);
   --accent-foreground: oklch(0.18 0.01 180);
-  --border: oklch(0.90 0.01 180);
+  --border: oklch(0.9 0.01 180);
   --input: oklch(0.92 0.01 180);
   --ring: oklch(0.65 0.16 165);
   --sidebar: oklch(0.98 0.005 180);
   --sidebar-foreground: oklch(0.18 0.01 180);
-  --sidebar-border: oklch(0.90 0.01 180);
+  --sidebar-border: oklch(0.9 0.01 180);
 }
 
 .dark {
@@ -184,7 +184,10 @@
     font-feature-settings: "ss01", "cv11";
   }
 
-  h1, h2, h3, h4 {
+  h1,
+  h2,
+  h3,
+  h4 {
     font-family: var(--font-display);
     letter-spacing: -0.02em;
   }
