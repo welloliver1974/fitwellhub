@@ -32,13 +32,13 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Verde — Treino & Nutrição" },
+      { title: "Fit Well Hub — Treino & Nutrição" },
       {
         name: "description",
         content: "Acompanhe seus treinos de musculação e refeições com dados nutricionais por IA.",
       },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Verde — Treino & Nutrição" },
+      { property: "og:title", content: "Fit Well Hub — Treino & Nutrição" },
       {
         property: "og:description",
         content: "Acompanhe seus treinos de musculação e refeições com dados nutricionais por IA.",
@@ -46,7 +46,7 @@ export const Route = createRootRoute({
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
-      { name: "twitter:title", content: "Verde — Treino & Nutrição" },
+      { name: "twitter:title", content: "Fit Well Hub — Treino & Nutrição" },
       {
         name: "twitter:description",
         content: "Acompanhe seus treinos de musculação e refeições com dados nutricionais por IA.",
@@ -64,7 +64,7 @@ export const Route = createRootRoute({
       { name: "theme-color", content: "#0a0a0a" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
-      { name: "apple-mobile-web-app-title", content: "Verde" },
+      { name: "apple-mobile-web-app-title", content: "Fit Well Hub" },
     ],
     links: [
       {

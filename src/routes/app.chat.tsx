@@ -22,7 +22,7 @@ const SUGGESTIONS = [
 ];
 
 function ChatPage() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -49,26 +49,44 @@ function ChatPage() {
   const send = async (text: string) => {
     const t = text.trim();
     if (!t || sending || !user) return;
+    console.log("Starting send process for:", t);
     setInput("");
     setSending(true);
     // optimistic
-    setMessages((p) => [
-      ...p,
-      { id: "tmp-" + Date.now(), role: "user", content: t, created_at: new Date().toISOString() },
-    ]);
+    const userMsg = {
+      id: "tmp-" + Date.now(),
+      role: "user",
+      content: t,
+      created_at: new Date().toISOString(),
+    };
+    setMessages((p) => [...p, userMsg]);
+
     try {
-      const r = await sendChat({ data: { message: t } });
-      setMessages((p) => [
-        ...p,
-        {
-          id: "tmp-r-" + Date.now(),
-          role: "assistant",
-          content: r.reply,
-          created_at: new Date().toISOString(),
+      console.log("Sending message to server-fn:", t);
+      const r = await sendChat({
+        data: { message: t },
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
         },
-      ]);
+      });
+      console.log("Server-fn response:", r);
+
+      setMessages((p) => {
+        // Remove optimistic user message and replace with assistant response
+        // This ensures we don't have duplicate or missing messages if load() is slow
+        return [
+          ...p,
+          {
+            id: "assistant-" + Date.now(),
+            role: "assistant",
+            content: r.reply,
+            created_at: new Date().toISOString(),
+          },
+        ];
+      });
       load();
     } catch (e) {
+      console.error("Error in sendChat:", e);
       toast.error(e instanceof Error ? e.message : "Erro");
     } finally {
       setSending(false);

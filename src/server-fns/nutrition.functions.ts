@@ -22,53 +22,57 @@ const macroSchema = {
 export const lookupNutrition = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => inputSchema.parse(d))
   .handler(async ({ data }) => {
-    const apiKey = process.env.LOVABLE_API_KEY;
-    if (!apiKey) throw new Error("LOVABLE_API_KEY não configurada");
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("GEMINI_API_KEY não configurada no arquivo .env");
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
+        contents: [
           {
-            role: "system",
-            content:
-              "Você é um nutricionista. Estime macros (kcal, proteína, carboidrato, gordura) de alimentos brasileiros. Use a tabela TACO como referência mental. Sempre arredonde para 1 casa decimal. Retorne APENAS via tool call.",
+            role: "user",
+            parts: [{ text: "Você é um nutricionista. Estime macros (kcal, proteína, carboidrato, gordura) de alimentos brasileiros. Use a tabela TACO como referência mental. Sempre arredonde para 1 casa decimal." }]
+          },
+          {
+            role: "model",
+            parts: [{ text: "Entendido. Vou analisar o alimento e a porção para fornecer os macros exatos via função report_macros." }]
           },
           {
             role: "user",
-            content: `Alimento: "${data.query}". Porção: ${data.grams}g. Estime os macros para essa porção exata.`,
-          },
+            parts: [{ text: `Alimento: "${data.query}". Porção: ${data.grams}g. Estime os macros para essa porção exata.` }]
+          }
         ],
         tools: [
           {
-            type: "function",
-            function: {
-              name: "report_macros",
-              description: "Reporta macros nutricionais estimados",
-              parameters: macroSchema,
-            },
-          },
+            functionDeclarations: [
+              {
+                name: "report_macros",
+                description: "Reporta macros nutricionais estimados",
+                parameters: macroSchema,
+              }
+            ]
+          }
         ],
-        tool_choice: { type: "function", function: { name: "report_macros" } },
+        toolConfig: {
+          functionCallingConfig: {
+            mode: "ANY",
+            allowedFunctionNames: ["report_macros"]
+          }
+        }
       }),
     });
 
-    if (res.status === 429) throw new Error("Muitas requisições. Aguarde um instante.");
-    if (res.status === 402)
-      throw new Error(
-        "Créditos de IA esgotados. Adicione créditos em Settings → Workspace → Usage.",
-      );
-    if (!res.ok) throw new Error(`Erro IA: ${res.status}`);
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error("Erro detalhado da API do Google (Nutrition):", errorText);
+      throw new Error(`Erro IA: ${res.status} - ${errorText.slice(0, 100)}`);
+    }
 
     const json = await res.json();
-    const call = json.choices?.[0]?.message?.tool_calls?.[0];
+    const call = json.candidates?.[0]?.content?.parts?.[0]?.functionCall;
     if (!call) throw new Error("Resposta inválida da IA");
-    const args = JSON.parse(call.function.arguments);
+    const args = call.args;
     return args as {
       name: string;
       calories: number;
@@ -110,14 +114,14 @@ const photoMacrosTool = {
 export const analyzePhoto = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => photoSchema.parse(d))
   .handler(async ({ data }) => {
-    const apiKey = process.env.LOVABLE_API_KEY;
-    if (!apiKey) throw new Error("LOVABLE_API_KEY não configurada");
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("GEMINI_API_KEY não configurada no arquivo .env");
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${apiKey}`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "gemini-2.0-flash",
         messages: [
           {
             role: "system",
@@ -173,27 +177,36 @@ const coachSchema = z.object({
 export const coachAdvice = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => coachSchema.parse(d))
   .handler(async ({ data }) => {
-    const apiKey = process.env.LOVABLE_API_KEY;
-    if (!apiKey) throw new Error("LOVABLE_API_KEY não configurada");
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("GEMINI_API_KEY não configurada no arquivo .env");
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
+        contents: [
           {
-            role: "system",
-            content:
-              "Você é um coach pessoal de treino e nutrição. Analise os dados da última semana do usuário e retorne 3-5 insights curtos, práticos e motivadores em português. Use markdown simples (negrito e listas). Seja direto, sem clichês.",
+            role: "user",
+            parts: [{ text: "Você é um coach pessoal de treino e nutrição. Analise os dados da última semana do usuário e retorne 3-5 insights curtos, práticos e motivadores em português. Use markdown simples (negrito e listas). Seja direto, sem clichês." }]
           },
-          { role: "user", content: data.summary },
+          {
+            role: "model",
+            parts: [{ text: "Entendido. Vou analisar os dados da semana e fornecer os insights solicitados." }]
+          },
+          {
+            role: "user",
+            parts: [{ text: data.summary }]
+          }
         ],
       }),
     });
-    if (res.status === 429) throw new Error("Muitas requisições. Aguarde.");
-    if (res.status === 402) throw new Error("Créditos de IA esgotados.");
-    if (!res.ok) throw new Error(`Erro IA: ${res.status}`);
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error("Erro detalhado da API do Google (Coach):", errorText);
+      throw new Error(`Erro IA: ${res.status} - ${errorText.slice(0, 100)}`);
+    }
+
     const json = await res.json();
-    return { text: (json.choices?.[0]?.message?.content as string) ?? "" };
+    return { text: (json.candidates?.[0]?.content?.parts?.[0]?.text as string) ?? "" };
   });

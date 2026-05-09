@@ -15,7 +15,7 @@ function Index() {
           <div className="h-9 w-9 rounded-xl bg-primary flex items-center justify-center">
             <Apple className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span className="font-display font-bold text-xl">Verde</span>
+          <span className="font-display font-bold text-xl">Fit Well Hub</span>
         </div>
         <Link to="/auth">
           <Button variant="ghost">Entrar</Button>

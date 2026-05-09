@@ -46,7 +46,7 @@ function AppLayout() {
             <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
               <Apple className="h-4 w-4 text-primary-foreground" />
             </div>
-            <span className="font-display font-bold">Verde</span>
+            <span className="font-display font-bold">Fit Well Hub</span>
           </Link>
           <div className="flex items-center gap-1">
             <RLink to="/app/lembretes">

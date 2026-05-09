@@ -10,10 +10,11 @@ export const sendChat = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => inputSchema.parse(d))
   .handler(async ({ data, context }) => {
-    const apiKey = process.env.LOVABLE_API_KEY;
-    if (!apiKey) throw new Error("LOVABLE_API_KEY não configurada");
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("GEMINI_API_KEY não configurada no arquivo .env");
     const { supabase, userId } = context;
 
+    // ... (rest of data gathering code remains same) ...
     // Build context: last 7 days of meals/water/weight + goals + history
     const today = new Date().toISOString().slice(0, 10);
     const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
@@ -98,29 +99,39 @@ Pesos recentes: ${(weights ?? []).map((w) => `${w.log_date}=${w.weight_kg}kg`).j
 
     const recentHistory = (history ?? []).reverse();
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
+        contents: [
           {
-            role: "system",
-            content: `Você é um coach de nutrição e treino direto, motivador e baseado em ciência. Responda em português brasileiro, curto e objetivo (máx 4 parágrafos). Use os dados reais do usuário abaixo:\n\n${ctxText}`,
+            role: "user",
+            parts: [{ text: `Você é um coach de nutrição e treino direto, motivador e baseado em ciência. Responda em português brasileiro, curto e objetivo (máx 4 parágrafos). Use os dados reais do usuário abaixo:\n\n${ctxText}` }]
           },
-          ...recentHistory.map((m) => ({ role: m.role, content: m.content })),
-          { role: "user", content: data.message },
+          ...recentHistory.map((m) => ({
+            role: m.role === "assistant" ? "model" : "user",
+            parts: [{ text: m.content }]
+          })),
+          {
+            role: "user",
+            parts: [{ text: data.message }]
+          }
         ],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 1000,
+        }
       }),
     });
 
-    if (res.status === 429)
-      throw new Error("Limite de requisições atingido. Tente em alguns segundos.");
-    if (res.status === 402) throw new Error("Créditos esgotados na sua workspace Lovable AI.");
-    if (!res.ok) throw new Error("Falha na IA");
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error("Erro detalhado da API do Google:", errorText);
+      throw new Error(`Falha na IA: ${res.status} - ${errorText.slice(0, 100)}`);
+    }
 
     const j = await res.json();
-    const reply: string = j.choices?.[0]?.message?.content ?? "(sem resposta)";
+    const reply: string = j.candidates?.[0]?.content?.parts?.[0]?.text ?? "(sem resposta)";
 
     await supabase
       .from("chat_messages")
