@@ -22,57 +22,52 @@ const macroSchema = {
 export const lookupNutrition = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => inputSchema.parse(d))
   .handler(async ({ data }) => {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error("GEMINI_API_KEY não configurada no arquivo .env");
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) throw new Error("GROQ_API_KEY não configurada no arquivo .env");
 
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json" 
+      },
       body: JSON.stringify({
-        contents: [
+        model: "llama-3.3-70b-versatile",
+        messages: [
           {
-            role: "user",
-            parts: [{ text: "Você é um nutricionista. Estime macros (kcal, proteína, carboidrato, gordura) de alimentos brasileiros. Use a tabela TACO como referência mental. Sempre arredonde para 1 casa decimal." }]
-          },
-          {
-            role: "model",
-            parts: [{ text: "Entendido. Vou analisar o alimento e a porção para fornecer os macros exatos via função report_macros." }]
+            role: "system",
+            content:
+              "Você é um nutricionista. Estime macros (kcal, proteína, carboidrato, gordura) de alimentos brasileiros. Use a tabela TACO como referência mental. Sempre arredonde para 1 casa decimal. Retorne APENAS via tool call.",
           },
           {
             role: "user",
-            parts: [{ text: `Alimento: "${data.query}". Porção: ${data.grams}g. Estime os macros para essa porção exata.` }]
-          }
+            content: `Alimento: "${data.query}". Porção: ${data.grams}g. Estime os macros para essa porção exata.`,
+          },
         ],
         tools: [
           {
-            functionDeclarations: [
-              {
-                name: "report_macros",
-                description: "Reporta macros nutricionais estimados",
-                parameters: macroSchema,
-              }
-            ]
-          }
+            type: "function",
+            function: {
+              name: "report_macros",
+              description: "Reporta macros nutricionais estimados",
+              parameters: macroSchema,
+            },
+          },
         ],
-        toolConfig: {
-          functionCallingConfig: {
-            mode: "ANY",
-            allowedFunctionNames: ["report_macros"]
-          }
-        }
+        tool_choice: { type: "function", function: { name: "report_macros" } },
       }),
     });
 
     if (!res.ok) {
       const errorText = await res.text();
-      console.error("Erro detalhado da API do Google (Nutrition):", errorText);
+      console.error("Erro detalhado da API do Groq (Nutrition):", errorText);
       throw new Error(`Erro IA: ${res.status} - ${errorText.slice(0, 100)}`);
     }
 
     const json = await res.json();
-    const call = json.candidates?.[0]?.content?.parts?.[0]?.functionCall;
+    const call = json.choices?.[0]?.message?.tool_calls?.[0];
     if (!call) throw new Error("Resposta inválida da IA");
-    const args = call.args;
+    const args = JSON.parse(call.function.arguments);
     return args as {
       name: string;
       calories: number;
@@ -177,36 +172,34 @@ const coachSchema = z.object({
 export const coachAdvice = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => coachSchema.parse(d))
   .handler(async ({ data }) => {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error("GEMINI_API_KEY não configurada no arquivo .env");
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) throw new Error("GROQ_API_KEY não configurada no arquivo .env");
 
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json" 
+      },
       body: JSON.stringify({
-        contents: [
+        model: "llama-3.3-70b-versatile",
+        messages: [
           {
-            role: "user",
-            parts: [{ text: "Você é um coach pessoal de treino e nutrição. Analise os dados da última semana do usuário e retorne 3-5 insights curtos, práticos e motivadores em português. Use markdown simples (negrito e listas). Seja direto, sem clichês." }]
+            role: "system",
+            content:
+              "Você é um coach pessoal de treino e nutrição. Analise os dados da última semana do usuário e retorne 3-5 insights curtos, práticos e motivadores em português. Use markdown simples (negrito e listas). Seja direto, sem clichês.",
           },
-          {
-            role: "model",
-            parts: [{ text: "Entendido. Vou analisar os dados da semana e fornecer os insights solicitados." }]
-          },
-          {
-            role: "user",
-            parts: [{ text: data.summary }]
-          }
+          { role: "user", content: data.summary },
         ],
       }),
     });
 
     if (!res.ok) {
       const errorText = await res.text();
-      console.error("Erro detalhado da API do Google (Coach):", errorText);
+      console.error("Erro detalhado da API do Groq (Coach):", errorText);
       throw new Error(`Erro IA: ${res.status} - ${errorText.slice(0, 100)}`);
     }
 
     const json = await res.json();
-    return { text: (json.candidates?.[0]?.content?.parts?.[0]?.text as string) ?? "" };
+    return { text: (json.choices?.[0]?.message?.content as string) ?? "" };
   });

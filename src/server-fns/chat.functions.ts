@@ -10,8 +10,8 @@ export const sendChat = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => inputSchema.parse(d))
   .handler(async ({ data, context }) => {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error("GEMINI_API_KEY não configurada no arquivo .env");
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) throw new Error("GROQ_API_KEY não configurada no arquivo .env");
     const { supabase, userId } = context;
 
     // ... (rest of data gathering code remains same) ...
@@ -99,39 +99,33 @@ Pesos recentes: ${(weights ?? []).map((w) => `${w.log_date}=${w.weight_kg}kg`).j
 
     const recentHistory = (history ?? []).reverse();
 
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json" 
+      },
       body: JSON.stringify({
-        contents: [
+        model: "llama-3.3-70b-versatile",
+        messages: [
           {
-            role: "user",
-            parts: [{ text: `Você é um coach de nutrição e treino direto, motivador e baseado em ciência. Responda em português brasileiro, curto e objetivo (máx 4 parágrafos). Use os dados reais do usuário abaixo:\n\n${ctxText}` }]
+            role: "system",
+            content: `Você é um coach de nutrição e treino direto, motivador e baseado em ciência. Responda em português brasileiro, curto e objetivo (máx 4 parágrafos). Use os dados reais do usuário abaixo:\n\n${ctxText}`,
           },
-          ...recentHistory.map((m) => ({
-            role: m.role === "assistant" ? "model" : "user",
-            parts: [{ text: m.content }]
-          })),
-          {
-            role: "user",
-            parts: [{ text: data.message }]
-          }
+          ...recentHistory.map((m) => ({ role: m.role, content: m.content })),
+          { role: "user", content: data.message },
         ],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 1000,
-        }
       }),
     });
 
     if (!res.ok) {
       const errorText = await res.text();
-      console.error("Erro detalhado da API do Google:", errorText);
+      console.error("Erro detalhado da API do Groq:", errorText);
       throw new Error(`Falha na IA: ${res.status} - ${errorText.slice(0, 100)}`);
     }
 
     const j = await res.json();
-    const reply: string = j.candidates?.[0]?.content?.parts?.[0]?.text ?? "(sem resposta)";
+    const reply: string = j.choices?.[0]?.message?.content ?? "(sem resposta)";
 
     await supabase
       .from("chat_messages")
