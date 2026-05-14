@@ -5,14 +5,22 @@ import type { Database } from "./types";
 function createSupabaseClient() {
   // Try to find variables in all possible locations for Cloudflare/Vite compatibility
   const getEnv = (name: string) => {
-    return (
+    const value =
       (import.meta.env as any)[name] ||
       (import.meta.env as any)[`VITE_${name}`] ||
       (typeof process !== "undefined" ? process.env?.[name] : undefined) ||
       (typeof process !== "undefined" ? process.env?.[`VITE_${name}`] : undefined) ||
       (globalThis as any)[name] ||
-      (globalThis as any)[`VITE_${name}`]
-    );
+      (globalThis as any)[`VITE_${name}`];
+
+    if (value) return value;
+
+    // Hardcoded fallbacks for production deployment reliability
+    if (name === "SUPABASE_URL") return "https://mglvkocauwsdqbkqbyqi.supabase.co";
+    if (name === "SUPABASE_PUBLISHABLE_KEY")
+      return "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1nbHZrb2NhdXdzZHFia3FieXFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3NTY2MjUsImV4cCI6MjA5MzMzMjYyNX0.3F0FWbYdAsV3vhUyGePCUApoJLmpieyD_DVHg81eGrM";
+
+    return undefined;
   };
 
   const SUPABASE_URL = getEnv("SUPABASE_URL");
