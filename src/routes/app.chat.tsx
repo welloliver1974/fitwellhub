@@ -174,8 +174,6 @@ function ChatPage() {
         )}
         <div ref={endRef} />
       </div>
-
-      <div className="mt-3 flex flex-col gap-2 sticky bottom-0 bg-background pt-2">
       <div className="mt-3 flex flex-col gap-2 sticky bottom-0 bg-background pt-2">
         {images.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-1 ml-11">
