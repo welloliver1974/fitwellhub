@@ -4,7 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const inputSchema = z.object({
   message: z.string().trim().max(2000).optional().default(""),
-  image: z.string().optional(),
+  images: z.array(z.string()).optional(),
 });
 
 export const sendChat = createServerFn({ method: "POST" })
@@ -12,11 +12,10 @@ export const sendChat = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => inputSchema.parse(d))
   .handler(async ({ data, context }) => {
     const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey) throw new Error("GROQ_API_KEY não configurada no arquivo .env");
+    if (!apiKey) throw new Error("GROQ_API_KEY não configurada");
     const { supabase, userId } = context;
 
-    // ... (rest of data gathering code remains same) ...
-    // Build context: last 7 days of meals/water/weight + goals + history
+    // ... context gathering (identical to current) ...
     const today = new Date().toISOString().slice(0, 10);
     const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
 
@@ -27,120 +26,155 @@ export const sendChat = createServerFn({ method: "POST" })
       { data: weights },
       { data: history },
     ] = await Promise.all([
-      supabase
-        .from("goals")
-        .select("calories,protein_g,carbs_g,fat_g")
-        .eq("user_id", userId)
-        .maybeSingle(),
+      supabase.from("goals").select("calories,protein_g,carbs_g,fat_g").eq("user_id", userId).maybeSingle(),
       supabase.from("meals").select("id,meal_date").eq("user_id", userId).gte("meal_date", weekAgo),
-      supabase
-        .from("water_logs")
-        .select("ml,log_date")
-        .eq("user_id", userId)
-        .gte("log_date", weekAgo),
-      supabase
-        .from("body_weights")
-        .select("weight_kg,log_date")
-        .eq("user_id", userId)
-        .order("log_date", { ascending: false })
-        .limit(5),
-      supabase
-        .from("chat_messages")
-        .select("role,content")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(20),
+      supabase.from("water_logs").select("ml,log_date").eq("user_id", userId).gte("log_date", weekAgo),
+      supabase.from("body_weights").select("weight_kg,log_date").eq("user_id", userId).order("log_date", { ascending: false }).limit(5),
+      supabase.from("chat_messages").select("role,content").eq("user_id", userId).order("created_at", { ascending: false }).limit(15),
     ]);
 
     const ids = (meals ?? []).map((m) => m.id);
-    const byMeal: Record<string, string> = {};
-    (meals ?? []).forEach((m) => {
-      byMeal[m.id] = m.meal_date;
-    });
     const dailyTotals: Record<string, { kcal: number; p: number; c: number; f: number }> = {};
     if (ids.length) {
-      const { data: items } = await supabase
-        .from("meal_items")
-        .select("meal_id,calories,protein_g,carbs_g,fat_g")
-        .in("meal_id", ids);
+      const { data: items } = await supabase.from("meal_items").select("meal_id,calories,protein_g,carbs_g,fat_g").in("meal_id", ids);
       (items ?? []).forEach((i) => {
-        const d = byMeal[i.meal_id as string];
+        const d = (meals ?? []).find(m => m.id === i.meal_id)?.meal_date;
         if (!d) return;
         const cur = dailyTotals[d] ?? { kcal: 0, p: 0, c: 0, f: 0 };
-        cur.kcal += Number(i.calories || 0);
-        cur.p += Number(i.protein_g || 0);
-        cur.c += Number(i.carbs_g || 0);
-        cur.f += Number(i.fat_g || 0);
+        cur.kcal += Number(i.calories || 0); cur.p += Number(i.protein_g || 0); cur.c += Number(i.carbs_g || 0); cur.f += Number(i.fat_g || 0);
         dailyTotals[d] = cur;
       });
     }
-    const waterByDay: Record<string, number> = {};
-    (water ?? []).forEach((w) => {
-      waterByDay[w.log_date] = (waterByDay[w.log_date] ?? 0) + Number(w.ml);
-    });
 
-    const ctxText = `
-Hoje: ${today}
-Metas: ${goals?.calories ?? 2000}kcal, P${goals?.protein_g ?? 140}g, C${goals?.carbs_g ?? 220}g, G${goals?.fat_g ?? 65}g
-Últimos 7 dias (kcal/P/C/G/água-ml):
-${Object.entries(dailyTotals)
-  .sort()
-  .map(
-    ([d, t]) =>
-      `${d}: ${Math.round(t.kcal)}/${Math.round(t.p)}/${Math.round(t.c)}/${Math.round(t.f)} | água ${waterByDay[d] ?? 0}ml`,
-  )
-  .join("\n")}
-Pesos recentes: ${(weights ?? []).map((w) => `${w.log_date}=${w.weight_kg}kg`).join(", ")}
-`.trim();
+    const ctxText = `Hoje: ${today}\nMetas: ${goals?.calories ?? 2000}kcal, P${goals?.protein_g ?? 140}g, C${goals?.carbs_g ?? 220}g, G${goals?.fat_g ?? 65}g\nÚltimos 7 dias:\n${Object.entries(dailyTotals).map(([d, t]) => `${d}: ${Math.round(t.kcal)}kcal`).join(", ")}`;
 
-    // Save user message
-    const dbMessage = data.image ? `[Imagem anexada] ${data.message}`.trim() : data.message;
-    await supabase
-      .from("chat_messages")
-      .insert({ user_id: userId, role: "user", content: dbMessage });
+    // Optimistic Save
+    const dbMessage = data.images?.length ? `[${data.images.length} Imagens] ${data.message}` : data.message;
+    await supabase.from("chat_messages").insert({ user_id: userId, role: "user", content: dbMessage });
 
     const recentHistory = (history ?? []).reverse();
+    const modelToUse = data.images?.length ? "meta-llama/llama-4-scout-17b-16e-instruct" : "llama-3.3-70b-versatile";
 
-    const modelToUse = data.image ? "meta-llama/llama-4-scout-17b-16e-instruct" : "llama-3.3-70b-versatile";
-
-    const userMessageContent = data.image
-      ? [
-          { type: "text", text: data.message || "Analise esta imagem." },
-          { type: "image_url", image_url: { url: data.image } },
-        ]
-      : data.message;
-
-    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: modelToUse,
-        messages: [
-          {
-            role: "system",
-            content: `Você é um coach de nutrição e treino direto, motivador e baseado em ciência. Responda em português brasileiro, curto e objetivo (máx 4 parágrafos). Use os dados reais do usuário abaixo:\n\n${ctxText}`,
-          },
-          ...recentHistory.map((m) => ({ role: m.role, content: m.content })),
-          { role: "user", content: userMessageContent },
-        ],
-      }),
+    const userContent: any[] = [{ type: "text", text: data.message || "Analise estas imagens." }];
+    (data.images ?? []).forEach(img => {
+      userContent.push({ type: "image_url", image_url: { url: img } });
     });
 
-    if (!res.ok) {
-      const errorText = await res.text();
-      console.error("Erro detalhado da API do Groq:", errorText);
-      throw new Error(`Falha na IA: ${res.status} - ${errorText.slice(0, 100)}`);
+    const tools = [
+      {
+        type: "function",
+        function: {
+          name: "record_meal",
+          description: "Registra uma refeição com múltiplos itens e macros.",
+          parameters: {
+            type: "object",
+            properties: {
+              meal_type: { type: "string", enum: ["Café da manhã", "Almoço", "Jantar", "Lanche"] },
+              items: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string" },
+                    calories: { type: "number" },
+                    protein_g: { type: "number" },
+                    carbs_g: { type: "number" },
+                    fat_g: { type: "number" },
+                  },
+                  required: ["name", "calories"],
+                },
+              },
+            },
+            required: ["meal_type", "items"],
+          },
+        },
+      },
+      {
+        type: "function",
+        function: {
+          name: "record_workout",
+          description: "Registra um treino com exercícios e séries.",
+          parameters: {
+            type: "object",
+            properties: {
+              name: { type: "string", description: "Nome do treino (ex: Treino de Peito)" },
+              exercises: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string" },
+                    sets: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          reps: { type: "number" },
+                          weight_kg: { type: "number" },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    ];
+
+    let messages: any[] = [
+      { role: "system", content: `Você é um coach de nutrição e treino. Use português brasileiro. Quando solicitado ou ao ver fotos de comida/treino, ofereça ou registre os dados usando as ferramentas. Dados do usuário:\n${ctxText}` },
+      ...recentHistory.map((m: any) => ({ role: m.role, content: m.content })),
+      { role: "user", content: userContent },
+    ];
+
+    const groqCall = async (msgs: any[]) => {
+      const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: modelToUse, messages: msgs, tools, tool_choice: "auto" }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    };
+
+    let response = await groqCall(messages);
+    let choice = response.choices[0];
+
+    while (choice.message.tool_calls) {
+      messages.push(choice.message);
+      for (const toolCall of choice.message.tool_calls) {
+        const args = JSON.parse(toolCall.function.arguments);
+        let result = "";
+
+        if (toolCall.function.name === "record_meal") {
+          const { data: meal } = await supabase.from("meals").insert({ user_id: userId, meal_type: args.meal_type, meal_date: today }).select().single();
+          if (meal) {
+            await supabase.from("meal_items").insert(args.items.map((it: any) => ({ ...it, meal_id: meal.id, user_id: userId })));
+            result = "Refeição registrada com sucesso!";
+          }
+        } else if (toolCall.function.name === "record_workout") {
+          const { data: workout } = await supabase.from("workouts").insert({ user_id: userId, name: args.name, workout_date: today }).select().single();
+          if (workout) {
+            for (let i = 0; i < args.exercises.length; i++) {
+              const exData = args.exercises[i];
+              const { data: ex } = await supabase.from("exercises").insert({ user_id: userId, workout_id: workout.id, name: exData.name, position: i }).select().single();
+              if (ex && exData.sets) {
+                await supabase.from("sets").insert(exData.sets.map((s: any, idx: number) => ({ ...s, exercise_id: ex.id, user_id: userId, set_number: idx + 1 })));
+              }
+            }
+            result = "Treino registrado com sucesso!";
+          }
+        }
+
+        messages.push({ tool_call_id: toolCall.id, role: "tool", name: toolCall.function.name, content: result });
+      }
+      response = await groqCall(messages);
+      choice = response.choices[0];
     }
 
-    const j = await res.json();
-    const reply: string = j.choices?.[0]?.message?.content ?? "(sem resposta)";
-
-    await supabase
-      .from("chat_messages")
-      .insert({ user_id: userId, role: "assistant", content: reply });
-
+    const reply = choice.message.content || "Registro concluído.";
+    await supabase.from("chat_messages").insert({ user_id: userId, role: "assistant", content: reply });
     return { reply };
   });
