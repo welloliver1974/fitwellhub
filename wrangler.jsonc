@@ -4,4 +4,10 @@
   "compatibility_date": "2025-09-24",
   "compatibility_flags": ["nodejs_compat"],
   "main": "@tanstack/react-start/server-entry",
+  "vars": {
+    "VITE_SUPABASE_URL": "https://mglvkocauwsdqbkqbyqi.supabase.co",
+    "VITE_SUPABASE_PUBLISHABLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1nbHZrb2NhdXdzZHFia3FieXFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3NTY2MjUsImV4cCI6MjA5MzMzMjYyNX0.3F0FWbYdAsV3vhUyGePCUApoJLmpieyD_DVHg81eGrM",
+    "SUPABASE_URL": "https://mglvkocauwsdqbkqbyqi.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1nbHZrb2NhdXdzZHFia3FieXFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3NTY2MjUsImV4cCI6MjA5MzMzMjYyNX0.3F0FWbYdAsV3vhUyGePCUApoJLmpieyD_DVHg81eGrM"
+  }
 }
