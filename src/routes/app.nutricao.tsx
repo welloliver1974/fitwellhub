@@ -188,16 +188,16 @@ function NutricaoPage() {
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
     setFavorites(
-  (favs ?? []) as Array<{
-    id: string;
-    name: string;
-    grams: number;
-    calories: number;
-    protein_g: number;
-    carbs_g: number;
-    fat_g: number;
-  }>,
-);
+      (favs ?? []) as Array<{
+        id: string;
+        name: string;
+        grams: number;
+        calories: number;
+        protein_g: number;
+        carbs_g: number;
+        fat_g: number;
+      }>,
+    );
   };
 
   useEffect(() => {

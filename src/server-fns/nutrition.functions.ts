@@ -27,9 +27,9 @@ export const lookupNutrition = createServerFn({ method: "POST" })
 
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
-      headers: { 
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json" 
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         model: "llama-3.3-70b-versatile",
@@ -112,38 +112,41 @@ export const analyzePhoto = createServerFn({ method: "POST" })
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error("GEMINI_API_KEY não configurada no arquivo .env");
 
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${apiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "gemini-2.0-flash",
-        messages: [
-          {
-            role: "system",
-            content:
-              "Você é nutricionista. Identifique cada alimento visível na foto do prato, estime gramas e macros (kcal, proteína, carboidrato, gordura) por item. Use a tabela TACO como referência. Retorne APENAS via tool call.",
-          },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: "Analise este prato e estime macros por item." },
-              { type: "image_url", image_url: { url: data.imageBase64 } },
-            ],
-          },
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "report_plate",
-              description: "Reporta itens identificados no prato",
-              parameters: photoMacrosTool,
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "gemini-2.0-flash",
+          messages: [
+            {
+              role: "system",
+              content:
+                "Você é nutricionista. Identifique cada alimento visível na foto do prato, estime gramas e macros (kcal, proteína, carboidrato, gordura) por item. Use a tabela TACO como referência. Retorne APENAS via tool call.",
             },
-          },
-        ],
-        tool_choice: { type: "function", function: { name: "report_plate" } },
-      }),
-    });
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Analise este prato e estime macros por item." },
+                { type: "image_url", image_url: { url: data.imageBase64 } },
+              ],
+            },
+          ],
+          tools: [
+            {
+              type: "function",
+              function: {
+                name: "report_plate",
+                description: "Reporta itens identificados no prato",
+                parameters: photoMacrosTool,
+              },
+            },
+          ],
+          tool_choice: { type: "function", function: { name: "report_plate" } },
+        }),
+      },
+    );
 
     if (res.status === 429) throw new Error("Muitas requisições. Aguarde um instante.");
     if (res.status === 402) throw new Error("Créditos de IA esgotados.");
@@ -177,9 +180,9 @@ export const coachAdvice = createServerFn({ method: "POST" })
 
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
-      headers: { 
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json" 
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         model: "llama-3.3-70b-versatile",

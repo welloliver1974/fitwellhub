@@ -3,7 +3,8 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const inputSchema = z.object({
-  message: z.string().trim().min(1).max(2000),
+  message: z.string().trim().max(2000).optional().default(""),
+  image: z.string().optional(),
 });
 
 export const sendChat = createServerFn({ method: "POST" })
@@ -93,27 +94,37 @@ Pesos recentes: ${(weights ?? []).map((w) => `${w.log_date}=${w.weight_kg}kg`).j
 `.trim();
 
     // Save user message
+    const dbMessage = data.image ? `[Imagem anexada] ${data.message}`.trim() : data.message;
     await supabase
       .from("chat_messages")
-      .insert({ user_id: userId, role: "user", content: data.message });
+      .insert({ user_id: userId, role: "user", content: dbMessage });
 
     const recentHistory = (history ?? []).reverse();
 
+    const modelToUse = data.image ? "llama-3.2-11b-vision-preview" : "llama-3.3-70b-versatile";
+
+    const userMessageContent = data.image
+      ? [
+          { type: "text", text: data.message || "Analise esta imagem." },
+          { type: "image_url", image_url: { url: data.image } },
+        ]
+      : data.message;
+
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
-      headers: { 
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json" 
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: modelToUse,
         messages: [
           {
             role: "system",
             content: `Você é um coach de nutrição e treino direto, motivador e baseado em ciência. Responda em português brasileiro, curto e objetivo (máx 4 parágrafos). Use os dados reais do usuário abaixo:\n\n${ctxText}`,
           },
           ...recentHistory.map((m) => ({ role: m.role, content: m.content })),
-          { role: "user", content: data.message },
+          { role: "user", content: userMessageContent },
         ],
       }),
     });
