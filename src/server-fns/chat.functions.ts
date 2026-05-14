@@ -124,7 +124,14 @@ export const sendChat = createServerFn({ method: "POST" })
     ];
 
     let messages: any[] = [
-      { role: "system", content: `Você é um coach de nutrição e treino. Use português brasileiro. Quando solicitado ou ao ver fotos de comida/treino, ofereça ou registre os dados usando as ferramentas. Dados do usuário:\n${ctxText}` },
+      { 
+        role: "system", 
+        content: `Você é um coach de nutrição e treino. Use português brasileiro. 
+        IMPORTANTE: Se o usuário enviar múltiplas fotos, analise se elas pertencem à mesma refeição ou ao mesmo treino. 
+        - Se forem do mesmo evento, use apenas UMA chamada de ferramenta para registrar tudo junto. 
+        - Não duplique registros se as fotos forem apenas ângulos diferentes da mesma coisa.
+        Dados do usuário:\n${ctxText}` 
+      },
       ...recentHistory.map((m: any) => ({ role: m.role, content: m.content })),
       { role: "user", content: userContent },
     ];
