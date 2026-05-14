@@ -101,7 +101,7 @@ Pesos recentes: ${(weights ?? []).map((w) => `${w.log_date}=${w.weight_kg}kg`).j
 
     const recentHistory = (history ?? []).reverse();
 
-    const modelToUse = data.image ? "llama-3.2-11b-vision-preview" : "llama-3.3-70b-versatile";
+    const modelToUse = data.image ? "meta-llama/llama-4-scout-17b-16e-instruct" : "llama-3.3-70b-versatile";
 
     const userMessageContent = data.image
       ? [
