@@ -30,7 +30,7 @@ export const sendChat = createServerFn({ method: "POST" })
       supabase.from("meals").select("id,meal_date").eq("user_id", userId).gte("meal_date", weekAgo),
       supabase.from("water_logs").select("ml,log_date").eq("user_id", userId).gte("log_date", weekAgo),
       supabase.from("body_weights").select("weight_kg,log_date").eq("user_id", userId).order("log_date", { ascending: false }).limit(5),
-      supabase.from("chat_messages").select("role,content").eq("user_id", userId).order("created_at", { ascending: false }).limit(15),
+      supabase.from("chat_messages").select("role,content").eq("user_id", userId).order("created_at", { ascending: false }).limit(8),
     ]);
 
     const ids = (meals ?? []).map((m) => m.id);

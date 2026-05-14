@@ -37,12 +37,25 @@ function ChatPage() {
     files.forEach(file => {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setImages(prev => [...prev, reader.result as string].slice(-4)); // Limit to 4 images
+        const img = new Image();
+        img.src = reader.result as string;
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const MAX_WIDTH = 800; // Resolução ideal para IA sem gastar muito token
+          const scaleSize = MAX_WIDTH / img.width;
+          canvas.width = MAX_WIDTH;
+          canvas.height = img.height * scaleSize;
+          
+          const ctx = canvas.getContext("2d");
+          ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+          
+          const resized = canvas.toDataURL("image/jpeg", 0.7); // 70% de qualidade
+          setImages(prev => [...prev, resized].slice(-4));
+        };
       };
       reader.readAsDataURL(file);
     });
     
-    // Reset file input
     e.target.value = "";
   };
 
