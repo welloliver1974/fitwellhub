@@ -171,17 +171,63 @@ export const sendChat = createServerFn({ method: "POST" })
           if (createdWorkoutNames.has(args.name)) {
             result = "Treino já processado nesta solicitação.";
           } else {
-            const { data: workout } = await supabase.from("workouts").insert({ user_id: userId, name: args.name, workout_date: today }).select().single();
-            if (workout) {
+            // Verificação adicional: ver se já existe um treino com esse nome HOJE para este usuário
+            const { data: existing } = await supabase
+              .from("workouts")
+              .select("id")
+              .eq("user_id", userId)
+              .eq("name", args.name)
+              .eq("workout_date", today)
+              .maybeSingle();
+
+            if (existing) {
+              result = `O treino "${args.name}" já foi registrado hoje.`;
               createdWorkoutNames.add(args.name);
-              for (let i = 0; i < args.exercises.length; i++) {
-                const exData = args.exercises[i];
-                const { data: ex } = await supabase.from("exercises").insert({ user_id: userId, workout_id: workout.id, name: exData.name, position: i }).select().single();
-                if (ex && exData.sets) {
-                  await supabase.from("sets").insert(exData.sets.map((s: any, idx: number) => ({ ...s, exercise_id: ex.id, user_id: userId, set_number: idx + 1 })));
+            } else {
+              // 1. Criar o treino
+              const { data: workout, error: wErr } = await supabase.from("workouts").insert({ user_id: userId, name: args.name, workout_date: today }).select().single();
+              
+              if (workout) {
+                createdWorkoutNames.add(args.name);
+                
+                // 2. Criar todos os exercícios em massa
+                const exercisesToInsert = args.exercises.map((ex: any, idx: number) => ({
+                  user_id: userId,
+                  workout_id: workout.id,
+                  name: ex.name,
+                  position: idx
+                }));
+                
+                const { data: insertedExercises, error: exErr } = await supabase.from("exercises").insert(exercisesToInsert).select();
+                
+                if (insertedExercises && !exErr) {
+                  // 3. Criar todas as séries em massa
+                  const allSetsToInsert: any[] = [];
+                  
+                  args.exercises.forEach((exData: any, idx: number) => {
+                    const exRecord = insertedExercises.find(e => e.name === exData.name && e.position === idx);
+                    if (exRecord && exData.sets) {
+                      exData.sets.forEach((s: any, sIdx: number) => {
+                        allSetsToInsert.push({
+                          ...s,
+                          exercise_id: exRecord.id,
+                          user_id: userId,
+                          set_number: sIdx + 1
+                        });
+                      });
+                    }
+                  });
+                  
+                  if (allSetsToInsert.length > 0) {
+                    await supabase.from("sets").insert(allSetsToInsert);
+                  }
+                  result = "Treino registrado com sucesso!";
+                } else {
+                  result = `Erro ao registrar exercícios: ${exErr?.message}`;
                 }
+              } else {
+                result = `Erro ao registrar treino: ${wErr?.message}`;
               }
-              result = "Treino registrado com sucesso!";
             }
           }
         }
