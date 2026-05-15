@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { Card } from "@/components/ui/card";
@@ -33,7 +34,13 @@ export const Route = createFileRoute("/app/treinos/$id")({
 
 type Workout = { id: string; name: string; workout_date: string };
 type Exercise = { id: string; name: string; position: number };
-type Set = { id: string; exercise_id: string; set_number: number; reps: number; weight_kg: number };
+type WorkoutSet = {
+  id: string;
+  exercise_id: string;
+  set_number: number;
+  reps: number;
+  weight_kg: number;
+};
 
 type PrevExerciseRow = {
   id: string;
@@ -52,7 +59,7 @@ function WorkoutDetail() {
   const { user } = useAuth();
   const [workout, setWorkout] = useState<Workout | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [sets, setSets] = useState<Set[]>([]);
+  const [sets, setSets] = useState<WorkoutSet[]>([]);
   const [history, setHistory] = useState<
     Record<string, { reps: number; weight_kg: number; date: string }>
   >({});
@@ -62,6 +69,27 @@ function WorkoutDetail() {
   const [restRunning, setRestRunning] = useState(false);
   const [restPreset, setRestPreset] = useState(90);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Completed sets tracked in localStorage by workout + date
+  const today = new Date().toISOString().split("T")[0];
+  const lsKey = `workout-completed-${id}-${today}`;
+  const [completedSets, setCompletedSets] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem(lsKey);
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+  const toggleCompleted = (setId: string) => {
+    setCompletedSets((prev) => {
+      const next = new Set(prev);
+      if (next.has(setId)) next.delete(setId);
+      else next.add(setId);
+      localStorage.setItem(lsKey, JSON.stringify([...next]));
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (restRunning && restSec > 0) {
@@ -116,7 +144,7 @@ function WorkoutDetail() {
         .select("*")
         .in("exercise_id", exIds)
         .order("set_number");
-      setSets((ss ?? []) as Set[]);
+      setSets((ss ?? []) as WorkoutSet[]);
     } else setSets([]);
 
     // Load best/last set per exercise name from previous workouts
@@ -265,7 +293,7 @@ function WorkoutDetail() {
       </div>
 
       {/* Rest timer */}
-      <Card className="p-3 flex items-center justify-between gap-3">
+      <Card className="p-3 flex items-center justify-between gap-3 sticky top-[57px] z-20 shadow-sm">
         <div className="flex items-center gap-2">
           <Timer className="h-5 w-5 text-primary" />
           <span className="font-display text-2xl font-bold tabular-nums">
@@ -344,36 +372,60 @@ function WorkoutDetail() {
 
                 {exSets.length > 0 && (
                   <div className="space-y-2 mb-3">
-                    <div className="grid grid-cols-[32px_1fr_1fr_32px] gap-2 text-xs text-muted-foreground px-1">
+                    <div className="grid grid-cols-[24px_32px_1fr_1fr_32px] gap-2 text-xs text-muted-foreground px-1">
                       <span>#</span>
+                      <span></span>
                       <span>Reps</span>
                       <span>Carga (kg)</span>
                       <span></span>
                     </div>
-                    {exSets.map((s) => (
+                    {exSets.map((s) => {
+                      const done = completedSets.has(s.id);
+                      return (
                       <div
                         key={s.id}
-                        className="grid grid-cols-[32px_1fr_1fr_32px] gap-2 items-center"
+                        className={cn(
+                          "grid grid-cols-[24px_32px_1fr_1fr_32px] gap-2 items-center transition-opacity",
+                          done && "opacity-50",
+                        )}
                       >
                         <span className="text-sm font-medium text-muted-foreground">
                           {s.set_number}
                         </span>
+                        <div className="flex justify-center">
+                          <input
+                            type="checkbox"
+                            checked={done}
+                            onChange={() => toggleCompleted(s.id)}
+                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                          />
+                        </div>
                         <Input
                           type="number"
-                          value={s.reps}
+                          value={s.reps || ""}
+                          onFocus={(e) => e.target.select()}
                           onChange={(e) => updateSet(s.id, "reps", Number(e.target.value))}
+                          disabled={done}
                         />
                         <Input
                           type="number"
                           step="0.5"
-                          value={s.weight_kg}
+                          value={s.weight_kg || ""}
+                          onFocus={(e) => e.target.select()}
                           onChange={(e) => updateSet(s.id, "weight_kg", Number(e.target.value))}
+                          disabled={done}
                         />
-                        <Button variant="ghost" size="icon" onClick={() => removeSet(s.id)}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeSet(s.id)}
+                          disabled={done}
+                        >
                           <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
                         </Button>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 

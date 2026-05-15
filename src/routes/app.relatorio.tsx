@@ -4,9 +4,33 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { FileDown, Loader2 } from "lucide-react";
+import { FileDown, Loader2, History } from "lucide-react";
 import jsPDF from "jspdf";
 import { toast } from "sonner";
+
+type CompletedLog = {
+  date: string;
+  workoutId: string;
+  workoutName: string;
+  setIds: string[];
+};
+
+function loadCompletedLogs(): CompletedLog[] {
+  const logs: CompletedLog[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key?.startsWith("workout-completed-")) {
+      const parts = key.replace("workout-completed-", "").split("-");
+      if (parts.length >= 4) {
+        const date = parts.slice(-3).join("-");
+        const workoutId = parts.slice(0, -3).join("-");
+        const setIds = JSON.parse(localStorage.getItem(key) || "[]");
+        logs.push({ date, workoutId, workoutName: "", setIds });
+      }
+    }
+  }
+  return logs.sort((a, b) => b.date.localeCompare(a.date));
+}
 
 export const Route = createFileRoute("/app/relatorio")({
   component: RelatorioPage,
@@ -15,6 +39,7 @@ export const Route = createFileRoute("/app/relatorio")({
 function RelatorioPage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const exportPdf = async () => {
     if (!user) return;
@@ -122,7 +147,7 @@ function RelatorioPage() {
       const doc = new jsPDF();
       let y = 18;
       doc.setFontSize(18);
-      doc.text("Verde — Relatorio Semanal", 14, y);
+      doc.text("Fit Well Hub — Relatorio Semanal", 14, y);
       y += 8;
       doc.setFontSize(10);
       doc.setTextColor(120);
@@ -194,7 +219,7 @@ function RelatorioPage() {
           }
         }
 
-      doc.save(`verde-relatorio-${today}.pdf`);
+      doc.save(`fitwellhub-relatorio-${today}.pdf`);
       toast.success("PDF gerado");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro");
@@ -225,6 +250,60 @@ function RelatorioPage() {
             </>
           )}
         </Button>
+      </Card>
+
+      <Card className="p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            Treinos concluídos por dia (salvo no navegador)
+          </p>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowHistory(!showHistory)}
+          >
+            <History className="h-4 w-4 mr-1" />
+            {showHistory ? "Ocultar" : "Ver"}
+          </Button>
+        </div>
+
+        {showHistory && (
+          <div className="space-y-2">
+            {(() => {
+              const logs = loadCompletedLogs();
+              if (logs.length === 0) {
+                return (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    Nenhum treino concluído ainda. Marque as séries como concluídas na página de treinos.
+                  </p>
+                );
+              }
+              const grouped = logs.reduce(
+                (acc, log) => {
+                  if (!acc[log.date]) acc[log.date] = [];
+                  acc[log.date].push(log);
+                  return acc;
+                },
+                {} as Record<string, CompletedLog[]>
+              );
+              return Object.entries(grouped).map(([date, dateLogs]) => (
+                <div key={date} className="border rounded-lg p-3">
+                  <p className="font-medium text-sm">
+                    {new Date(date + "T00:00").toLocaleDateString("pt-BR", {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                    })}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {dateLogs.reduce((sum, l) => sum + l.setIds.length, 0)} séries
+                    concluídas
+                  </p>
+                </div>
+              ));
+            })()}
+          </div>
+        )}
       </Card>
     </div>
   );

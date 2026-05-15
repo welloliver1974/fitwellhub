@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft, ChevronRight, X, Plus, Check, Timer, Pause, Play } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/treinos/$id/foco")({
@@ -12,19 +13,45 @@ export const Route = createFileRoute("/app/treinos/$id/foco")({
 });
 
 type Exercise = { id: string; name: string; position: number };
-type Set = { id: string; exercise_id: string; set_number: number; reps: number; weight_kg: number };
+type WorkoutSet = {
+  id: string;
+  exercise_id: string;
+  set_number: number;
+  reps: number;
+  weight_kg: number;
+};
 
 function FocusMode() {
   const { id } = Route.useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [sets, setSets] = useState<Set[]>([]);
+  const [sets, setSets] = useState<WorkoutSet[]>([]);
   const [idx, setIdx] = useState(0);
   const [restSec, setRestSec] = useState(0);
   const [restRunning, setRestRunning] = useState(false);
   const [restPreset, setRestPreset] = useState(90);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Completed sets tracked in localStorage
+  const lsKey = `workout-completed-${id}`;
+  const [completedSets, setCompletedSets] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem(lsKey);
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+  const toggleCompleted = (setId: string) => {
+    setCompletedSets((prev) => {
+      const next = new Set(prev);
+      if (next.has(setId)) next.delete(setId);
+      else next.add(setId);
+      localStorage.setItem(lsKey, JSON.stringify([...next]));
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (restRunning && restSec > 0) {
@@ -57,7 +84,7 @@ function FocusMode() {
         .select("*")
         .in("exercise_id", exIds)
         .order("set_number");
-      setSets((ss ?? []) as Set[]);
+      setSets((ss ?? []) as WorkoutSet[]);
     }
   };
   useEffect(() => {
@@ -85,10 +112,8 @@ function FocusMode() {
 
   const updateSet = async (setId: string, field: "reps" | "weight_kg", value: number) => {
     setSets((p) => p.map((s) => (s.id === setId ? { ...s, [field]: value } : s)));
-    await supabase
-      .from("sets")
-      .update(field === "reps" ? { reps: value } : { weight_kg: value })
-      .eq("id", setId);
+    const update = field === "reps" ? { reps: value } : { weight_kg: value };
+    await supabase.from("sets").update(update).eq("id", setId);
   };
 
   if (!exercises.length)
@@ -157,28 +182,46 @@ function FocusMode() {
         </div>
 
         <div className="w-full max-w-md space-y-2">
-          {exSets.map((s) => (
+          {exSets.map((s) => {
+            const done = completedSets.has(s.id);
+            return (
             <div
               key={s.id}
-              className="grid grid-cols-[40px_1fr_1fr_36px] items-center gap-2 rounded-xl bg-card border p-2"
+              className={cn(
+                "grid grid-cols-[40px_28px_1fr_1fr_36px] items-center gap-2 rounded-xl bg-card border p-2 transition-opacity",
+                done && "opacity-50",
+              )}
             >
               <span className="text-center font-bold">{s.set_number}</span>
+              <div className="flex justify-center">
+                <input
+                  type="checkbox"
+                  checked={done}
+                  onChange={() => toggleCompleted(s.id)}
+                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                />
+              </div>
               <Input
                 type="number"
-                value={s.reps}
+                value={s.reps || ""}
+                onFocus={(e) => e.target.select()}
                 onChange={(e) => updateSet(s.id, "reps", Number(e.target.value))}
                 className="text-center text-lg"
+                disabled={done}
               />
               <Input
                 type="number"
                 step="0.5"
-                value={s.weight_kg}
+                value={s.weight_kg || ""}
+                onFocus={(e) => e.target.select()}
                 onChange={(e) => updateSet(s.id, "weight_kg", Number(e.target.value))}
                 className="text-center text-lg"
+                disabled={done}
               />
-              <Check className="h-5 w-5 text-primary mx-auto" />
+              <Check className={cn("h-5 w-5 mx-auto", done ? "text-primary" : "text-muted-foreground/30")} />
             </div>
-          ))}
+            );
+          })}
           <Button onClick={addSet} variant="secondary" className="w-full h-12 text-base">
             <Plus className="h-4 w-4 mr-1" /> Adicionar série
           </Button>
