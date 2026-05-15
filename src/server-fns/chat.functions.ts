@@ -112,12 +112,15 @@ export const sendChat = createServerFn({ method: "POST" })
                           reps: { type: "number" },
                           weight_kg: { type: "number" },
                         },
+                        required: ["reps", "weight_kg"],
                       },
                     },
                   },
+                  required: ["name", "sets"],
                 },
               },
             },
+            required: ["name", "exercises"],
           },
         },
       },
@@ -126,10 +129,12 @@ export const sendChat = createServerFn({ method: "POST" })
     let messages: any[] = [
       { 
         role: "system", 
-        content: `Você é um coach de nutrição e treino. Use português brasileiro. 
-        IMPORTANTE: Se o usuário enviar múltiplas fotos, analise se elas pertencem à mesma refeição ou ao mesmo treino. 
-        - Se forem do mesmo evento, use apenas UMA chamada de ferramenta para registrar tudo junto. 
-        - Não duplique registros se as fotos forem apenas ângulos diferentes da mesma coisa.
+        content: `Você é um coach de nutrição e treino altamente analítico. Use português brasileiro. 
+        IMPORTANTE: Se o usuário enviar fotos, analise TODAS elas antes de chamar qualquer ferramenta.
+        - Se as fotos forem do mesmo treino ou refeição, use apenas UMA chamada de ferramenta consolidando todos os dados.
+        - Treinos têm exercícios, séries e repetições. NÃO calcule macros para treinos.
+        - Use APENAS as chamadas de ferramentas nativas. NÃO gere JSON manualmente.
+        - Seja preciso com nomes de exercícios e pesos.
         Dados do usuário:\n${ctxText}` 
       },
       ...recentHistory.map((m: any) => ({ role: m.role, content: m.content })),
@@ -148,6 +153,7 @@ export const sendChat = createServerFn({ method: "POST" })
 
     let response = await groqCall(messages);
     let choice = response.choices[0];
+    const createdWorkoutNames = new Set<string>();
 
     while (choice.message.tool_calls) {
       messages.push(choice.message);
@@ -162,16 +168,21 @@ export const sendChat = createServerFn({ method: "POST" })
             result = "Refeição registrada com sucesso!";
           }
         } else if (toolCall.function.name === "record_workout") {
-          const { data: workout } = await supabase.from("workouts").insert({ user_id: userId, name: args.name, workout_date: today }).select().single();
-          if (workout) {
-            for (let i = 0; i < args.exercises.length; i++) {
-              const exData = args.exercises[i];
-              const { data: ex } = await supabase.from("exercises").insert({ user_id: userId, workout_id: workout.id, name: exData.name, position: i }).select().single();
-              if (ex && exData.sets) {
-                await supabase.from("sets").insert(exData.sets.map((s: any, idx: number) => ({ ...s, exercise_id: ex.id, user_id: userId, set_number: idx + 1 })));
+          if (createdWorkoutNames.has(args.name)) {
+            result = "Treino já processado nesta solicitação.";
+          } else {
+            const { data: workout } = await supabase.from("workouts").insert({ user_id: userId, name: args.name, workout_date: today }).select().single();
+            if (workout) {
+              createdWorkoutNames.add(args.name);
+              for (let i = 0; i < args.exercises.length; i++) {
+                const exData = args.exercises[i];
+                const { data: ex } = await supabase.from("exercises").insert({ user_id: userId, workout_id: workout.id, name: exData.name, position: i }).select().single();
+                if (ex && exData.sets) {
+                  await supabase.from("sets").insert(exData.sets.map((s: any, idx: number) => ({ ...s, exercise_id: ex.id, user_id: userId, set_number: idx + 1 })));
+                }
               }
+              result = "Treino registrado com sucesso!";
             }
-            result = "Treino registrado com sucesso!";
           }
         }
 
