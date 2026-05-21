@@ -112,41 +112,54 @@ export const analyzePhoto = createServerFn({ method: "POST" })
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error("GEMINI_API_KEY não configurada no arquivo .env");
 
+    // Remove the data URI prefix to get raw base64
+    const [prefix, base64Data] = data.imageBase64.split(",");
+    const mimeType = prefix.match(/data:(.*?);/)?.[1] || "image/jpeg";
+
     const res = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "gemini-1.5-flash",
-          messages: [
-            {
-              role: "system",
-              content:
-                "Você é nutricionista. Identifique cada alimento visível na foto do prato, estime gramas e macros (kcal, proteína, carboidrato, gordura) por item. Use a tabela TACO como referência. Retorne APENAS via tool call.",
-            },
+          systemInstruction: {
+            parts: [
+              {
+                text: "Você é nutricionista. Identifique cada alimento visível na foto do prato, estime gramas e macros (kcal, proteína, carboidrato, gordura) por item. Use a tabela TACO como referência. Retorne APENAS via tool call.",
+              },
+            ],
+          },
+          contents: [
             {
               role: "user",
-              content: [
-                { type: "text", text: "Analise este prato e estime macros por item." },
-                { type: "image_url", image_url: { url: data.imageBase64 } },
+              parts: [
+                { text: "Analise este prato e estime macros por item." },
+                {
+                  inlineData: {
+                    mimeType: mimeType,
+                    data: base64Data,
+                  },
+                },
               ],
             },
           ],
           tools: [
             {
-              type: "function",
-              function: {
-                name: "report_plate",
-                description: "Reporta itens identificados no prato",
-                parameters: photoMacrosTool,
-              },
+              functionDeclarations: [
+                {
+                  name: "report_plate",
+                  description: "Reporta itens identificados no prato",
+                  parameters: photoMacrosTool,
+                },
+              ],
             },
           ],
-          tool_choice: { type: "function", function: { name: "report_plate" } },
+          toolConfig: {
+            functionCallingConfig: {
+              mode: "ANY",
+              allowedFunctionNames: ["report_plate"],
+            },
+          },
         }),
       },
     );
@@ -158,11 +171,14 @@ export const analyzePhoto = createServerFn({ method: "POST" })
       console.error("Erro detalhado da API do Gemini:", errorText);
       throw new Error(`Erro IA: ${res.status} - ${errorText.slice(0, 100)}`);
     }
+
     const json = await res.json();
-    const call = json.choices?.[0]?.message?.tool_calls?.[0];
-    if (!call) throw new Error("Resposta inválida da IA");
-    const args = JSON.parse(call.function.arguments);
-    return args as {
+    
+    // Extract function call arguments from native Gemini response
+    const call = json.candidates?.[0]?.content?.parts?.find((p: any) => p.functionCall)?.functionCall;
+    if (!call || !call.args) throw new Error("Resposta inválida da IA");
+    
+    return call.args as {
       items: Array<{
         name: string;
         grams: number;
