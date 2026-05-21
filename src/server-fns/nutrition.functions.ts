@@ -113,10 +113,13 @@ export const analyzePhoto = createServerFn({ method: "POST" })
     if (!apiKey) throw new Error("GEMINI_API_KEY não configurada no arquivo .env");
 
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${apiKey}`,
+      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           model: "gemini-1.5-flash",
           messages: [
