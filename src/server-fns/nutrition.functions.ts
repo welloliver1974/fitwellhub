@@ -118,7 +118,7 @@ export const analyzePhoto = createServerFn({ method: "POST" })
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "gemini-2.0-flash",
+          model: "gemini-1.5-flash",
           messages: [
             {
               role: "system",
@@ -150,8 +150,11 @@ export const analyzePhoto = createServerFn({ method: "POST" })
 
     if (res.status === 429) throw new Error("Muitas requisições. Aguarde um instante.");
     if (res.status === 402) throw new Error("Créditos de IA esgotados.");
-    if (!res.ok) throw new Error(`Erro IA: ${res.status}`);
-
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error("Erro detalhado da API do Gemini:", errorText);
+      throw new Error(`Erro IA: ${res.status} - ${errorText.slice(0, 100)}`);
+    }
     const json = await res.json();
     const call = json.choices?.[0]?.message?.tool_calls?.[0];
     if (!call) throw new Error("Resposta inválida da IA");
