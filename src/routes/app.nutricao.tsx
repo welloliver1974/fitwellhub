@@ -340,8 +340,34 @@ function NutricaoPage() {
     setPhotoItems([]);
     try {
       const dataUrl: string = await new Promise((resolve, reject) => {
+        const img = new Image();
         const r = new FileReader();
-        r.onload = () => resolve(r.result as string);
+        r.onload = (e) => {
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            let width = img.width;
+            let height = img.height;
+            const maxSize = 800; // Resize to max 800px to save tokens and bandwidth
+
+            if (width > height && width > maxSize) {
+              height = Math.round((height * maxSize) / width);
+              width = maxSize;
+            } else if (height > maxSize) {
+              width = Math.round((width * maxSize) / height);
+              height = maxSize;
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) return reject(new Error("Canvas não suportado"));
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // Compress with JPEG at 70% quality
+            resolve(canvas.toDataURL("image/jpeg", 0.7));
+          };
+          img.src = e.target?.result as string;
+        };
         r.onerror = reject;
         r.readAsDataURL(file);
       });
