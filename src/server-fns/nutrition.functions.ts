@@ -107,85 +107,63 @@ const photoMacrosTool = {
 export const analyzePhoto = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => photoSchema.parse(d))
   .handler(async ({ data }) => {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error("GEMINI_API_KEY não configurada no arquivo .env");
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) throw new Error("GROQ_API_KEY não configurada no arquivo .env");
 
-    // Remove the data URI prefix to get raw base64
-    const [prefix, base64Data] = data.imageBase64.split(",");
-    const mimeType = prefix.match(/data:(.*?);/)?.[1] || "image/jpeg";
-
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "llama-3.2-90b-vision-preview",
+        messages: [
+          {
+            role: "user",
+            content: [
               {
-                text: "Você é nutricionista. Identifique cada alimento visível na foto do prato, estime gramas e macros (kcal, proteína, carboidrato, gordura) por item. Use a tabela TACO como referência. Retorne APENAS via tool call.",
+                type: "text",
+                text: "Você é nutricionista. Identifique cada alimento visível na foto do prato, estime gramas e macros (kcal, proteína, carboidrato, gordura) por item. Use a tabela TACO como referência. Retorne OBRIGATORIAMENTE um JSON válido com a seguinte estrutura exata e sem nenhum outro texto ao redor: { \"items\": [ { \"name\": \"Nome do alimento\", \"grams\": 100, \"calories\": 150, \"protein_g\": 10, \"carbs_g\": 20, \"fat_g\": 5 } ] }",
               },
+              { type: "image_url", image_url: { url: data.imageBase64 } },
             ],
           },
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { text: "Analise este prato e estime macros por item." },
-                {
-                  inlineData: {
-                    mimeType: mimeType,
-                    data: base64Data,
-                  },
-                },
-              ],
-            },
-          ],
-          tools: [
-            {
-              functionDeclarations: [
-                {
-                  name: "report_plate",
-                  description: "Reporta itens identificados no prato",
-                  parameters: photoMacrosTool,
-                },
-              ],
-            },
-          ],
-          toolConfig: {
-            functionCallingConfig: {
-              mode: "ANY",
-              allowedFunctionNames: ["report_plate"],
-            },
-          },
-        }),
-      },
-    );
+        ],
+        temperature: 0.1,
+        response_format: { type: "json_object" },
+      }),
+    });
 
-    if (res.status === 429) throw new Error("Muitas requisições. Aguarde um instante.");
-    if (res.status === 402) throw new Error("Créditos de IA esgotados.");
     if (!res.ok) {
       const errorText = await res.text();
-      console.error("Erro detalhado da API do Gemini:", errorText);
+      console.error("Erro detalhado da API do Groq (Vision):", errorText);
       throw new Error(`Erro IA: ${res.status} - ${errorText.slice(0, 100)}`);
     }
 
     const json = await res.json();
-    
-    // Extract function call arguments from native Gemini response
-    const call = json.candidates?.[0]?.content?.parts?.find((p: any) => p.functionCall)?.functionCall;
-    if (!call || !call.args) throw new Error("Resposta inválida da IA");
-    
-    return call.args as {
-      items: Array<{
-        name: string;
-        grams: number;
-        calories: number;
-        protein_g: number;
-        carbs_g: number;
-        fat_g: number;
-      }>;
-    };
+    const content = json.choices?.[0]?.message?.content;
+    if (!content) throw new Error("Resposta inválida da IA");
+
+    try {
+      const parsed = JSON.parse(content);
+      if (!parsed.items || !Array.isArray(parsed.items)) {
+        throw new Error("Formato JSON retornado não contém o array 'items'");
+      }
+      return parsed as {
+        items: Array<{
+          name: string;
+          grams: number;
+          calories: number;
+          protein_g: number;
+          carbs_g: number;
+          fat_g: number;
+        }>;
+      };
+    } catch (e) {
+      console.error("Erro ao fazer parse do JSON do Groq:", content);
+      throw new Error("A IA não retornou um formato válido.");
+    }
   });
 
 const coachSchema = z.object({
