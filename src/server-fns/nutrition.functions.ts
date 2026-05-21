@@ -98,12 +98,10 @@ const photoMacrosTool = {
           fat_g: { type: "number" },
         },
         required: ["name", "grams", "calories", "protein_g", "carbs_g", "fat_g"],
-        additionalProperties: false,
       },
     },
   },
   required: ["items"],
-  additionalProperties: false,
 };
 
 export const analyzePhoto = createServerFn({ method: "POST" })
