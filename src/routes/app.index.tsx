@@ -53,9 +53,33 @@ function TodayPage() {
 
   const today = new Date().toISOString().slice(0, 10);
 
+  const findTodayWorkout = async (userId: string) => {
+    const { data: db } = await supabase
+      .from("workouts")
+      .select("id,name")
+      .eq("user_id", userId)
+      .eq("workout_date", today)
+      .limit(1);
+    if (db && db[0]) return db[0];
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.endsWith("-" + today) && key.startsWith("workout-completed-")) {
+        const workoutId = key.replace("workout-completed-", "").slice(0, -today.length - 1);
+        const { data: w } = await supabase
+          .from("workouts")
+          .select("id,name")
+          .eq("id", workoutId)
+          .single();
+        if (w) return w;
+      }
+    }
+    return null;
+  };
+
   const load = async () => {
     if (!user) return;
-    const [{ data: g }, { data: meals }, { data: water }, { data: weight }, { data: wk }] =
+    const [{ data: g }, { data: meals }, { data: water }, { data: weight }] =
       await Promise.all([
         supabase
           .from("goals")
@@ -70,17 +94,11 @@ function TodayPage() {
           .eq("user_id", user.id)
           .order("log_date", { ascending: false })
           .limit(1),
-        supabase
-          .from("workouts")
-          .select("id,name")
-          .eq("user_id", user.id)
-          .eq("workout_date", today)
-          .limit(1),
       ]);
     setGoals(g ?? { calories: 2000, protein_g: 140, carbs_g: 220, fat_g: 65 });
     setWaterMl((water ?? []).reduce((a, w) => a + (w.ml || 0), 0));
     setLastWeight(weight && weight[0] ? Number(weight[0].weight_kg) : null);
-    setTodayWorkout(wk && wk[0] ? wk[0] : null);
+    setTodayWorkout(await findTodayWorkout(user.id));
 
     const ids = (meals ?? []).map((m) => m.id);
     if (ids.length) {

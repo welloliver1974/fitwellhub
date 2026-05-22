@@ -33,8 +33,9 @@ function FocusMode() {
   const [restPreset, setRestPreset] = useState(90);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Completed sets tracked in localStorage
-  const lsKey = `workout-completed-${id}`;
+  // Completed sets tracked in localStorage by workout + date
+  const today = new Date().toISOString().split("T")[0];
+  const lsKey = `workout-completed-${id}-${today}`;
   const [completedSets, setCompletedSets] = useState<Set<string>>(() => {
     try {
       const saved = localStorage.getItem(lsKey);
