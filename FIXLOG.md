@@ -166,3 +166,39 @@ Isso torna a função compatível com **qualquer modelo de visão** do OpenRoute
 - ✅ Código migrado para OpenRouter sem dependência de tool calling
 - ✅ Compatível com qualquer modelo de visão
 - ⬜ **Usuário precisa:** Criar conta em [openrouter.ai](https://openrouter.ai) e colocar a chave em `OPENROUTER_API_KEY` no `.env`
+
+---
+
+## Sessão: 21/05/2026 — Correções no Relatório e Dashboard
+
+### 🎯 Funcionalidades trabalhadas
+- `src/routes/app.treinos.$id.foco.tsx` → localStorage do modo foco
+- `src/routes/app.index.tsx` → card "Treino de hoje" no dashboard
+- `src/routes/app.relatorio.tsx` → leitura dos dias no relatório (indiretamente)
+
+### 🐞 Bug 1: Modo Foco sobrescrevia histórico
+
+**Problema:** A chave do `localStorage` no modo foco não incluía a data:
+- Modo normal: `workout-completed-{id}-2026-05-21` ✅
+- Modo foco: `workout-completed-{id}` ❌
+
+Cada uso do modo foco sobrescrevia o mesmo registro. O relatório lia as chaves e tentava extrair a data — sem ela, só o último dia aparecia.
+
+**Solução:** Adicionada data na chave do modo foco (linha 37):
+```ts
+const today = new Date().toISOString().split("T")[0];
+const lsKey = `workout-completed-${id}-${today}`;
+```
+
+### 🐞 Bug 2: Dashboard não reconhecia treino de hoje
+
+**Problema:** O card "Treino de hoje" no dashboard (`app.index.tsx`) consultava `workouts WHERE workout_date = hoje`. Como a `workout_date` é a data de criação do treino (não a data de uso), treinos criados dias atrás e usados hoje não apareciam — mostrava "Nenhum".
+
+**Solução:** Criada função `findTodayWorkout()` que:
+1. Primeiro tenta achar treino criado hoje (comportamento antigo — rápido)
+2. Se não achar, varre o `localStorage` por chaves `workout-completed-*-{hoje}`, extrai o ID e busca o nome no banco
+
+### ✅ Estado final
+- ✅ Modo foco preserva histórico por dia
+- ✅ Relatório mostra todos os dias corretamente
+- ✅ Dashboard reconhece treino mesmo que criado em data anterior
