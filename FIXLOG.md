@@ -94,3 +94,31 @@ O código em `nutrition.functions.ts` está:
 - ✅ Usando function calling do Gemini para garantir resposta estruturada.
 - ✅ Com tratamento de erro detalhado (erros 429, 402 e genéricos com logs no terminal).
 - ✅ Recebendo imagens já comprimidas do frontend (~150KB).
+
+---
+
+## Sessão: 21/05/2026 — Sinal Sonoro no Cronômetro
+
+### 🎯 Funcionalidade trabalhada
+`src/routes/app.treinos.$id.tsx` e `src/routes/app.treinos.$id.foco.tsx` → timer de descanso entre séries
+
+### 🔊 Problema
+O cronômetro não emitia som audível (ou emitia um beep muito curto e imperceptível) ao final da contagem, dificultando o uso com fones de ouvido.
+
+### 🛠️ Solução implementada
+
+**`src/lib/utils.ts`** — Criada função `playBeep(duration = 2000)`:
+- Usa Web Audio API (`AudioContext` + `OscillatorNode`)
+- Gera tom senoidal de 880Hz por **2 segundos** com fade out suave
+- Não depende de arquivos de áudio externos
+
+**`src/routes/app.treinos.$id.tsx`** (tela de treino normal):
+- Substituído o `new Audio(base64)` curto por `playBeep()`
+
+**`src/routes/app.treinos.$id.foco.tsx`** (modo foco):
+- Adicionado `playBeep()` que não existia antes
+
+### ✅ Estado final
+- ✅ Beep audível de 2 segundos ao fim do descanso
+- ✅ Funciona nas duas telas de treino
+- ✅ Zero dependências externas

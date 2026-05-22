@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { cn } from "@/lib/utils";
+import { cn, playBeep } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { Card } from "@/components/ui/card";
@@ -97,15 +97,7 @@ function WorkoutDetail() {
         setRestSec((s) => {
           if (s <= 1) {
             setRestRunning(false);
-            try {
-              new Audio(
-                "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=",
-              )
-                .play()
-                .catch(() => {});
-            } catch (error) {
-              console.error("Failed to play timer sound:", error);
-            }
+            playBeep();
             toast.success("Descanso terminado");
             return 0;
           }

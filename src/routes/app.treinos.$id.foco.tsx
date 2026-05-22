@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft, ChevronRight, X, Plus, Check, Timer, Pause, Play } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, playBeep } from "@/lib/utils";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/treinos/$id/foco")({
@@ -59,6 +59,7 @@ function FocusMode() {
         setRestSec((s) => {
           if (s <= 1) {
             setRestRunning(false);
+            playBeep();
             return 0;
           }
           return s - 1;
