@@ -81,29 +81,6 @@ const photoSchema = z.object({
   imageBase64: z.string().min(50),
 });
 
-const photoMacrosTool = {
-  type: "object",
-  properties: {
-    items: {
-      type: "array",
-      description: "Alimentos identificados na foto",
-      items: {
-        type: "object",
-        properties: {
-          name: { type: "string", description: "Nome em português" },
-          grams: { type: "number", description: "Estimativa de gramas visíveis no prato" },
-          calories: { type: "number" },
-          protein_g: { type: "number" },
-          carbs_g: { type: "number" },
-          fat_g: { type: "number" },
-        },
-        required: ["name", "grams", "calories", "protein_g", "carbs_g", "fat_g"],
-      },
-    },
-  },
-  required: ["items"],
-};
-
 export const analyzePhoto = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => photoSchema.parse(d))
   .handler(async ({ data }) => {
@@ -124,27 +101,16 @@ export const analyzePhoto = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              "Você é nutricionista. Identifique cada alimento visível na foto do prato, estime gramas e macros (kcal, proteína, carboidrato, gordura) por item. Use a tabela TACO como referência. Retorne APENAS via tool call.",
+              'Você é nutricionista. Identifique cada alimento visível na foto do prato, estime gramas e macros (kcal, proteína, carboidrato, gordura) por item. Use a tabela TACO como referência. Retorne APENAS um JSON válido (sem markdown, sem explicacão) no formato: {"items":[{"name":"...","grams":N,"calories":N,"protein_g":N,"carbs_g":N,"fat_g":N}]}',
           },
           {
             role: "user",
             content: [
-              { type: "text", text: "Analise este prato e estime macros por item." },
+              { type: "text", text: "Analise este prato e estime macros por item. Retorne apenas o JSON." },
               { type: "image_url", image_url: { url: data.imageBase64 } },
             ],
           },
         ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "report_plate",
-              description: "Reporta itens identificados no prato",
-              parameters: photoMacrosTool,
-            },
-          },
-        ],
-        tool_choice: { type: "function", function: { name: "report_plate" } },
       }),
     });
 
@@ -157,9 +123,15 @@ export const analyzePhoto = createServerFn({ method: "POST" })
     }
 
     const json = await res.json();
-    const call = json.choices?.[0]?.message?.tool_calls?.[0];
-    if (!call) throw new Error("Resposta inválida da IA");
-    const args = JSON.parse(call.function.arguments);
+    const content = json.choices?.[0]?.message?.content;
+    if (!content) throw new Error("Resposta vazia da IA");
+
+    const match = content.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("IA não retornou um JSON válido");
+
+    const args = JSON.parse(match[0]);
+    if (!args.items || !Array.isArray(args.items)) throw new Error("Formato de resposta inesperado");
+
     return args as {
       items: Array<{
         name: string;
