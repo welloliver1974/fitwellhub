@@ -52,7 +52,6 @@ function RelatorioPage() {
         { data: profile },
         { data: goals },
         { data: meals },
-        { data: workouts },
         { data: weights },
         { data: water },
       ] = await Promise.all([
@@ -69,13 +68,6 @@ function RelatorioPage() {
           .gte("meal_date", start)
           .lte("meal_date", today)
           .order("meal_date"),
-        supabase
-          .from("workouts")
-          .select("id,name,workout_date")
-          .eq("user_id", user.id)
-          .gte("workout_date", start)
-          .lte("workout_date", today)
-          .order("workout_date"),
         supabase
           .from("body_weights")
           .select("weight_kg,log_date")
@@ -144,6 +136,23 @@ function RelatorioPage() {
       }
       const days = Array.from(perDay.entries()).sort();
 
+      // Workouts from localStorage (actual completion dates)
+      const logs = loadCompletedLogs();
+      const uniqueIds = [...new Set(logs.map((l) => l.workoutId))];
+      const { data: wNames } = await supabase
+        .from("workouts")
+        .select("id,name")
+        .in("id", uniqueIds);
+      const nameMap = new Map((wNames ?? []).map((w) => [w.id, w.name]));
+      const workoutsByDate = logs.reduce(
+        (acc, l) => {
+          if (!acc[l.date]) acc[l.date] = [];
+          acc[l.date].push(nameMap.get(l.workoutId) ?? "Treino");
+          return acc;
+        },
+        {} as Record<string, string[]>,
+      );
+
       const doc = new jsPDF();
       let y = 18;
       doc.setFontSize(18);
@@ -190,13 +199,16 @@ function RelatorioPage() {
       doc.text("Treinos", 14, y);
       y += 6;
       doc.setFontSize(10);
-      if (!workouts?.length) {
+      const workoutDates = Object.keys(workoutsByDate).sort();
+      if (!workoutDates.length) {
         doc.text("Nenhum treino registrado.", 14, y);
         y += 6;
       } else
-        for (const w of workouts) {
-          doc.text(`${w.workout_date}  ·  ${w.name}`, 14, y);
-          y += 5;
+        for (const d of workoutDates) {
+          for (const name of workoutsByDate[d]) {
+            doc.text(`${d}  ·  ${name}`, 14, y);
+            y += 5;
+          }
           if (y > 270) {
             doc.addPage();
             y = 18;

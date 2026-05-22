@@ -202,3 +202,23 @@ const lsKey = `workout-completed-${id}-${today}`;
 - ✅ Modo foco preserva histórico por dia
 - ✅ Relatório mostra todos os dias corretamente
 - ✅ Dashboard reconhece treino mesmo que criado em data anterior
+
+---
+
+## Sessão: 21/05/2026 — Correção no PDF do Relatório
+
+### 🎯 Funcionalidade trabalhada
+`src/routes/app.relatorio.tsx` → exportação de PDF
+
+### 🐞 Bug
+O PDF listava treinos consultando `workouts` pela `workout_date` (data de **criação** no banco). Se o usuário criou o treino no dia 15 e treinou com ele nos dias 16, 17, 18..., apenas o dia 15 aparecia no relatório.
+
+### 🛠️ Solução
+Substituída a consulta ao banco pelos dados do `localStorage` (`loadCompletedLogs()`):
+1. Lê todas as chaves `workout-completed-*` do navegador (que agora têm data graças à correção anterior)
+2. Busca os nomes dos treinos no banco pelos IDs únicos encontrados
+3. Agrupa por data e lista no PDF
+
+### ✅ Estado final
+- ✅ PDF agora mostra treinos pelas datas em que foram **realmente concluídos**
+- ✅ Removeu query desnecessária ao banco
