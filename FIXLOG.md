@@ -222,3 +222,26 @@ Substituída a consulta ao banco pelos dados do `localStorage` (`loadCompletedLo
 ### ✅ Estado final
 - ✅ PDF agora mostra treinos pelas datas em que foram **realmente concluídos**
 - ✅ Removeu query desnecessária ao banco
+
+---
+
+## Sessão: 22/05/2026 — Beep do Cronômetro mais audível com música
+
+### 🎯 Funcionalidade trabalhada
+`src/lib/utils.ts` → função `playBeep`
+
+### 🔊 Problema
+O beep usava onda senoidal (sine) de 880Hz com volume baixo, praticamente inaudível com fones durante música.
+
+### 🛠️ Solução implementada
+
+**O que mudou:**
+1. **Onda quadrada** (`square`) — som muito mais agressivo, corta qualquer música de fundo
+2. **3 bipes em sequência** — 250ms cada com pausa de 200ms, em vez de um tom único de 2s
+3. **Frequências alternadas** — 880Hz → 660Hz → 880Hz (o cérebro capta mudança de tom mesmo com música)
+4. **Volume aumentado** — gain de 0.4 para 0.5
+
+### ✅ Estado final
+- ✅ Beep audível mesmo com música nos fones
+- ✅ 3 bipes com tom alternado chamam atenção
+- ✅ Zero dependências externas
