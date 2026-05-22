@@ -150,7 +150,19 @@ Substituída a API nativa do Gemini pelo **OpenRouter** (formato OpenAI), que pe
 
 **Modelo padrão escolhido:** `qwen/qwen2.5-vl-72b-instruct` (bom custo-benefício com tool calling)
 
-### ✅ Próximos passos
-1. ✅ Código migrado para OpenRouter
-2. ⬜ **Usuário precisa:** Criar conta em [openrouter.ai](https://openrouter.ai), gerar uma chave e colar no `.env` em `OPENROUTER_API_KEY`
-3. ⬜ Se quiser trocar de modelo, basta alterar a string `model` na requisição — sem mudar código
+### 🔧 Problema encontrado
+O modelo `qwen/qwen2.5-vl-72b-instruct` retornava erro `404 no endpoints found that support report_plate` — o OpenRouter não suporta function calling para esse modelo.
+
+### 🛠️ Solução aplicada
+Substituído tool calling por **JSON direto no texto da resposta**:
+1. System prompt agora pede JSON puro sem markdown
+2. Regex extrai o `{...}` do texto de resposta
+3. Parse direto com `JSON.parse()`
+4. Removeu código morto (`photoMacrosTool` — 30 linhas)
+
+Isso torna a função compatível com **qualquer modelo de visão** do OpenRouter, independente de suporte a function calling.
+
+### ✅ Estado atual
+- ✅ Código migrado para OpenRouter sem dependência de tool calling
+- ✅ Compatível com qualquer modelo de visão
+- ⬜ **Usuário precisa:** Criar conta em [openrouter.ai](https://openrouter.ai) e colocar a chave em `OPENROUTER_API_KEY` no `.env`
