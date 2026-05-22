@@ -74,7 +74,14 @@ function TodayPage() {
         if (w) return w;
       }
     }
-    return null;
+
+    const { data: last } = await supabase
+      .from("workouts")
+      .select("id,name")
+      .eq("user_id", userId)
+      .order("workout_date", { ascending: false })
+      .limit(1);
+    return last?.[0] ?? null;
   };
 
   const load = async () => {
