@@ -107,76 +107,60 @@ const photoMacrosTool = {
 export const analyzePhoto = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => photoSchema.parse(d))
   .handler(async ({ data }) => {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error("GEMINI_API_KEY não configurada no arquivo .env");
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) throw new Error("OPENROUTER_API_KEY não configurada no arquivo .env");
 
-    // Remove the data URI prefix to get raw base64
-    const [prefix, base64Data] = data.imageBase64.split(",");
-    const mimeType = prefix.match(/data:(.*?);/)?.[1] || "image/jpeg";
-
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [
-              {
-                text: "Você é nutricionista. Identifique cada alimento visível na foto do prato, estime gramas e macros (kcal, proteína, carboidrato, gordura) por item. Use a tabela TACO como referência. Retorne APENAS via tool call.",
-              },
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://fitwellhub.app",
+        "X-Title": "FitWell Hub",
+      },
+      body: JSON.stringify({
+        model: "qwen/qwen2.5-vl-72b-instruct",
+        messages: [
+          {
+            role: "system",
+            content:
+              "Você é nutricionista. Identifique cada alimento visível na foto do prato, estime gramas e macros (kcal, proteína, carboidrato, gordura) por item. Use a tabela TACO como referência. Retorne APENAS via tool call.",
+          },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Analise este prato e estime macros por item." },
+              { type: "image_url", image_url: { url: data.imageBase64 } },
             ],
           },
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { text: "Analise este prato e estime macros por item." },
-                {
-                  inlineData: {
-                    mimeType: mimeType,
-                    data: base64Data,
-                  },
-                },
-              ],
-            },
-          ],
-          tools: [
-            {
-              functionDeclarations: [
-                {
-                  name: "report_plate",
-                  description: "Reporta itens identificados no prato",
-                  parameters: photoMacrosTool,
-                },
-              ],
-            },
-          ],
-          toolConfig: {
-            functionCallingConfig: {
-              mode: "ANY",
-              allowedFunctionNames: ["report_plate"],
+        ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "report_plate",
+              description: "Reporta itens identificados no prato",
+              parameters: photoMacrosTool,
             },
           },
-        }),
-      },
-    );
+        ],
+        tool_choice: { type: "function", function: { name: "report_plate" } },
+      }),
+    });
 
-    if (res.status === 429) throw new Error("Muitas requisições (Cota diária da API Esgotada). Tente amanhã ou use outra chave.");
-    if (res.status === 402) throw new Error("Créditos de IA esgotados.");
+    if (res.status === 429) throw new Error("Muitas requisições. Tente novamente mais tarde ou verifique seus créditos no OpenRouter.");
+    if (res.status === 402) throw new Error("Créditos de IA esgotados. Adicione fundos no OpenRouter.");
     if (!res.ok) {
       const errorText = await res.text();
-      console.error("Erro detalhado da API do Gemini:", errorText);
+      console.error("Erro detalhado da API do OpenRouter:", errorText);
       throw new Error(`Erro IA: ${res.status} - ${errorText.slice(0, 100)}`);
     }
 
     const json = await res.json();
-    
-    // Extract function call arguments from native Gemini response
-    const call = json.candidates?.[0]?.content?.parts?.find((p: any) => p.functionCall)?.functionCall;
-    if (!call || !call.args) throw new Error("Resposta inválida da IA");
-    
-    return call.args as {
+    const call = json.choices?.[0]?.message?.tool_calls?.[0];
+    if (!call) throw new Error("Resposta inválida da IA");
+    const args = JSON.parse(call.function.arguments);
+    return args as {
       items: Array<{
         name: string;
         grams: number;

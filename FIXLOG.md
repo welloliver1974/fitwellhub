@@ -122,3 +122,35 @@ O cronômetro não emitia som audível (ou emitia um beep muito curto e impercep
 - ✅ Beep audível de 2 segundos ao fim do descanso
 - ✅ Funciona nas duas telas de treino
 - ✅ Zero dependências externas
+
+---
+
+## Sessão: 21/05/2026 — Migração da Análise de Foto para OpenRouter
+
+### 🎯 Funcionalidade trabalhada
+`src/server-fns/nutrition.functions.ts` → função `analyzePhoto`
+
+### 🔍 Problema
+A chave `GEMINI_API_KEY` gratuita excedeu o limite de requisições (erro 429) e a conta gratuita do Google bloqueia por precaução.
+
+### 🛠️ Solução implementada
+Substituída a API nativa do Gemini pelo **OpenRouter** (formato OpenAI), que permite escolher entre dezenas de modelos de visão com uma única chave.
+
+**O que mudou no código:**
+1. **Endpoint:** `generativelanguage.googleapis.com` → `openrouter.ai/api/v1/chat/completions`
+2. **Autenticação:** Query param `?key=` → Header `Authorization: Bearer`
+3. **Formato da imagem:** `inlineData` (Gemini) → `image_url` (OpenAI)
+4. **Formato do tool call:** `functionDeclarations` (Gemini) → `tools[].function` (OpenAI)
+5. **Resposta:** Extração de `candidates[0].content.parts[].functionCall` → `choices[0].message.tool_calls[0].function.arguments`
+6. **Header extra:** `HTTP-Referer` e `X-Title` exigidos pelo OpenRouter
+
+**Variável de ambiente:**
+- Antes: `GEMINI_API_KEY`
+- Agora: `OPENROUTER_API_KEY`
+
+**Modelo padrão escolhido:** `qwen/qwen2.5-vl-72b-instruct` (bom custo-benefício com tool calling)
+
+### ✅ Próximos passos
+1. ✅ Código migrado para OpenRouter
+2. ⬜ **Usuário precisa:** Criar conta em [openrouter.ai](https://openrouter.ai), gerar uma chave e colar no `.env` em `OPENROUTER_API_KEY`
+3. ⬜ Se quiser trocar de modelo, basta alterar a string `model` na requisição — sem mudar código
