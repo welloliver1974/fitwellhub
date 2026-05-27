@@ -2,12 +2,16 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
-## [27/05/2026] - Antigravity (Análise de Medidas com IA)
+## [27/05/2026] - Antigravity (Migração de Supabase e Análise de Medidas com IA)
 - **Escopo**:
-  - Criação de nova server function `src/server-fns/medidas.functions.ts` para cruzar dados de treinos dos últimos 30 dias com a evolução de medidas corporais.
-  - Integração com a API Groq (LLaMA-3.3-70b-versatile) por meio de um prompt de sistema especializado (Persona de Coach Analítico).
-  - Atualização da rota `app.medidas.tsx` adicionando botão de acionamento sob demanda ("Coach IA"), estados de carregamento, e interface de exibição de resultado baseada no `react-markdown` (whitespace-pre-wrap).
+  - **Análise de Medidas**: Criação de nova server function `src/server-fns/medidas.functions.ts` para cruzar dados de treinos dos últimos 30 dias com a evolução de medidas corporais via Groq API (LLaMA-3.3-70b-versatile).
+  - Atualização da rota `app.medidas.tsx` adicionando o botão "Coach IA", carregamento e resposta em markdown.
+  - **Migração do Supabase**:
+    - Geração do dump completo do schema em `supabase/schema_completo.sql`.
+    - Atualização de variáveis de ambiente no arquivo `.env` para o novo projeto do Supabase (`haavrgglnfbchiygspqw`).
+    - Substituição de referências estáticas antigas (`mglvkocauwsdqbkqbyqi`) pelo novo ID do projeto no código fonte: `src/integrations/supabase/client.ts`, `supabase/config.toml` e `wrangler.jsonc`.
 - **Status**: Concluído, testado e logado.
+
 
 ## [26/05/2026] - Antigravity (Melhorias Scanner e Medidas)
 - **Escopo**:

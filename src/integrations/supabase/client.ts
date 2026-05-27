@@ -16,9 +16,9 @@ function createSupabaseClient() {
     if (value) return value;
 
     // Hardcoded fallbacks for production deployment reliability
-    if (name === "SUPABASE_URL") return "https://mglvkocauwsdqbkqbyqi.supabase.co";
+    if (name === "SUPABASE_URL") return "https://haavrgglnfbchiygspqw.supabase.co";
     if (name === "SUPABASE_PUBLISHABLE_KEY")
-      return "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1nbHZrb2NhdXdzZHFia3FieXFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3NTY2MjUsImV4cCI6MjA5MzMzMjYyNX0.3F0FWbYdAsV3vhUyGePCUApoJLmpieyD_DVHg81eGrM";
+      return "sb_publishable_Ad2aSiOJKf_53pnMCLhc6A_JkX1vvJ2";
 
     return undefined;
   };

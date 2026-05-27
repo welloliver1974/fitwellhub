@@ -265,6 +265,7 @@ function MedidasPage() {
           </DialogContent>
         </Dialog>
       </div>
+    </div>
 
       {entries.length === 0 ? (
         <Card className="p-10 text-center">
