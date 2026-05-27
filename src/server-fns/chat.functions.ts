@@ -76,10 +76,10 @@ export const sendChat = createServerFn({ method: "POST" })
                   type: "object",
                   properties: {
                     name: { type: "string" },
-                    calories: { type: "number" },
-                    protein_g: { type: "number" },
-                    carbs_g: { type: "number" },
-                    fat_g: { type: "number" },
+                    calories: { type: "string", description: "Quantidade de calorias do item como texto (ex: '250')" },
+                    protein_g: { type: "string", description: "Proteínas em gramas como texto (ex: '20')" },
+                    carbs_g: { type: "string", description: "Carboidratos em gramas como texto (ex: '30')" },
+                    fat_g: { type: "string", description: "Gorduras em gramas como texto (ex: '10')" },
                   },
                   required: ["name", "calories"],
                 },
@@ -109,8 +109,8 @@ export const sendChat = createServerFn({ method: "POST" })
                       items: {
                         type: "object",
                         properties: {
-                          reps: { type: "number" },
-                          weight_kg: { type: "number" },
+                          reps: { type: "string", description: "Número de repetições como texto (ex: '12')" },
+                          weight_kg: { type: "string", description: "Carga em kg como texto (ex: '60')" },
                         },
                         required: ["reps", "weight_kg"],
                       },
@@ -164,7 +164,16 @@ export const sendChat = createServerFn({ method: "POST" })
         if (toolCall.function.name === "record_meal") {
           const { data: meal } = await supabase.from("meals").insert({ user_id: userId, meal_type: args.meal_type, meal_date: today }).select().single();
           if (meal) {
-            await supabase.from("meal_items").insert(args.items.map((it: any) => ({ ...it, meal_id: meal.id, user_id: userId })));
+            const mappedItems = args.items.map((it: any) => ({
+              meal_id: meal.id,
+              user_id: userId,
+              name: it.name,
+              calories: Number(it.calories || 0),
+              protein_g: Number(it.protein_g || 0),
+              carbs_g: Number(it.carbs_g || 0),
+              fat_g: Number(it.fat_g || 0),
+            }));
+            await supabase.from("meal_items").insert(mappedItems);
             result = "Refeição registrada com sucesso!";
           }
         } else if (toolCall.function.name === "record_workout") {
@@ -209,10 +218,11 @@ export const sendChat = createServerFn({ method: "POST" })
                     if (exRecord && exData.sets) {
                       exData.sets.forEach((s: any, sIdx: number) => {
                         allSetsToInsert.push({
-                          ...s,
                           exercise_id: exRecord.id,
                           user_id: userId,
-                          set_number: sIdx + 1
+                          set_number: sIdx + 1,
+                          reps: Number(s.reps || 0),
+                          weight_kg: Number(s.weight_kg || 0)
                         });
                       });
                     }
