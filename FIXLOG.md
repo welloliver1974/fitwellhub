@@ -292,3 +292,30 @@ O beep usava onda senoidal (sine) de 880Hz com volume baixo, praticamente inaud�
 ### ✅ Estado final
 - ✅ Botão "Coach IA" implementado na tela de Medidas.
 - ✅ Integração do Groq LLaMA 3.3 funcional e analisando contexto de treinos VS evolução corporal.
+
+---
+
+## Sessão: 27/05/2026 — Migração de Supabase e Resolução de Erro de Compilação
+
+### 🎯 Funcionalidades trabalhadas
+- **Migração do Supabase**: Redirecionamento completo do banco de dados antigo (`mglvkocauwsdqbkqbyqi`) para o novo projeto do Supabase (`haavrgglnfbchiygspqw`).
+- **Resolução de Bug no Frontend**: Correção de tag JSX não finalizada na rota de medidas.
+
+### 🔌 Migração do Banco de Dados
+**Problema:** O banco de dados original era controlado por chaves antigas de um projeto Supabase inativo do Lovable. Havia a necessidade de migrar todas as tabelas e dados para o novo projeto do usuário.
+**Solução:**
+- Criado o dump completo do banco de dados em `supabase/schema_completo.sql` para que o usuário possa importá-lo no novo painel.
+- Atualizado o arquivo de configuração do Supabase local (`supabase/config.toml`) para o novo ID `haavrgglnfbchiygspqw`.
+- Atualizado os fallbacks do cliente Supabase em `src/integrations/supabase/client.ts` para usar a URL e a Publishable Key do novo projeto.
+- Atualizado o arquivo `wrangler.jsonc` para compatibilidade com o deploy na Cloudflare.
+
+### 🐞 Correção de Sintaxe (Bug do JSX)
+**Problema:** Ao realizar a build, o Vite retornava o erro `SyntaxError: Unterminated JSX contents. (374:10)` impedindo a compilação do projeto.
+**Causa:** No arquivo `src/routes/app.medidas.tsx`, a tag `<div className="flex items-center gap-2">` (linha 188) que agrupa os botões de ação e o modal não estava sendo fechada.
+**Solução:** Inserida a tag de fechamento `</div>` apropriada logo após `</Dialog>` no arquivo.
+
+### ✅ Estado final
+- ✅ Configurações do Supabase 100% atualizadas e apontando para o novo projeto.
+- ✅ Erro de JSX resolvido de ponta a ponta.
+- ✅ Compilação (`npm run build`) concluída com absoluto sucesso em ambos os ambientes (Client e SSR).
+
