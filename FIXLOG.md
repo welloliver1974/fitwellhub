@@ -272,3 +272,23 @@ O beep usava onda senoidal (sine) de 880Hz com volume baixo, praticamente inaud�
 ### ✅ Estado final
 - Leitor configurado para alta resolução sem consumo de rede/tokens.
 - Tela de medidas corporais finalizada.
+
+---
+
+## Sessão: 27/05/2026 — Análise de Medidas com IA
+
+### 🎯 Funcionalidade trabalhada
+- `src/server-fns/medidas.functions.ts` → Nova server function `analyzeMeasurements`.
+- `src/routes/app.medidas.tsx` → Integração do botão "Coach IA" na interface.
+
+### 🧠 Análise por IA (Integração)
+**Problema:** O usuário possuía um histórico de treinos e também uma nova tela para registro de medidas corporais, porém não existia inteligência relacionando o esforço físico com a evolução dessas medidas.
+**Solução:**
+- Criada a nova server function `analyzeMeasurements` no backend, protegida por middleware de autenticação do Supabase.
+- A função busca: (a) todas as medidas corporais, calculando o ganho/perda em cm de cada parte do corpo e (b) o histórico de treinos dos últimos 30 dias (nome, número de treinos, volume).
+- Construído um prompt estruturado que envia esses dados formatados para a API do Groq (usando modelo `llama-3.3-70b-versatile`). A IA age como um Coach e gera insights diretos e motivacionais correlacionando os dados.
+- Modificada a tela `/app/medidas` para exibir um novo botão com ícone de brilho ✨ que invoca a análise de forma sob-demanda e exibe em um painel estilizado.
+
+### ✅ Estado final
+- ✅ Botão "Coach IA" implementado na tela de Medidas.
+- ✅ Integração do Groq LLaMA 3.3 funcional e analisando contexto de treinos VS evolução corporal.

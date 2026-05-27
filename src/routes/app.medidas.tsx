@@ -20,7 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Plus, Ruler, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Ruler, Trash2, Sparkles, Loader2 } from "lucide-react";
+import { analyzeMeasurements } from "@/server-fns/medidas.functions";
 import { toast } from "sonner";
 import {
   LineChart,
@@ -67,6 +68,22 @@ function MedidasPage() {
   const [value, setValue] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [activeGroup, setActiveGroup] = useState<string | null>(null);
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  const runAiAnalysis = async () => {
+    try {
+      setIsAnalyzing(true);
+      setAiAnalysis(null);
+      const res = await analyzeMeasurements();
+      setAiAnalysis(res.analysis);
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Erro ao analisar");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   const load = async () => {
     if (!user) return;
@@ -168,13 +185,29 @@ function MedidasPage() {
           <h1 className="text-2xl font-display font-bold">Medidas corporais</h1>
         </div>
 
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="rounded-full">
-              <Plus className="h-4 w-4 mr-1" />
-              Registrar
-            </Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-full border-primary/20 bg-primary/5 text-primary hover:bg-primary/10"
+            onClick={runAiAnalysis}
+            disabled={isAnalyzing}
+          >
+            {isAnalyzing ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4 mr-1" />
+            )}
+            Coach IA
+          </Button>
+
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="rounded-full">
+                <Plus className="h-4 w-4 mr-1" />
+                Registrar
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Nova medida</DialogTitle>
@@ -243,6 +276,19 @@ function MedidasPage() {
         </Card>
       ) : (
         <>
+          {/* AI Analysis Result */}
+          {aiAnalysis && (
+            <Card className="p-4 bg-primary/5 border-primary/20 relative">
+              <div className="absolute top-4 right-4">
+                <Sparkles className="h-5 w-5 text-primary" />
+              </div>
+              <h3 className="font-display font-bold text-primary mb-2">Análise do Coach</h3>
+              <div className="text-sm whitespace-pre-wrap text-foreground/90">
+                {aiAnalysis}
+              </div>
+            </Card>
+          )}
+
           {/* Summary cards */}
           <div className="grid grid-cols-3 gap-2">
             {summaryCards.map(({ label, last }) => (
