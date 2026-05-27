@@ -242,6 +242,33 @@ O beep usava onda senoidal (sine) de 880Hz com volume baixo, praticamente inaud�
 4. **Volume aumentado** — gain de 0.4 para 0.5
 
 ### ✅ Estado final
-- ✅ Beep audível mesmo com música nos fones
 - ✅ 3 bipes com tom alternado chamam atenção
 - ✅ Zero dependências externas
+
+---
+
+## Sessão: 26/05/2026 — Melhorias no Barcode Scanner e Nova Seção de Medidas
+
+### 🎯 Funcionalidades trabalhadas
+- `src/components/BarcodeScanner.tsx` → Leitor de código de barras aprimorado
+- `src/routes/app.medidas.tsx` → Nova funcionalidade de registro e histórico de medidas corporais
+- `supabase/migrations/20260527003000_add_body_measurements.sql` → Migração do banco
+
+### 🔍 Melhoria do Leitor de Código de Barras
+**Problema:** A câmera estava lendo os códigos com baixa resolução, dificultando muito o foco e o escaneamento correto dos produtos.
+**Solução:**
+- Aumentada a resolução (`constraints`) de vídeo solicitada para a câmera (focando em resoluções HD como 1280x720 e 1920x1080).
+- Forçado uso explícito da câmera traseira (`facingMode: 'environment'`).
+- Adicionado a diretiva `TRY_HARDER` da biblioteca ZXing, fazendo o algoritmo tentar decodificar o código mais agressivamente.
+- Adicionada uma animação visual de escaneamento (`scanline`) por cima da câmera no arquivo `styles.css`.
+
+### 📏 Nova Funcionalidade: Medidas e Peso
+**Problema:** Faltava um local para salvar o peso e demais medidas do corpo, com histórico de datas e categorização.
+**Solução:**
+- Criada a nova tabela no Supabase `body_measurements` com as devidas permissões RLS (Row Level Security).
+- Criada a tela `/app/medidas` contendo: formulário de cadastro, resumo agrupado por tipos de medida, gráficos em linha mostrando a evolução no tempo, e listagem do histórico.
+- Ícone de "Régua" adicionado ao menu inferior em `app.tsx`.
+
+### ✅ Estado final
+- Leitor configurado para alta resolução sem consumo de rede/tokens.
+- Tela de medidas corporais finalizada.

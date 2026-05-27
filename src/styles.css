@@ -192,3 +192,10 @@
     letter-spacing: -0.02em;
   }
 }
+
+/* Barcode scanner scan line animation */
+@keyframes scanline {
+  0%   { top: 10%; opacity: 1; }
+  50%  { top: 85%; opacity: 0.8; }
+  100% { top: 10%; opacity: 1; }
+}
