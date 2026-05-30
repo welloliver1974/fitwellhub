@@ -8,6 +8,8 @@ import { useTheme } from "@/lib/theme";
 import { useReminders } from "@/lib/use-reminders";
 import { Link as RLink } from "@tanstack/react-router";
 
+import { supabase } from "@/integrations/supabase/client";
+
 export const Route = createFileRoute("/app")({
   component: AppLayout,
 });
@@ -22,6 +24,58 @@ function AppLayout() {
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth" });
   }, [user, loading, navigate]);
+
+  // Sincroniza dados históricos de treinos concluídos do localStorage para o Supabase
+  useEffect(() => {
+    if (!user) return;
+
+    const syncLegacyCompletedWorkouts = async () => {
+      try {
+        const keysToSync: { key: string; setIds: string[] }[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key?.startsWith("workout-completed-")) {
+            const raw = localStorage.getItem(key);
+            if (raw) {
+              try {
+                const setIds = JSON.parse(raw);
+                if (Array.isArray(setIds) && setIds.length > 0) {
+                  keysToSync.push({ key, setIds });
+                } else if (Array.isArray(setIds) && setIds.length === 0) {
+                  localStorage.removeItem(key);
+                }
+              } catch (e) {
+                console.error("Erro ao ler chave legada do localStorage:", e);
+              }
+            }
+          }
+        }
+
+        if (keysToSync.length > 0) {
+          const allSetIds = keysToSync.flatMap((k) => k.setIds);
+          if (allSetIds.length > 0) {
+            const { error } = await supabase
+              .from("sets")
+              .update({ completed: true })
+              .in("id", allSetIds);
+
+            if (error) {
+              console.error("Erro ao salvar histórico no Supabase:", error.message);
+              return;
+            }
+          }
+
+          // Limpa do localStorage somente se salvou no banco
+          keysToSync.forEach((k) => localStorage.removeItem(k.key));
+          console.log(`[Sincronização] ${keysToSync.length} treinos históricos migrados para o Supabase.`);
+        }
+      } catch (err) {
+        console.error("Falha ao sincronizar histórico legado:", err);
+      }
+    };
+
+    syncLegacyCompletedWorkouts();
+  }, [user]);
 
   if (loading || !user) {
     return (

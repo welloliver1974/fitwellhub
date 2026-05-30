@@ -386,12 +386,18 @@ Migramos o rastreamento de conclusão do frontend local para o banco de dados do
    - A função `findTodayWorkout` no `app.index.tsx` agora consulta o Supabase usando queries do tipo `inner join` para verificar se existem séries completadas no dia atual, em vez de realizar varreduras locais no `localStorage`.
 4. **Refatoração do Relatório PDF:**
    - O `app.relatorio.tsx` agora possui uma função assíncrona `loadCompletedLogs` para resgatar e agregar o total de séries concluídas no banco e gerar o histórico por datas reais de execução, eliminando referências locais ao navegador.
+5. **Sincronização Automática de Dados Legados:**
+   - Implementamos no layout global do aplicativo (`app.tsx`) um hook de migração que varre o `localStorage` do dispositivo procurando chaves do tipo `workout-completed-*`.
+   - Se chaves forem encontradas, o app envia em lote a conclusão destas séries (`completed: true`) para o Supabase, garantindo que o histórico antigo do celular do usuário seja recuperado e preservado permanentemente na nuvem.
+   - As chaves locais são deletadas do `localStorage` somente após a resposta positiva de persistência do Supabase.
 
 ### ✅ Estado final
 - ✅ Sincronização em tempo real de séries concluídas entre diferentes dispositivos e sessões do usuário.
 - ✅ Dashboard e relatórios PDF operando de forma 100% dinâmica com consultas diretas ao banco.
+- ✅ Histórico legado recuperado e integrado transparentemente via rotina de sincronização automática.
 - ✅ Código mais limpo e livre de interações com o `localStorage` do navegador para o core das regras de negócio de treino.
 - ✅ build validado com sucesso.
+
 
 
 
