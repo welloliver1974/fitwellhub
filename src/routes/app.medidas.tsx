@@ -73,7 +73,7 @@ type Entry = {
 };
 
 function MedidasPage() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const navigate = useNavigate();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [open, setOpen] = useState(false);
@@ -91,7 +91,11 @@ function MedidasPage() {
     try {
       setIsAnalyzing(true);
       setAiAnalysis(null);
-      const res = await analyzeMeasurements();
+      const res = await analyzeMeasurements({
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+      });
       setAiAnalysis(res.analysis);
     } catch (e) {
       console.error(e);
