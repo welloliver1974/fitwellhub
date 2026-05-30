@@ -319,3 +319,42 @@ O beep usava onda senoidal (sine) de 880Hz com volume baixo, praticamente inaud�
 - ✅ Erro de JSX resolvido de ponta a ponta.
 - ✅ Compilação (`npm run build`) concluída com absoluto sucesso em ambos os ambientes (Client e SSR).
 
+---
+
+## Sessão: 29/05/2026 — Dashboard de Medidas Premium, Timeline e Detalhes do Coach IA
+
+### 🎯 Funcionalidade trabalhada
+`src/routes/app.medidas.tsx` → Tela de medidas corporais, visualização de dados e usabilidade do Coach IA
+
+### 🔍 Problema inicial ou Motivação
+O usuário manifestou duas dores principais de usabilidade na rota de medidas:
+1. **Dificuldade de compreensão do Coach IA:** O usuário não entendia claramente o que o "Coach IA" fazia a partir de um botão simples no header.
+2. **Deficiências na apresentação dos dados:** Os cards de resumo mostravam apenas o valor mais recente, sem deixar claro a data desse registro e sem permitir visualizar com facilidade as medidas de datas anteriores de forma integrada (exigindo olhar apenas para o gráfico ou clicar de medida em medida).
+
+### 🛠️ Solução implementada
+Redesenhamos e refatoramos completamente a página `src/routes/app.medidas.tsx` adicionando recursos premium de interface, usabilidade e clareza analítica:
+
+1. **Card Explicativo do Coach IA:**
+   - Adicionamos um banner interativo com fundo degradê sutil e um botão colapsável *"Como funciona?"*.
+   - Ao ser expandido, o card descreve didaticamente o cruzamento analítico dos dados: histórico de medidas e consistência de treinos nos últimos 30 dias via LLaMA-3.3-70b (API do Groq).
+   - O retorno da análise foi estilizado como um "Relatório Evolutivo do Coach" premium.
+
+2. **Cards Bento Grid de Medida Inteligentes:**
+   - Inserimos a **data exata em pt-BR** (ex: `28 mai`) do registro mais recente no rodapé do card.
+   - Exibimos a medida imediatamente anterior (`ant. XX.X cm`) como referência.
+   - Implementamos **tags de variação/tendência inteligentes** baseadas nos objetivos físicos do usuário:
+     - *Hipertrofia* (ombros, peito, braço, coxa, panturrilha): aumento de tamanho é marcado com tag verde (`↑ X.X cm`).
+     - *Queima de gordura* (cintura, quadril): redução de tamanho é marcada com tag verde (`↓ X.X cm`).
+     - Flutuações inversas ou neutras recebem cores adequadas e discretas.
+
+3. **Sistema de Abas de Navegação (Tabs):**
+   - **Aba 1: Evolução Individual:** Gráfico Recharts aprimorado e histórico detalhado apenas da medida ativa.
+   - **Aba 2: Linha do Tempo Geral:** Histórico unificado que agrupa todas as medições por data cronológica de registro, conectadas por uma linha do tempo vertical pontilhada. Cada dia contém um grid de todas as medidas tiradas naquela data, simplificando a visualização de status passados e possibilitando a exclusão rápida.
+
+### ✅ Estado final
+- ✅ Seção explicativa interativa do Coach IA funcional e premium.
+- ✅ Cards Bento Grid de medidas com data e tags coloridas de progresso inteligentes.
+- ✅ Navegação por abas com gráfico individual de tendência e linha do tempo geral cronológica unificada.
+- ✅ Compilação (`npm run build`) concluída com absoluto sucesso em ambos os ambientes (Client e SSR).
+
+
