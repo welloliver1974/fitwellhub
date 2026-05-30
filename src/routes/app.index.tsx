@@ -54,6 +54,7 @@ function TodayPage() {
   const today = new Date().toISOString().slice(0, 10);
 
   const findTodayWorkout = async (userId: string) => {
+    // 1. Workout scheduled for today
     const { data: db } = await supabase
       .from("workouts")
       .select("id,name")
@@ -62,19 +63,22 @@ function TodayPage() {
       .limit(1);
     if (db && db[0]) return db[0];
 
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.endsWith("-" + today) && key.startsWith("workout-completed-")) {
-        const workoutId = key.replace("workout-completed-", "").slice(0, -today.length - 1);
-        const { data: w } = await supabase
-          .from("workouts")
-          .select("id,name")
-          .eq("id", workoutId)
-          .single();
-        if (w) return w;
-      }
+    // 2. Workout with completed sets today (from Supabase)
+    const { data: completedToday } = await supabase
+      .from("sets")
+      .select("exercise_id, exercises!inner(workout_id, workouts!inner(id, name))")
+      .eq("user_id", userId)
+      .eq("completed", true)
+      .gte("created_at", today + "T00:00:00")
+      .lte("created_at", today + "T23:59:59")
+      .limit(1);
+    if (completedToday && completedToday[0]) {
+      const ex = completedToday[0].exercises as any;
+      const w = ex?.workouts;
+      if (w) return { id: w.id, name: w.name };
     }
 
+    // 3. Fallback to most recent workout
     const { data: last } = await supabase
       .from("workouts")
       .select("id,name")

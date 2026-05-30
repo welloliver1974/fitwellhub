@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
@@ -12,24 +12,36 @@ type CompletedLog = {
   date: string;
   workoutId: string;
   workoutName: string;
-  setIds: string[];
+  setCount: number;
 };
 
-function loadCompletedLogs(): CompletedLog[] {
-  const logs: CompletedLog[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key?.startsWith("workout-completed-")) {
-      const parts = key.replace("workout-completed-", "").split("-");
-      if (parts.length >= 4) {
-        const date = parts.slice(-3).join("-");
-        const workoutId = parts.slice(0, -3).join("-");
-        const setIds = JSON.parse(localStorage.getItem(key) || "[]");
-        logs.push({ date, workoutId, workoutName: "", setIds });
-      }
+async function loadCompletedLogs(userId: string): Promise<CompletedLog[]> {
+  // Query sets with completed=true, joined to exercises->workouts
+  const { data } = await supabase
+    .from("sets")
+    .select("id, created_at, exercises!inner(workout_id, workouts!inner(id, name))")
+    .eq("user_id", userId)
+    .eq("completed", true)
+    .order("created_at", { ascending: false });
+
+  if (!data || !data.length) return [];
+
+  // Group by date + workoutId
+  const grouped = new Map<string, CompletedLog>();
+  for (const row of data) {
+    const ex = row.exercises as any;
+    const w = ex?.workouts;
+    if (!w) continue;
+    const date = (row.created_at as string).slice(0, 10);
+    const key = `${date}-${w.id}`;
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.setCount++;
+    } else {
+      grouped.set(key, { date, workoutId: w.id, workoutName: w.name, setCount: 1 });
     }
   }
-  return logs.sort((a, b) => b.date.localeCompare(a.date));
+  return Array.from(grouped.values()).sort((a, b) => b.date.localeCompare(a.date));
 }
 
 export const Route = createFileRoute("/app/relatorio")({
@@ -136,18 +148,12 @@ function RelatorioPage() {
       }
       const days = Array.from(perDay.entries()).sort();
 
-      // Workouts from localStorage (actual completion dates)
-      const logs = loadCompletedLogs();
-      const uniqueIds = [...new Set(logs.map((l) => l.workoutId))];
-      const { data: wNames } = await supabase
-        .from("workouts")
-        .select("id,name")
-        .in("id", uniqueIds);
-      const nameMap = new Map((wNames ?? []).map((w) => [w.id, w.name]));
+      // Workouts from Supabase (completed sets)
+      const logs = await loadCompletedLogs(user.id);
       const workoutsByDate = logs.reduce(
         (acc, l) => {
           if (!acc[l.date]) acc[l.date] = [];
-          acc[l.date].push(nameMap.get(l.workoutId) ?? "Treino");
+          acc[l.date].push(l.workoutName);
           return acc;
         },
         {} as Record<string, string[]>,
@@ -267,7 +273,7 @@ function RelatorioPage() {
       <Card className="p-5 space-y-3">
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            Treinos concluídos por dia (salvo no navegador)
+            Treinos concluídos por dia
           </p>
           <Button
             variant="ghost"
@@ -280,43 +286,63 @@ function RelatorioPage() {
         </div>
 
         {showHistory && (
-          <div className="space-y-2">
-            {(() => {
-              const logs = loadCompletedLogs();
-              if (logs.length === 0) {
-                return (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    Nenhum treino concluído ainda. Marque as séries como concluídas na página de treinos.
-                  </p>
-                );
-              }
-              const grouped = logs.reduce(
-                (acc, log) => {
-                  if (!acc[log.date]) acc[log.date] = [];
-                  acc[log.date].push(log);
-                  return acc;
-                },
-                {} as Record<string, CompletedLog[]>
-              );
-              return Object.entries(grouped).map(([date, dateLogs]) => (
-                <div key={date} className="border rounded-lg p-3">
-                  <p className="font-medium text-sm">
-                    {new Date(date + "T00:00").toLocaleDateString("pt-BR", {
-                      weekday: "long",
-                      day: "numeric",
-                      month: "long",
-                    })}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {dateLogs.reduce((sum, l) => sum + l.setIds.length, 0)} séries
-                    concluídas
-                  </p>
-                </div>
-              ));
-            })()}
-          </div>
+          <HistoryList userId={user?.id} />
         )}
       </Card>
+    </div>
+  );
+}
+
+function HistoryList({ userId }: { userId?: string }) {
+  const [logs, setLogs] = useState<CompletedLog[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!userId) return;
+    (async () => {
+      const data = await loadCompletedLogs(userId);
+      setLogs(data);
+      setLoading(false);
+    })();
+  }, [userId]);
+
+  if (loading) return <p className="text-sm text-muted-foreground text-center py-4">Carregando…</p>;
+
+  if (logs.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground text-center py-4">
+        Nenhum treino concluído ainda. Marque as séries como concluídas na página de treinos.
+      </p>
+    );
+  }
+
+  const grouped = logs.reduce(
+    (acc, log) => {
+      if (!acc[log.date]) acc[log.date] = [];
+      acc[log.date].push(log);
+      return acc;
+    },
+    {} as Record<string, CompletedLog[]>,
+  );
+
+  return (
+    <div className="space-y-2">
+      {Object.entries(grouped).map(([date, dateLogs]) => (
+        <div key={date} className="border rounded-lg p-3">
+          <p className="font-medium text-sm">
+            {new Date(date + "T00:00").toLocaleDateString("pt-BR", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+            })}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {dateLogs.reduce((sum, l) => sum + l.setCount, 0)} séries
+            concluídas
+            {dateLogs.map((l) => ` · ${l.workoutName}`).join("")}
+          </p>
+        </div>
+      ))}
     </div>
   );
 }

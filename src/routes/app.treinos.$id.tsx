@@ -40,6 +40,7 @@ type WorkoutSet = {
   set_number: number;
   reps: number;
   weight_kg: number;
+  completed: boolean;
 };
 
 type PrevExerciseRow = {
@@ -70,25 +71,15 @@ function WorkoutDetail() {
   const [restPreset, setRestPreset] = useState(90);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Completed sets tracked in localStorage by workout + date
-  const today = new Date().toISOString().split("T")[0];
-  const lsKey = `workout-completed-${id}-${today}`;
-  const [completedSets, setCompletedSets] = useState<Set<string>>(() => {
-    try {
-      const saved = localStorage.getItem(lsKey);
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
-  const toggleCompleted = (setId: string) => {
-    setCompletedSets((prev) => {
-      const next = new Set(prev);
-      if (next.has(setId)) next.delete(setId);
-      else next.add(setId);
-      localStorage.setItem(lsKey, JSON.stringify([...next]));
-      return next;
-    });
+  // Completed sets synced with Supabase (sets.completed column)
+  const completedSets = new Set(sets.filter((s) => s.completed).map((s) => s.id));
+  const toggleCompleted = async (setId: string) => {
+    const current = completedSets.has(setId);
+    // Optimistic update
+    setSets((prev) =>
+      prev.map((s) => (s.id === setId ? { ...s, completed: !current } : s)),
+    );
+    await supabase.from("sets").update({ completed: !current }).eq("id", setId);
   };
 
   useEffect(() => {

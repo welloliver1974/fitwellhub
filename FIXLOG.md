@@ -363,4 +363,35 @@ Redesenhamos e refatoramos completamente a página `src/routes/app.medidas.tsx` 
 - ✅ Navegação por abas com gráfico individual de tendência e linha do tempo geral cronológica unificada.
 - ✅ Compilação (`npm run build`) concluída com absoluto sucesso em ambos os ambientes (Client e SSR).
 
+---
+
+## Sessão: 29/05/2026 — Persistência de Treinos Concluídos no Supabase
+
+### 🎯 Funcionalidade trabalhada
+`src/routes/app.treinos.$id.tsx`, `src/routes/app.treinos.$id.foco.tsx`, `src/routes/app.index.tsx` e `src/routes/app.relatorio.tsx` → Armazenamento e histórico de séries concluídas (workout completed logs).
+
+### 🔍 Problema ou Motivação
+Anteriormente, ao concluir séries de exercícios nas páginas de treino detalhado ou modo foco, o estado das séries era persistido temporariamente no `localStorage` do navegador com o prefixo `workout-completed-*`. Isso causava:
+1. Perda de dados no caso de limpeza de cache, troca de aparelho ou navegação anônima.
+2. Inacessibilidade dos dados pelo lado do servidor (como o Coach IA ou geração de relatórios), impedindo análises de adesão mais profundas.
+
+### 🛠️ Solução implementada
+Migramos o rastreamento de conclusão do frontend local para o banco de dados do Supabase:
+
+1. **Uso da Coluna Existente:** Aproveitamos a coluna `completed` (boolean) já criada anteriormente na tabela `sets` por uma migration, que não estava sendo utilizada.
+2. **Atualização das Telas de Treino:**
+   - Modificamos o detalhe do treino (`app.treinos.$id.tsx`) e o modo foco (`app.treinos.$id.foco.tsx`) para derivar o estado `completedSets` diretamente da lista de `sets` retornada do banco de dados.
+   - O checkbox de conclusão agora dispara um update otimista no estado local e uma requisição assíncrona ao Supabase (`supabase.from("sets").update({ completed: !current })`).
+3. **Refatoração do Dashboard:**
+   - A função `findTodayWorkout` no `app.index.tsx` agora consulta o Supabase usando queries do tipo `inner join` para verificar se existem séries completadas no dia atual, em vez de realizar varreduras locais no `localStorage`.
+4. **Refatoração do Relatório PDF:**
+   - O `app.relatorio.tsx` agora possui uma função assíncrona `loadCompletedLogs` para resgatar e agregar o total de séries concluídas no banco e gerar o histórico por datas reais de execução, eliminando referências locais ao navegador.
+
+### ✅ Estado final
+- ✅ Sincronização em tempo real de séries concluídas entre diferentes dispositivos e sessões do usuário.
+- ✅ Dashboard e relatórios PDF operando de forma 100% dinâmica com consultas diretas ao banco.
+- ✅ Código mais limpo e livre de interações com o `localStorage` do navegador para o core das regras de negócio de treino.
+- ✅ build validado com sucesso.
+
+
 
