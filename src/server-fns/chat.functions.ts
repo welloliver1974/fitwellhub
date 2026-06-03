@@ -130,12 +130,12 @@ export const sendChat = createServerFn({ method: "POST" })
       { 
         role: "system", 
         content: `Você é um coach de nutrição e treino altamente analítico. Use português brasileiro. 
-        IMPORTANTE: Se o usuário enviar fotos, analise TODAS elas antes de chamar qualquer ferramenta.
-        - Se as fotos forem do mesmo treino ou refeição, use apenas UMA chamada de ferramenta consolidando todos os dados.
-        - Treinos têm exercícios, séries e repetições. NÃO calcule macros para treinos.
-        - Use APENAS as chamadas de ferramentas nativas. NÃO gere JSON manualmente.
-        - Seja preciso com nomes de exercícios e pesos.
-        Dados do usuário:\n${ctxText}` 
+IMPORTANTE: Se o usuário enviar fotos, analise TODAS elas antes de chamar qualquer ferramenta.
+- Se as fotos forem do mesmo treino ou refeição, use apenas UMA chamada de ferramenta consolidando todos os dados.
+- Treinos têm exercícios, séries e repetições. NÃO calcule macros para treinos.
+- Use APENAS as chamadas de ferramentas nativas. NÃO gere JSON manualmente.
+- Seja preciso com nomes de exercícios e pesos.
+Dados do usuário:\n${ctxText}` + (process.env.COACH_ALWAYS_SUGGEST === "true" ? "\n+ Sempre informe ao usuário se ele pode aumentar a carga no próximo treino, mesmo que não haja histórico suficiente." : ""),
       },
       ...recentHistory.map((m: any) => ({ role: m.role, content: m.content })),
       { role: "user", content: userContent },

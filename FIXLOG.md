@@ -398,6 +398,36 @@ Migramos o rastreamento de conclusão do frontend local para o banco de dados do
 - ✅ Código mais limpo e livre de interações com o `localStorage` do navegador para o core das regras de negócio de treino.
 - ✅ build validado com sucesso.
 
+---
 
+## Sessão: 02/06/2026 — Sugestão de Progressão de Carga Sempre Ativa no Coach IA
+
+### 🎯 Funcionalidade trabalhada
+`src/server-fns/chat.functions.ts` → system prompt do Coach IA
+
+### 🔍 Problema ou Motivação
+O usuário notou que em alguns treinos a IA sugeria aumento de carga e em outros não. A sugestão de progressão (ex: "tente subir para X kg na próxima sessão") era inconsistente — aparecia apenas quando o histórico de sessões indicava condições específicas. O desejo era que **todos os treinos** recebessem essa orientação motivacional.
+
+### 🛠️ Solução implementada
+1. **Nova variável de ambiente `COACH_ALWAYS_SUGGEST`:**
+   - Adicionada ao `.env` com valor `true`.
+   - Quando ativada, injeta instrução adicional no system prompt do Coach IA: *"Sempre informe ao usuário se ele pode aumentar a carga no próximo treino, mesmo que não haja histórico suficiente."*
+
+2. **Refatoração do system prompt (`chat.functions.ts`):**
+   - Removida a indentação excessiva do template literal (melhor legibilidade).
+   - Adicionada concatenação condicional que verifica `process.env.COACH_ALWAYS_SUGGEST === "true"` antes de anexar a instrução extra.
+
+### ⚙️ Configuração
+| Variável | Valor | Efeito |
+|---|---|---|
+| `COACH_ALWAYS_SUGGEST` | `true` | IA sempre sugere progressão de carga |
+| `COACH_ALWAYS_SUGGEST` | `false` ou ausente | Comportamento padrão (sugere apenas quando o histórico indica) |
+
+> **Nota:** Para produção (Cloudflare), configurar via `npx wrangler secret put COACH_ALWAYS_SUGGEST` com valor `true`.
+
+### ✅ Estado final
+- ✅ Sugestão de aumento de carga presente em todas as respostas do Coach IA
+- ✅ Configurável via variável de ambiente (reversível sem alterar código)
+- ✅ Build validado com sucesso
 
 
