@@ -479,6 +479,88 @@ export type Database = {
         };
         Relationships: [];
       };
+      workout_sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          workout_id: string | null;
+          name: string;
+          completed_at: string;
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          workout_id?: string | null;
+          name: string;
+          completed_at?: string;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          workout_id?: string | null;
+          name?: string;
+          completed_at?: string;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workout_sessions_workout_id_fkey";
+            columns: ["workout_id"];
+            isOneToOne: false;
+            referencedRelation: "workouts";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      workout_session_sets: {
+        Row: {
+          id: string;
+          session_id: string;
+          user_id: string;
+          exercise_name: string;
+          set_number: number;
+          reps: number;
+          weight_kg: number;
+          completed: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          user_id: string;
+          exercise_name: string;
+          set_number: number;
+          reps: number;
+          weight_kg?: number;
+          completed?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          session_id?: string;
+          user_id?: string;
+          exercise_name?: string;
+          set_number?: number;
+          reps?: number;
+          weight_kg?: number;
+          completed?: boolean;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workout_session_sets_session_id_fkey";
+            columns: ["session_id"];
+            isOneToOne: false;
+            referencedRelation: "workout_sessions";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
     };
     Views: {
       [_ in never]: never;

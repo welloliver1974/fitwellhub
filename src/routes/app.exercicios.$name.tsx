@@ -28,32 +28,36 @@ function ExerciseHistory() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data: exs } = await supabase
-        .from("exercises")
-        .select("id,workout_id")
+      const { data, error } = await supabase
+        .from("workout_session_sets")
+        .select(`
+          reps,
+          weight_kg,
+          workout_sessions (
+            completed_at
+          )
+        `)
         .eq("user_id", user.id)
-        .ilike("name", decoded);
-      const exIds = (exs ?? []).map((e) => e.id);
-      const wIds = Array.from(new Set((exs ?? []).map((e) => e.workout_id)));
-      if (!exIds.length) {
+        .ilike("exercise_name", decoded)
+        .eq("completed", true);
+
+      if (error || !data || !data.length) {
         setRows([]);
+        setPr(null);
         return;
       }
-      const [{ data: sets }, { data: workouts }] = await Promise.all([
-        supabase.from("sets").select("exercise_id,reps,weight_kg").in("exercise_id", exIds),
-        supabase.from("workouts").select("id,workout_date").in("id", wIds),
-      ]);
-      const exToDate = new Map<string, string>();
-      const dateById = new Map((workouts ?? []).map((w) => [w.id, w.workout_date]));
-      for (const e of exs ?? []) exToDate.set(e.id, dateById.get(e.workout_id) ?? "");
+
+      // Group by date (completed_at)
       const grouped = new Map<string, { reps: number; weight: number }[]>();
-      for (const s of sets ?? []) {
-        const d = exToDate.get(s.exercise_id);
-        if (!d) continue;
-        const arr = grouped.get(d) ?? [];
-        arr.push({ reps: s.reps, weight: Number(s.weight_kg) });
-        grouped.set(d, arr);
+      for (const row of data) {
+        const sess = row.workout_sessions as any;
+        if (!sess || !sess.completed_at) continue;
+        const date = (sess.completed_at as string).slice(0, 10);
+        const arr = grouped.get(date) ?? [];
+        arr.push({ reps: row.reps, weight: Number(row.weight_kg) });
+        grouped.set(date, arr);
       }
+
       const sorted = Array.from(grouped.entries()).sort(([a], [b]) => a.localeCompare(b));
       const out: Row[] = sorted.map(([date, ss]) => ({
         date,
@@ -62,10 +66,14 @@ function ExerciseHistory() {
         volume: ss.reduce((a, s) => a + s.weight * s.reps, 0),
       }));
       setRows(out);
+
       let best = { weight: 0, reps: 0, date: "" };
       for (const [date, ss] of sorted) {
-        for (const s of ss)
-          if (s.weight > best.weight) best = { weight: s.weight, reps: s.reps, date };
+        for (const s of ss) {
+          if (s.weight > best.weight) {
+            best = { weight: s.weight, reps: s.reps, date };
+          }
+        }
       }
       setPr(best.weight > 0 ? best : null);
     })();

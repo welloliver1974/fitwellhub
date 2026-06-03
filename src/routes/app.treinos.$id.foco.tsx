@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, X, Plus, Check, Timer, Pause, Play } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Plus, Check, Timer, Pause, Play, Loader2 } from "lucide-react";
 import { cn, playBeep } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -34,15 +34,56 @@ function FocusMode() {
   const [restPreset, setRestPreset] = useState(90);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Completed sets synced with Supabase (sets.completed column)
-  const completedSets = new Set(sets.filter((s) => s.completed).map((s) => s.id));
-  const toggleCompleted = async (setId: string) => {
-    const current = completedSets.has(setId);
-    // Optimistic update
-    setSets((p) =>
-      p.map((s) => (s.id === setId ? { ...s, completed: !current } : s)),
+  // Estados da sessão de treino ativa (mesmo rascunho da tela normal)
+  const [completedSets, setCompletedSets] = useState<Set<string>>(new Set());
+  const [setValues, setSetValues] = useState<Record<string, { reps: number; weight_kg: number }>>({});
+  const [startedAt, setStartedAt] = useState<string | null>(null);
+  const [isFinishing, setIsFinishing] = useState(false);
+  const [workoutName, setWorkoutName] = useState("");
+
+  // Auxiliar para salvar rascunho no localStorage
+  const saveDraft = (
+    newCompleted: Set<string>,
+    newValues: Record<string, { reps: number; weight_kg: number }>,
+    start: string
+  ) => {
+    localStorage.setItem(
+      `active-session-${id}`,
+      JSON.stringify({
+        startedAt: start,
+        completedSets: Array.from(newCompleted),
+        setValues: newValues,
+      })
     );
-    await supabase.from("sets").update({ completed: !current }).eq("id", setId);
+  };
+
+  const toggleCompleted = (setId: string) => {
+    setCompletedSets((prev) => {
+      const next = new Set(prev);
+      if (next.has(setId)) {
+        next.delete(setId);
+      } else {
+        next.add(setId);
+        setRestSec(restPreset); // Auto inicia o timer de descanso
+        setRestRunning(true);
+      }
+      if (startedAt) saveDraft(next, setValues, startedAt);
+      return next;
+    });
+  };
+
+  const updateLocalSet = (setId: string, field: "reps" | "weight_kg", value: number) => {
+    setSetValues((prev) => {
+      const updated = {
+        ...prev,
+        [setId]: {
+          ...prev[setId],
+          [field]: value,
+        },
+      };
+      if (startedAt) saveDraft(completedSets, updated, startedAt);
+      return updated;
+    });
   };
 
   useEffect(() => {
@@ -64,22 +105,67 @@ function FocusMode() {
   }, [restRunning]);
 
   const load = async () => {
+    const { data: w } = await supabase
+      .from("workouts")
+      .select("name")
+      .eq("id", id)
+      .maybeSingle();
+    if (w) setWorkoutName(w.name);
+
     const { data: ex } = await supabase
       .from("exercises")
       .select("id,name,position")
       .eq("workout_id", id)
       .order("position");
     setExercises((ex ?? []) as Exercise[]);
+    
     const exIds = (ex ?? []).map((e) => e.id);
+    let loadedSets: WorkoutSet[] = [];
     if (exIds.length) {
       const { data: ss } = await supabase
         .from("sets")
         .select("*")
         .in("exercise_id", exIds)
         .order("set_number");
-      setSets((ss ?? []) as WorkoutSet[]);
+      loadedSets = (ss ?? []) as WorkoutSet[];
+      setSets(loadedSets);
+    } else {
+      setSets([]);
+    }
+
+    // Carregar rascunho do localStorage se existir
+    const draftStr = localStorage.getItem(`active-session-${id}`);
+    if (draftStr) {
+      try {
+        const draft = JSON.parse(draftStr);
+        setStartedAt(draft.startedAt);
+        setCompletedSets(new Set(draft.completedSets));
+
+        const mergedValues: Record<string, { reps: number; weight_kg: number }> = {};
+        loadedSets.forEach((s) => {
+          if (draft.setValues[s.id]) {
+            mergedValues[s.id] = draft.setValues[s.id];
+          } else {
+            mergedValues[s.id] = { reps: s.reps, weight_kg: Number(s.weight_kg) };
+          }
+        });
+        setSetValues(mergedValues);
+      } catch (err) {
+        console.error("Erro ao carregar rascunho em modo foco:", err);
+      }
+    } else {
+      const newStart = new Date().toISOString();
+      setStartedAt(newStart);
+      const initialValues: Record<string, { reps: number; weight_kg: number }> = {};
+      loadedSets.forEach((s) => {
+        initialValues[s.id] = { reps: s.reps, weight_kg: Number(s.weight_kg) };
+      });
+      setSetValues(initialValues);
+      setCompletedSets(new Set());
+      saveDraft(new Set(), initialValues, newStart);
     }
   };
+
   useEffect(() => {
     load(); /* eslint-disable-next-line */
   }, [id]);
@@ -89,13 +175,22 @@ function FocusMode() {
 
   const addSet = async () => {
     if (!user || !ex) return;
+    const exSets = sets.filter((s) => s.exercise_id === ex.id);
     const last = exSets[exSets.length - 1];
+
+    let lastReps = last?.reps ?? 10;
+    let lastWeight = last?.weight_kg ?? 0;
+    if (last && setValues[last.id]) {
+      lastReps = setValues[last.id].reps;
+      lastWeight = setValues[last.id].weight_kg;
+    }
+
     const { error } = await supabase.from("sets").insert({
       user_id: user.id,
       exercise_id: ex.id,
       set_number: exSets.length + 1,
-      reps: last?.reps ?? 10,
-      weight_kg: last?.weight_kg ?? 0,
+      reps: lastReps,
+      weight_kg: lastWeight,
     });
     if (error) return toast.error(error.message);
     setRestSec(restPreset);
@@ -103,10 +198,78 @@ function FocusMode() {
     load();
   };
 
-  const updateSet = async (setId: string, field: "reps" | "weight_kg", value: number) => {
-    setSets((p) => p.map((s) => (s.id === setId ? { ...s, [field]: value } : s)));
-    const update = field === "reps" ? { reps: value } : { weight_kg: value };
-    await supabase.from("sets").update(update).eq("id", setId);
+  const finishWorkout = async () => {
+    if (!user) return;
+    if (completedSets.size === 0) {
+      if (!confirm("Você não concluiu nenhuma série neste treino. Deseja finalizar assim mesmo?")) {
+        return;
+      }
+    }
+
+    setIsFinishing(true);
+    try {
+      // 1. Criar sessão de treino finalizada
+      const { data: session, error: sessError } = await supabase
+        .from("workout_sessions")
+        .insert({
+          user_id: user.id,
+          workout_id: id,
+          name: workoutName || "Treino",
+          completed_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (sessError) throw sessError;
+
+      // 2. Inserir séries realizadas (sets) na nova tabela workout_session_sets
+      const sessionSetsToInsert = sets.map((s) => {
+        const val = setValues[s.id] ?? { reps: s.reps, weight_kg: Number(s.weight_kg) };
+        const isDone = completedSets.has(s.id);
+        const exName = exercises.find((e) => e.id === s.exercise_id)?.name ?? "Exercício";
+        return {
+          session_id: session.id,
+          user_id: user.id,
+          exercise_name: exName,
+          set_number: s.set_number,
+          reps: val.reps,
+          weight_kg: val.weight_kg,
+          completed: isDone,
+        };
+      });
+
+      if (sessionSetsToInsert.length > 0) {
+        const { error: setsError } = await supabase
+          .from("workout_session_sets")
+          .insert(sessionSetsToInsert);
+        if (setsError) throw setsError;
+      }
+
+      // 3. Atualizar template original (sets) com as cargas novas como padrão e desmarcados
+      const templateUpdates = sets.map((s) => {
+        const val = setValues[s.id] ?? { reps: s.reps, weight_kg: Number(s.weight_kg) };
+        return supabase
+          .from("sets")
+          .update({
+            reps: val.reps,
+            weight_kg: val.weight_kg,
+            completed: false, // reset template
+          })
+          .eq("id", s.id);
+      });
+
+      await Promise.all(templateUpdates);
+
+      // 4. Remover rascunho
+      localStorage.removeItem(`active-session-${id}`);
+
+      toast.success("Treino finalizado com sucesso!");
+      navigate({ to: "/app/treinos" });
+    } catch (err: any) {
+      toast.error("Erro ao salvar treino: " + err.message);
+    } finally {
+      setIsFinishing(false);
+    }
   };
 
   if (!exercises.length)
@@ -129,8 +292,8 @@ function FocusMode() {
         >
           <X className="h-5 w-5" />
         </Button>
-        <p className="text-xs text-muted-foreground">
-          {idx + 1} / {exercises.length}
+        <p className="text-xs text-muted-foreground font-semibold">
+          {idx + 1} / {exercises.length} — {workoutName}
         </p>
         <div className="w-9" />
       </header>
@@ -177,6 +340,7 @@ function FocusMode() {
         <div className="w-full max-w-md space-y-2">
           {exSets.map((s) => {
             const done = completedSets.has(s.id);
+            const curVal = setValues[s.id] ?? { reps: s.reps, weight_kg: Number(s.weight_kg) };
             return (
             <div
               key={s.id}
@@ -191,23 +355,23 @@ function FocusMode() {
                   type="checkbox"
                   checked={done}
                   onChange={() => toggleCompleted(s.id)}
-                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
                 />
               </div>
               <Input
                 type="number"
-                value={s.reps || ""}
+                value={curVal.reps || ""}
                 onFocus={(e) => e.target.select()}
-                onChange={(e) => updateSet(s.id, "reps", Number(e.target.value))}
+                onChange={(e) => updateLocalSet(s.id, "reps", Number(e.target.value))}
                 className="text-center text-lg"
                 disabled={done}
               />
               <Input
                 type="number"
                 step="0.5"
-                value={s.weight_kg || ""}
+                value={curVal.weight_kg || ""}
                 onFocus={(e) => e.target.select()}
-                onChange={(e) => updateSet(s.id, "weight_kg", Number(e.target.value))}
+                onChange={(e) => updateLocalSet(s.id, "weight_kg", Number(e.target.value))}
                 className="text-center text-lg"
                 disabled={done}
               />
@@ -231,7 +395,8 @@ function FocusMode() {
           <ChevronLeft className="h-5 w-5" /> Anterior
         </Button>
         {idx === exercises.length - 1 ? (
-          <Button size="lg" onClick={() => navigate({ to: "/app/treinos/$id", params: { id } })}>
+          <Button size="lg" disabled={isFinishing} onClick={finishWorkout} className="flex items-center gap-1">
+            {isFinishing && <Loader2 className="h-4 w-4 animate-spin" />}
             Finalizar
           </Button>
         ) : (

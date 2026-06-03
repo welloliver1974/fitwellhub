@@ -54,36 +54,29 @@ function TodayPage() {
   const today = new Date().toISOString().slice(0, 10);
 
   const findTodayWorkout = async (userId: string) => {
-    // 1. Workout scheduled for today
-    const { data: db } = await supabase
-      .from("workouts")
-      .select("id,name")
-      .eq("user_id", userId)
-      .eq("workout_date", today)
-      .limit(1);
-    if (db && db[0]) return db[0];
-
-    // 2. Workout with completed sets today (from Supabase)
+    // 1. Treino concluído hoje (da tabela workout_sessions)
     const { data: completedToday } = await supabase
-      .from("sets")
-      .select("exercise_id, exercises!inner(workout_id, workouts!inner(id, name))")
+      .from("workout_sessions")
+      .select("workout_id, name")
       .eq("user_id", userId)
-      .eq("completed", true)
-      .gte("created_at", today + "T00:00:00")
-      .lte("created_at", today + "T23:59:59")
+      .gte("completed_at", today + "T00:00:00")
+      .lte("completed_at", today + "T23:59:59")
+      .order("completed_at", { ascending: false })
       .limit(1);
+
     if (completedToday && completedToday[0]) {
-      const ex = completedToday[0].exercises as any;
-      const w = ex?.workouts;
-      if (w) return { id: w.id, name: w.name };
+      return { 
+        id: completedToday[0].workout_id || "", 
+        name: completedToday[0].name 
+      };
     }
 
-    // 3. Fallback to most recent workout
+    // 2. Fallback: sugere o último treino criado como template
     const { data: last } = await supabase
       .from("workouts")
       .select("id,name")
       .eq("user_id", userId)
-      .order("workout_date", { ascending: false })
+      .order("created_at", { ascending: false })
       .limit(1);
     return last?.[0] ?? null;
   };

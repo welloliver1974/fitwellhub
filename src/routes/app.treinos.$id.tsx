@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { cn, playBeep } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +26,9 @@ import {
   Play,
   Sparkles,
   Maximize2,
+  Loader2,
+  Check,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -58,6 +62,7 @@ type PrevSetRow = {
 function WorkoutDetail() {
   const { id } = Route.useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [workout, setWorkout] = useState<Workout | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [sets, setSets] = useState<WorkoutSet[]>([]);
@@ -71,15 +76,55 @@ function WorkoutDetail() {
   const [restPreset, setRestPreset] = useState(90);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Completed sets synced with Supabase (sets.completed column)
-  const completedSets = new Set(sets.filter((s) => s.completed).map((s) => s.id));
-  const toggleCompleted = async (setId: string) => {
-    const current = completedSets.has(setId);
-    // Optimistic update
-    setSets((prev) =>
-      prev.map((s) => (s.id === setId ? { ...s, completed: !current } : s)),
+  // Estados da sessão de treino ativa
+  const [completedSets, setCompletedSets] = useState<Set<string>>(new Set());
+  const [setValues, setSetValues] = useState<Record<string, { reps: number; weight_kg: number }>>({});
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [startedAt, setStartedAt] = useState<string | null>(null);
+  const [isFinishing, setIsFinishing] = useState(false);
+
+  // Auxiliar para salvar rascunho no localStorage
+  const saveDraft = (
+    newCompleted: Set<string>,
+    newValues: Record<string, { reps: number; weight_kg: number }>,
+    start: string
+  ) => {
+    localStorage.setItem(
+      `active-session-${id}`,
+      JSON.stringify({
+        startedAt: start,
+        completedSets: Array.from(newCompleted),
+        setValues: newValues,
+      })
     );
-    await supabase.from("sets").update({ completed: !current }).eq("id", setId);
+  };
+
+  const toggleCompleted = (setId: string) => {
+    setCompletedSets((prev) => {
+      const next = new Set(prev);
+      if (next.has(setId)) {
+        next.delete(setId);
+      } else {
+        next.add(setId);
+        startRest(restPreset); // Auto inicia o timer de descanso ao marcar
+      }
+      if (startedAt) saveDraft(next, setValues, startedAt);
+      return next;
+    });
+  };
+
+  const updateLocalSet = (setId: string, field: "reps" | "weight_kg", value: number) => {
+    setSetValues((prev) => {
+      const updated = {
+        ...prev,
+        [setId]: {
+          ...prev[setId],
+          [field]: value,
+        },
+      };
+      if (startedAt) saveDraft(completedSets, updated, startedAt);
+      return updated;
+    });
   };
 
   useEffect(() => {
@@ -101,10 +146,42 @@ function WorkoutDetail() {
     };
   }, [restRunning]);
 
+  // Cronômetro do tempo de treino corrido
+  useEffect(() => {
+    if (!startedAt) return;
+    const interval = setInterval(() => {
+      const diff = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
+      setElapsedTime(diff > 0 ? diff : 0);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [startedAt]);
+
   const startRest = (sec: number) => {
     setRestPreset(sec);
     setRestSec(sec);
     setRestRunning(true);
+  };
+
+  const formatTime = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const resetWorkout = () => {
+    if (confirm("Deseja realmente reiniciar o treino? O progresso desta sessão ativa será limpo.")) {
+      localStorage.removeItem(`active-session-${id}`);
+      const newStart = new Date().toISOString();
+      setStartedAt(newStart);
+      setCompletedSets(new Set());
+      const initialValues: Record<string, { reps: number; weight_kg: number }> = {};
+      sets.forEach((s) => {
+        initialValues[s.id] = { reps: s.reps, weight_kg: Number(s.weight_kg) };
+      });
+      setSetValues(initialValues);
+      setElapsedTime(0);
+      toast.success("Treino reiniciado");
+    }
   };
 
   const load = async () => {
@@ -114,23 +191,61 @@ function WorkoutDetail() {
       .eq("id", id)
       .maybeSingle();
     setWorkout(w as Workout | null);
+
     const { data: ex } = await supabase
       .from("exercises")
       .select("id,name,position")
       .eq("workout_id", id)
       .order("position");
     setExercises((ex ?? []) as Exercise[]);
+
     const exIds = (ex ?? []).map((e) => e.id);
+    let loadedSets: WorkoutSet[] = [];
     if (exIds.length) {
       const { data: ss } = await supabase
         .from("sets")
         .select("*")
         .in("exercise_id", exIds)
         .order("set_number");
-      setSets((ss ?? []) as WorkoutSet[]);
-    } else setSets([]);
+      loadedSets = (ss ?? []) as WorkoutSet[];
+      setSets(loadedSets);
+    } else {
+      setSets([]);
+    }
 
-    // Load best/last set per exercise name from previous workouts
+    // Carregar rascunho do localStorage se existir
+    const draftStr = localStorage.getItem(`active-session-${id}`);
+    if (draftStr) {
+      try {
+        const draft = JSON.parse(draftStr);
+        setStartedAt(draft.startedAt);
+        setCompletedSets(new Set(draft.completedSets));
+
+        const mergedValues: Record<string, { reps: number; weight_kg: number }> = {};
+        loadedSets.forEach((s) => {
+          if (draft.setValues[s.id]) {
+            mergedValues[s.id] = draft.setValues[s.id];
+          } else {
+            mergedValues[s.id] = { reps: s.reps, weight_kg: Number(s.weight_kg) };
+          }
+        });
+        setSetValues(mergedValues);
+      } catch (err) {
+        console.error("Erro ao carregar rascunho:", err);
+      }
+    } else {
+      const newStart = new Date().toISOString();
+      setStartedAt(newStart);
+      const initialValues: Record<string, { reps: number; weight_kg: number }> = {};
+      loadedSets.forEach((s) => {
+        initialValues[s.id] = { reps: s.reps, weight_kg: Number(s.weight_kg) };
+      });
+      setSetValues(initialValues);
+      setCompletedSets(new Set());
+      saveDraft(new Set(), initialValues, newStart);
+    }
+
+    // Carregar melhor/última série por nome de exercício do histórico
     if (user && (ex ?? []).length) {
       const names = Array.from(new Set((ex ?? []).map((e) => e.name)));
       const { data: prev } = await supabase
@@ -186,22 +301,98 @@ function WorkoutDetail() {
     if (!user) return;
     const exSets = sets.filter((s) => s.exercise_id === exerciseId);
     const last = exSets[exSets.length - 1];
+
+    let lastReps = last?.reps ?? 10;
+    let lastWeight = last?.weight_kg ?? 0;
+    if (last && setValues[last.id]) {
+      lastReps = setValues[last.id].reps;
+      lastWeight = setValues[last.id].weight_kg;
+    }
+
     const { error } = await supabase.from("sets").insert({
       user_id: user.id,
       exercise_id: exerciseId,
       set_number: exSets.length + 1,
-      reps: last?.reps ?? 10,
-      weight_kg: last?.weight_kg ?? 0,
+      reps: lastReps,
+      weight_kg: lastWeight,
     });
     if (error) return toast.error(error.message);
     startRest(restPreset);
     load();
   };
 
-  const updateSet = async (setId: string, field: "reps" | "weight_kg", value: number) => {
-    setSets((prev) => prev.map((s) => (s.id === setId ? { ...s, [field]: value } : s)));
-    const update = field === "reps" ? { reps: value } : { weight_kg: value };
-    await supabase.from("sets").update(update).eq("id", setId);
+  const finishWorkout = async () => {
+    if (!user || !workout) return;
+    if (completedSets.size === 0) {
+      if (!confirm("Você não concluiu nenhuma série neste treino. Deseja finalizar assim mesmo?")) {
+        return;
+      }
+    }
+
+    setIsFinishing(true);
+    try {
+      // 1. Criar sessão de treino finalizada
+      const { data: session, error: sessError } = await supabase
+        .from("workout_sessions")
+        .insert({
+          user_id: user.id,
+          workout_id: id,
+          name: workout.name,
+          completed_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (sessError) throw sessError;
+
+      // 2. Inserir séries realizadas (sets) na nova tabela workout_session_sets
+      const sessionSetsToInsert = sets.map((s) => {
+        const val = setValues[s.id] ?? { reps: s.reps, weight_kg: Number(s.weight_kg) };
+        const isDone = completedSets.has(s.id);
+        const exName = exercises.find((e) => e.id === s.exercise_id)?.name ?? "Exercício";
+        return {
+          session_id: session.id,
+          user_id: user.id,
+          exercise_name: exName,
+          set_number: s.set_number,
+          reps: val.reps,
+          weight_kg: val.weight_kg,
+          completed: isDone,
+        };
+      });
+
+      if (sessionSetsToInsert.length > 0) {
+        const { error: setsError } = await supabase
+          .from("workout_session_sets")
+          .insert(sessionSetsToInsert);
+        if (setsError) throw setsError;
+      }
+
+      // 3. Atualizar template original (sets) com as cargas novas como padrão e desmarcados
+      const templateUpdates = sets.map((s) => {
+        const val = setValues[s.id] ?? { reps: s.reps, weight_kg: Number(s.weight_kg) };
+        return supabase
+          .from("sets")
+          .update({
+            reps: val.reps,
+            weight_kg: val.weight_kg,
+            completed: false, // resetar completed no template
+          })
+          .eq("id", s.id);
+      });
+
+      await Promise.all(templateUpdates);
+
+      // 4. Remover rascunho
+      localStorage.removeItem(`active-session-${id}`);
+
+      toast.success("Treino finalizado com sucesso!");
+      navigate({ to: "/app/treinos" });
+    } catch (err: any) {
+      toast.error("Erro ao salvar treino: " + err.message);
+    } finally {
+      setIsFinishing(false);
+    }
   };
 
   const removeSet = async (setId: string) => {
@@ -223,14 +414,30 @@ function WorkoutDetail() {
     return { last: h, next };
   };
 
+  const pct = sets.length > 0 ? Math.round((completedSets.size / sets.length) * 100) : 0;
+
   return (
     <div className="space-y-5">
-      <Link
-        to="/app/treinos"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" /> Treinos
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link
+          to="/app/treinos"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" /> Treinos
+        </Link>
+        <Button 
+          onClick={finishWorkout} 
+          disabled={isFinishing} 
+          className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-4 py-1.5 rounded-full shadow-md shrink-0 flex items-center gap-1.5"
+        >
+          {isFinishing ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Check className="h-3.5 w-3.5" />
+          )}
+          Finalizar Treino
+        </Button>
+      </div>
 
       <div className="flex items-center justify-between">
         <div>
@@ -273,6 +480,33 @@ function WorkoutDetail() {
             </DialogContent>
           </Dialog>
         </div>
+      </div>
+
+      {/* Progresso e Timer */}
+      <div className="grid grid-cols-2 gap-3">
+        <Card className="p-3.5 flex flex-col justify-center gap-1.5 bg-card/50 backdrop-blur-sm border">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Progresso</span>
+          <div className="flex items-center gap-2">
+            <Progress value={pct} className="h-2 flex-1" />
+            <span className="text-xs font-semibold tabular-nums shrink-0">{pct}%</span>
+          </div>
+          <span className="text-[10px] text-muted-foreground">{completedSets.size} de {sets.length} séries</span>
+        </Card>
+        <Card className="p-3.5 flex items-center justify-between bg-card/50 backdrop-blur-sm border">
+          <div>
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold block">Duração</span>
+            <span className="text-lg font-display font-bold tabular-nums text-foreground">{formatTime(elapsedTime)}</span>
+          </div>
+          <Button 
+            variant="outline" 
+            size="icon" 
+            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+            onClick={resetWorkout}
+            title="Reiniciar treino"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </Button>
+        </Card>
       </div>
 
       {/* Rest timer */}
@@ -364,6 +598,7 @@ function WorkoutDetail() {
                     </div>
                     {exSets.map((s) => {
                       const done = completedSets.has(s.id);
+                      const curVal = setValues[s.id] ?? { reps: s.reps, weight_kg: Number(s.weight_kg) };
                       return (
                       <div
                         key={s.id}
@@ -380,22 +615,22 @@ function WorkoutDetail() {
                             type="checkbox"
                             checked={done}
                             onChange={() => toggleCompleted(s.id)}
-                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
                           />
                         </div>
                         <Input
                           type="number"
-                          value={s.reps || ""}
+                          value={curVal.reps || ""}
                           onFocus={(e) => e.target.select()}
-                          onChange={(e) => updateSet(s.id, "reps", Number(e.target.value))}
+                          onChange={(e) => updateLocalSet(s.id, "reps", Number(e.target.value))}
                           disabled={done}
                         />
                         <Input
                           type="number"
                           step="0.5"
-                          value={s.weight_kg || ""}
+                          value={curVal.weight_kg || ""}
                           onFocus={(e) => e.target.select()}
-                          onChange={(e) => updateSet(s.id, "weight_kg", Number(e.target.value))}
+                          onChange={(e) => updateLocalSet(s.id, "weight_kg", Number(e.target.value))}
                           disabled={done}
                         />
                         <Button

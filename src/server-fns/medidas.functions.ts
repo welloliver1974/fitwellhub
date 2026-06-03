@@ -17,26 +17,24 @@ export const analyzeMeasurements = createServerFn({ method: "POST" })
       .eq("user_id", userId)
       .order("log_date", { ascending: true });
 
-    // 2. Fetch workouts from the last 30 days
+    // 2. Fetch completed workout sessions from the last 30 days
     const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
     const { data: workoutsData } = await supabase
-      .from("workouts")
+      .from("workout_sessions")
       .select(`
         id, 
         name, 
-        workout_date,
-        exercises (
+        completed_at,
+        workout_session_sets (
           id, 
-          name, 
-          sets (
-            reps, 
-            weight_kg
-          )
+          exercise_name, 
+          reps, 
+          weight_kg
         )
       `)
       .eq("user_id", userId)
-      .gte("workout_date", thirtyDaysAgo)
-      .order("workout_date", { ascending: true });
+      .gte("completed_at", thirtyDaysAgo + "T00:00:00")
+      .order("completed_at", { ascending: true });
 
     // Format Measurements
     let measurementsText = "Nenhuma medida registrada.";

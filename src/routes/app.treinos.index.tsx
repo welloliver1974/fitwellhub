@@ -83,15 +83,57 @@ function WorkoutsPage() {
       .select("id")
       .single();
     if (error || !newW) return toast.error(error?.message ?? "Erro");
+
     const { data: exs } = await supabase
       .from("exercises")
-      .select("name,position,notes")
+      .select("id,name,position,notes")
       .eq("workout_id", w.id)
       .order("position");
+
     if (exs && exs.length) {
-      await supabase
+      const exIds = exs.map((ex) => ex.id);
+      const { data: setsData } = await supabase
+        .from("sets")
+        .select("exercise_id,set_number,reps,weight_kg")
+        .in("exercise_id", exIds);
+
+      const { data: newExs, error: exErr } = await supabase
         .from("exercises")
-        .insert(exs.map((ex) => ({ ...ex, user_id: user.id, workout_id: newW.id })));
+        .insert(exs.map((ex) => ({
+          name: ex.name,
+          position: ex.position,
+          notes: ex.notes,
+          user_id: user.id,
+          workout_id: newW.id
+        })))
+        .select("id,name");
+
+      if (exErr) return toast.error("Erro ao duplicar exercícios");
+
+      if (newExs && newExs.length && setsData && setsData.length) {
+        const setsToInsert: any[] = [];
+        exs.forEach((originalEx) => {
+          const matchingNewEx = newExs.find((n) => n.name === originalEx.name);
+          if (matchingNewEx) {
+            const originalExSets = setsData.filter((s) => s.exercise_id === originalEx.id);
+            originalExSets.forEach((s) => {
+              setsToInsert.push({
+                exercise_id: matchingNewEx.id,
+                user_id: user.id,
+                set_number: s.set_number,
+                reps: s.reps,
+                weight_kg: s.weight_kg,
+                completed: false
+              });
+            });
+          }
+        });
+
+        if (setsToInsert.length > 0) {
+          const { error: setsErr } = await supabase.from("sets").insert(setsToInsert);
+          if (setsErr) return toast.error("Erro ao duplicar séries");
+        }
+      }
     }
     toast.success("Treino duplicado para hoje");
     load();

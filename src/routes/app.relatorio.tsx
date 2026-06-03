@@ -16,32 +16,33 @@ type CompletedLog = {
 };
 
 async function loadCompletedLogs(userId: string): Promise<CompletedLog[]> {
-  // Query sets with completed=true, joined to exercises->workouts
-  const { data } = await supabase
-    .from("sets")
-    .select("id, created_at, exercises!inner(workout_id, workouts!inner(id, name))")
+  // Query sessions and join their session sets to count them
+  const { data, error } = await supabase
+    .from("workout_sessions")
+    .select(`
+      id,
+      completed_at,
+      workout_id,
+      name,
+      workout_session_sets (id)
+    `)
     .eq("user_id", userId)
-    .eq("completed", true)
-    .order("created_at", { ascending: false });
+    .order("completed_at", { ascending: false });
 
-  if (!data || !data.length) return [];
+  if (error || !data || !data.length) return [];
 
-  // Group by date + workoutId
-  const grouped = new Map<string, CompletedLog>();
-  for (const row of data) {
-    const ex = row.exercises as any;
-    const w = ex?.workouts;
-    if (!w) continue;
-    const date = (row.created_at as string).slice(0, 10);
-    const key = `${date}-${w.id}`;
-    const existing = grouped.get(key);
-    if (existing) {
-      existing.setCount++;
-    } else {
-      grouped.set(key, { date, workoutId: w.id, workoutName: w.name, setCount: 1 });
-    }
-  }
-  return Array.from(grouped.values()).sort((a, b) => b.date.localeCompare(a.date));
+  return data.map((session) => {
+    const date = (session.completed_at as string).slice(0, 10);
+    const setCount = Array.isArray(session.workout_session_sets)
+      ? session.workout_session_sets.length
+      : 0;
+    return {
+      date,
+      workoutId: session.workout_id || "",
+      workoutName: session.name,
+      setCount,
+    };
+  });
 }
 
 export const Route = createFileRoute("/app/relatorio")({
