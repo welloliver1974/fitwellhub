@@ -83,20 +83,31 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
 
     try {
       const video = videoRef.current;
-      if (!video) { capturingRef.current = false; setCapturing(false); return; }
+      if (!video || !video.videoWidth || !video.videoHeight) {
+        setError("Aguardando a câmera estabilizar. Tente novamente.");
+        capturingRef.current = false;
+        setCapturing(false);
+        return;
+      }
 
       const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth || 1280;
-      canvas.height = video.videoHeight || 720;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) { capturingRef.current = false; setCapturing(false); return; }
-      ctx.drawImage(video, 0, 0);
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d")?.drawImage(video, 0, 0);
 
-      const reader = new BrowserMultiFormatReader();
-      const result = reader.decodeFromCanvas(canvas);
       controlsRef.current?.stop();
+
+      const hints = new Map();
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+        BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.CODE_128,
+        BarcodeFormat.CODE_39, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
+        BarcodeFormat.QR_CODE,
+      ]);
+
+      const result = new BrowserMultiFormatReader(hints).decodeFromCanvas(canvas);
       onDetected(result.getText());
     } catch {
+      setError("Nenhum código encontrado. Aproxime e tente novamente.");
       capturingRef.current = false;
       setCapturing(false);
     }
