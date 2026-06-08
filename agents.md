@@ -75,10 +75,10 @@ Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hu
   - **Ajuste de tipos**: Onde `grams`, `servings` e `portions` são usados em chamadas ao banco ou IA, foram adicionadas conversões com fallback (`Number() || 100/1/0`) para garantir type safety.
 - **Status**: Concluído, type-check validado com sucesso.
 
-## [08/06/2026] - Antigravity (Correção do Barcode Scanner: Detecção Zero)
+## [08/06/2026] - Antigravity (Correção do Barcode Scanner: Substituição do ZXing pela API nativa BarcodeDetector)
 - **Escopo**:
-  - **Scanner por foto (snapshot)**: Substituição do scanner contínuo em tempo real por captura manual com botão. Usa `getUserMedia` para preview ao vivo + `decodeFromCanvas` (síncrono) para decodificar o frame estático, eliminando travamentos e problemas de performance em mobile.
-  - **Remoção de constraints problemáticas**: Removidos `TRY_HARDER` (lentidão), `focusMode`/`advanced` (quebra em diversos navegadores mobile). Resolução reduzida para 720p e `facingMode` simplificado para string `"environment"`.
+  - **Troca do ZXing pela `BarcodeDetector` API**: Remoção total do `@zxing/browser` e `@zxing/library`. O ZXing apresentava problemas de detecção (decode nunca achava códigos de barras, mesmo com canvas snapshot e RGBLuminanceSource com Int32Array ARGB). Substituído pela API nativa `BarcodeDetector` (Chrome Android 85+), que detecta códigos de barras de forma nativa e confiável.
+  - **Preview ao vivo + botão de captura**: `getUserMedia` para preview da câmera traseira, botão circular "Capturar" que tira snapshot do frame do vídeo e passa para o `BarcodeDetector.detect(canvas)`.
 - **Status**: Concluído.
 
 ## [08/06/2026] - Antigravity (Busca em Tempo Real via Open Food Facts na Nutrition)
