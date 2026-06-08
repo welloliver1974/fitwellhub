@@ -62,3 +62,9 @@ Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hu
   - Atualização do arquivo `app.tsx` inserindo novo ícone `Ruler` com navegação para a nova rota.
   - Adição de animações `.scanline` ao `styles.css`.
 - **Status**: Concluído, testado localmente (build sucesso) e commitado para o repositório principal do GitHub.
+
+## [08/06/2026] - Antigravity (Catálogo de Exercícios Pré-Definido)
+- **Escopo**:
+  - **Nova Tabela `exercise_catalog`**: Criação da migration `20260608000000_exercise_catalog.sql` com tabela e seed de 30 exercícios (lista fornecida pelo usuário), RLS liberado para leitura por usuários autenticados.
+  - **Picker no Dialog de Novo Exercício**: Substituição do input simples por um `Command` (cmdk) com busca, lista filtrável do catálogo e opção de nome personalizado quando o exercício não está na lista.
+- **Status**: Concluído, build de produção validado com sucesso.

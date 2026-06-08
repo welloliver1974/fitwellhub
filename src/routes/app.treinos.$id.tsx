@@ -6,7 +6,6 @@ import { useAuth } from "@/lib/auth-context";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
@@ -16,6 +15,13 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   ArrowLeft,
   Plus,
@@ -71,6 +77,7 @@ function WorkoutDetail() {
   >({});
   const [open, setOpen] = useState(false);
   const [exName, setExName] = useState("");
+  const [catalog, setCatalog] = useState<{ id: string; name: string }[]>([]);
   const [restSec, setRestSec] = useState(0);
   const [restRunning, setRestRunning] = useState(false);
   const [restPreset, setRestPreset] = useState(90);
@@ -452,28 +459,77 @@ function WorkoutDetail() {
               <Maximize2 className="h-4 w-4" />
             </Button>
           </Link>
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog
+            open={open}
+            onOpenChange={(open) => {
+              setOpen(open);
+              if (open) {
+                supabase
+                  .from("exercise_catalog")
+                  .select("id,name")
+                  .order("name")
+                  .then(({ data }) => {
+                    if (data) setCatalog(data);
+                  });
+              }
+            }}
+          >
             <DialogTrigger asChild>
               <Button size="sm" className="rounded-full">
                 <Plus className="h-4 w-4 mr-1" />
                 Exercício
               </Button>
             </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
+            <DialogContent className="gap-0 p-0">
+              <DialogHeader className="p-4 pb-0">
                 <DialogTitle>Novo exercício</DialogTitle>
               </DialogHeader>
-              <div className="space-y-3">
-                <Label>Nome</Label>
-                <Input
+              <Command>
+                <CommandInput
+                  placeholder="Buscar exercício..."
                   value={exName}
-                  onChange={(e) => setExName(e.target.value)}
-                  placeholder="Supino reto"
-                  autoFocus
+                  onValueChange={setExName}
                 />
-              </div>
-              <DialogFooter>
-                <Button onClick={addExercise} className="rounded-full">
+                <CommandList>
+                  <CommandEmpty>
+                    {exName.trim() ? (
+                      <span className="text-xs text-muted-foreground">
+                        &quot;{exName}&quot; não está no catálogo.
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        Digite para buscar...
+                      </span>
+                    )}
+                  </CommandEmpty>
+                  {catalog.map((item) => (
+                    <CommandItem
+                      key={item.id}
+                      value={item.name}
+                      onSelect={(v) => {
+                        setExName(v);
+                      }}
+                    >
+                      {item.name}
+                    </CommandItem>
+                  ))}
+                </CommandList>
+              </Command>
+              <DialogFooter className="border-t p-3">
+                {exName.trim() &&
+                  !catalog.some(
+                    (c) =>
+                      c.name.toLowerCase() === exName.trim().toLowerCase(),
+                  ) && (
+                    <span className="text-xs text-muted-foreground mr-auto">
+                      Nome personalizado
+                    </span>
+                  )}
+                <Button
+                  onClick={addExercise}
+                  className="rounded-full"
+                  disabled={!exName.trim()}
+                >
                   Adicionar
                 </Button>
               </DialogFooter>
