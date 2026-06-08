@@ -26,7 +26,7 @@ function RecipesPage() {
   const [list, setList] = useState<Recipe[]>([]);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
-  const [servings, setServings] = useState(1);
+  const [servings, setServings] = useState<number | "">(1);
 
   const load = async () => {
     if (!user) return;
@@ -45,7 +45,7 @@ function RecipesPage() {
     if (!user || !name.trim()) return;
     const { error } = await supabase
       .from("recipes")
-      .insert({ user_id: user.id, name: name.trim(), servings });
+      .insert({ user_id: user.id, name: name.trim(), servings: Number(servings) || 1 });
     if (error) return toast.error(error.message);
     setName("");
     setServings(1);
@@ -95,11 +95,11 @@ function RecipesPage() {
               </div>
               <div>
                 <Label>Porções</Label>
-                <Input
-                  type="number"
-                  value={servings}
-                  onChange={(e) => setServings(Number(e.target.value))}
-                />
+                  <Input
+                    type="number"
+                    value={servings}
+                    onChange={(e) => setServings(e.target.value === "" ? "" : Number(e.target.value))}
+                  />
               </div>
             </div>
             <DialogFooter>

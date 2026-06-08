@@ -78,7 +78,7 @@ function NutricaoPage() {
   const [open, setOpen] = useState(false);
   const [mealType, setMealType] = useState(MEAL_TYPES[0]);
   const [query, setQuery] = useState("");
-  const [grams, setGrams] = useState(100);
+  const [grams, setGrams] = useState<number | "">(100);
   const [loading, setLoading] = useState(false);
   const [manual, setManual] = useState(false);
   const [mCal, setMCal] = useState<number | "">("");
@@ -88,7 +88,7 @@ function NutricaoPage() {
 
   // edit quantity
   const [editItem, setEditItem] = useState<Item | null>(null);
-  const [editGrams, setEditGrams] = useState(100);
+  const [editGrams, setEditGrams] = useState<number | "">(100);
 
   // photo analysis
   const [photoOpen, setPhotoOpen] = useState(false);
@@ -228,14 +228,14 @@ function NutricaoPage() {
             carbs_g: Number(mCarb) || 0,
             fat_g: Number(mFat) || 0,
           }
-        : await lookupNutrition({ data: { query: query.trim(), grams } });
+        : await lookupNutrition({ data: { query: query.trim(), grams: Number(grams) || 100 } });
 
       const meal = await ensureMeal(mealType);
       const { error: e2 } = await supabase.from("meal_items").insert({
         user_id: user.id,
         meal_id: meal.id,
         name: macros.name,
-        grams,
+        grams: Number(grams) || 0,
         calories: macros.calories,
         protein_g: macros.protein_g,
         carbs_g: macros.carbs_g,
@@ -443,12 +443,12 @@ function NutricaoPage() {
   };
 
   const saveEdit = async () => {
-    if (!editItem || editGrams <= 0) return;
-    const ratio = editGrams / Number(editItem.grams);
+    if (!editItem || editGrams === "" || editGrams <= 0) return;
+    const ratio = Number(editGrams) / Number(editItem.grams);
     const { error } = await supabase
       .from("meal_items")
       .update({
-        grams: editGrams,
+        grams: Number(editGrams),
         calories: Number(editItem.calories) * ratio,
         protein_g: Number(editItem.protein_g) * ratio,
         carbs_g: Number(editItem.carbs_g) * ratio,
@@ -600,7 +600,7 @@ function NutricaoPage() {
                   <Input
                     type="number"
                     value={grams}
-                    onChange={(e) => setGrams(Number(e.target.value))}
+                    onChange={(e) => setGrams(e.target.value === "" ? "" : Number(e.target.value))}
                   />
                 </div>
                 <div className="flex items-center justify-between pt-1">
@@ -778,7 +778,7 @@ function NutricaoPage() {
                 <Input
                   type="number"
                   value={editGrams}
-                  onChange={(e) => setEditGrams(Number(e.target.value))}
+                  onChange={(e) => setEditGrams(e.target.value === "" ? "" : Number(e.target.value))}
                   autoFocus
                 />
               </div>

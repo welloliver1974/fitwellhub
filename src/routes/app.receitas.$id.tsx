@@ -47,11 +47,11 @@ function RecipeDetail() {
   const [items, setItems] = useState<Item[]>([]);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [grams, setGrams] = useState(100);
+  const [grams, setGrams] = useState<number | "">(100);
   const [busy, setBusy] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [mealType, setMealType] = useState(MEAL_TYPES[1]);
-  const [portions, setPortions] = useState(1);
+  const [portions, setPortions] = useState<number | "">(1);
 
   const load = async () => {
     const { data: r } = await supabase
@@ -99,12 +99,12 @@ function RecipeDetail() {
     if (!user || !query.trim()) return;
     setBusy(true);
     try {
-      const m = await lookupNutrition({ data: { query: query.trim(), grams } });
+      const m = await lookupNutrition({ data: { query: query.trim(), grams: Number(grams) || 100 } });
       await supabase.from("recipe_items").insert({
         user_id: user.id,
         recipe_id: id,
         name: m.name,
-        grams,
+        grams: Number(grams) || 0,
         calories: m.calories,
         protein_g: m.protein_g,
         carbs_g: m.carbs_g,
@@ -146,15 +146,16 @@ function RecipeDetail() {
       meal = nm;
     }
     if (!meal) return;
+    const p = Number(portions) || 1;
     await supabase.from("meal_items").insert({
       user_id: user.id,
       meal_id: meal.id,
-      name: `${recipe.name}${portions !== 1 ? ` (${portions}x)` : ""}`,
-      grams: portions * 100,
-      calories: perServing.calories * portions,
-      protein_g: perServing.protein_g * portions,
-      carbs_g: perServing.carbs_g * portions,
-      fat_g: perServing.fat_g * portions,
+      name: `${recipe.name}${p !== 1 ? ` (${p}x)` : ""}`,
+      grams: p * 100,
+      calories: perServing.calories * p,
+      protein_g: perServing.protein_g * p,
+      carbs_g: perServing.carbs_g * p,
+      fat_g: perServing.fat_g * p,
     });
     toast.success(`Adicionado em ${mealType}`);
     setAddOpen(false);
@@ -213,7 +214,7 @@ function RecipeDetail() {
                 <Input
                   type="number"
                   value={grams}
-                  onChange={(e) => setGrams(Number(e.target.value))}
+                  onChange={(e) => setGrams(e.target.value === "" ? "" : Number(e.target.value))}
                 />
               </div>
               <Button onClick={addIngredient} disabled={busy || !query.trim()} className="w-full">
@@ -256,7 +257,7 @@ function RecipeDetail() {
                     type="number"
                     step="0.5"
                     value={portions}
-                    onChange={(e) => setPortions(Number(e.target.value))}
+                    onChange={(e) => setPortions(e.target.value === "" ? "" : Number(e.target.value))}
                   />
                 </div>
               </div>
