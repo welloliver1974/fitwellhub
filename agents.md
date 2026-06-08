@@ -75,6 +75,12 @@ Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hu
   - **Ajuste de tipos**: Onde `grams`, `servings` e `portions` são usados em chamadas ao banco ou IA, foram adicionadas conversões com fallback (`Number() || 100/1/0`) para garantir type safety.
 - **Status**: Concluído, type-check validado com sucesso.
 
+## [08/06/2026] - Antigravity (Correção do Barcode Scanner: Detecção Zero)
+- **Escopo**:
+  - **Scanner por foto (snapshot)**: Substituição do scanner contínuo em tempo real por captura manual com botão. Usa `getUserMedia` para preview ao vivo + `decodeFromCanvas` (síncrono) para decodificar o frame estático, eliminando travamentos e problemas de performance em mobile.
+  - **Remoção de constraints problemáticas**: Removidos `TRY_HARDER` (lentidão), `focusMode`/`advanced` (quebra em diversos navegadores mobile). Resolução reduzida para 720p e `facingMode` simplificado para string `"environment"`.
+- **Status**: Concluído.
+
 ## [08/06/2026] - Antigravity (Busca em Tempo Real via Open Food Facts na Nutrition)
 - **Escopo**:
   - **Open Food Facts como fonte primária**: Em `src/server-fns/nutrition.functions.ts`, antes de chamar a Groq IA, o `lookupNutrition` agora faz uma busca na API pública do Open Food Facts pelo nome do alimento. Se encontrar produto com dados nutricionais válidos, retorna os macros reais proporcionais aos gramas solicitados.
