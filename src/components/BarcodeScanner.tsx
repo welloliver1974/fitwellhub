@@ -39,9 +39,10 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
 
         const constraints: MediaStreamConstraints = {
           video: {
-            facingMode: { ideal: "environment" },
-            width: { ideal: 1280, min: 480 },
-            height: { ideal: 720, min: 360 },
+            facingMode: { exact: "environment" },
+            width: { min: 640, ideal: 1280 },
+            height: { min: 480, ideal: 720 },
+            focusMode: "continuous",
           },
         };
 
