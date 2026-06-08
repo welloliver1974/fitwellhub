@@ -12,14 +12,16 @@ type Props = {
 
 export function BarcodeScanner({ open, onClose, onDetected }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
+  const controlsRef = useRef<{ stop: () => void } | null>(null);
+  const capturingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [capturing, setCapturing] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setError(null);
+    setCapturing(false);
+    capturingRef.current = false;
 
     const hints = new Map();
     hints.set(DecodeHintType.POSSIBLE_FORMATS, [
@@ -32,22 +34,30 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
       BarcodeFormat.QR_CODE,
     ]);
 
-    readerRef.current = new BrowserMultiFormatReader(hints);
+    const reader = new BrowserMultiFormatReader(hints);
 
     (async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "environment",
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+        if (!videoRef.current) return;
+
+        const controls = await reader.decodeFromConstraints(
+          {
+            video: {
+              facingMode: { ideal: "environment" },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
           },
-        });
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-        }
+          videoRef.current,
+          (result) => {
+            if (result && !capturingRef.current) {
+              capturingRef.current = true;
+              controls.stop();
+              onDetected(result.getText());
+            }
+          },
+        );
+        controlsRef.current = controls;
       } catch (e) {
         setError(
           e instanceof Error
@@ -62,30 +72,35 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
     })();
 
     return () => {
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
+      controlsRef.current?.stop();
     };
-  }, [open]);
+  }, [open, onDetected]);
 
   const handleCapture = useCallback(() => {
-    if (!videoRef.current || !readerRef.current || capturing) return;
+    if (capturingRef.current) return;
+    capturingRef.current = true;
     setCapturing(true);
+
     try {
       const video = videoRef.current;
+      if (!video) { capturingRef.current = false; setCapturing(false); return; }
+
       const canvas = document.createElement("canvas");
       canvas.width = video.videoWidth || 1280;
       canvas.height = video.videoHeight || 720;
-      canvas.getContext("2d")?.drawImage(video, 0, 0);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { capturingRef.current = false; setCapturing(false); return; }
+      ctx.drawImage(video, 0, 0);
 
-      const result = readerRef.current.decodeFromCanvas(canvas);
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
+      const reader = new BrowserMultiFormatReader();
+      const result = reader.decodeFromCanvas(canvas);
+      controlsRef.current?.stop();
       onDetected(result.getText());
     } catch {
-      setError("Não foi possível ler o código. Aproxime a câmera e tente novamente.");
+      capturingRef.current = false;
       setCapturing(false);
     }
-  }, [capturing, onDetected]);
+  }, [onDetected]);
 
   if (!open) return null;
 
@@ -128,17 +143,13 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
                 <span className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-primary rounded-tr-2xl" />
                 <span className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-primary rounded-bl-2xl" />
                 <span className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-primary rounded-br-2xl" />
-
-                {!capturing && (
-                  <span className="absolute left-2 right-2 h-0.5 bg-primary/80 rounded-full animate-[scanline_2s_ease-in-out_infinite]" />
-                )}
               </div>
             </div>
 
             <div className="absolute bottom-24 left-0 right-0 flex justify-center">
               <div className="bg-black/70 text-white text-xs px-4 py-2 rounded-full flex items-center gap-2 backdrop-blur-sm">
                 <Camera className="h-3 w-3" />
-                Enquadre o código e capture
+                Aponte para o código de barras
               </div>
             </div>
 
