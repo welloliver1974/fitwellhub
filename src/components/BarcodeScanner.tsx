@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 import { Button } from "@/components/ui/button";
-import { Loader2, X } from "lucide-react";
+import { Camera, Loader2, X } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -12,14 +12,14 @@ type Props = {
 
 export function BarcodeScanner({ open, onClose, onDetected }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const controlsRef = useRef<{ stop: () => void } | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [scanning, setScanning] = useState(false);
+  const [capturing, setCapturing] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setError(null);
-    setScanning(false);
 
     const hints = new Map();
     hints.set(DecodeHintType.POSSIBLE_FORMATS, [
@@ -32,32 +32,22 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
       BarcodeFormat.QR_CODE,
     ]);
 
-    const reader = new BrowserMultiFormatReader(hints);
+    readerRef.current = new BrowserMultiFormatReader(hints);
 
     (async () => {
       try {
-        if (!videoRef.current) return;
-
-        const controls = await reader.decodeFromConstraints(
-          {
-            video: {
-              facingMode: "environment",
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-            },
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "environment",
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
           },
-          videoRef.current,
-          (result) => {
-            if (result) {
-              setScanning(true);
-              setTimeout(() => {
-                controls.stop();
-                onDetected(result.getText());
-              }, 150);
-            }
-          },
-        );
-        controlsRef.current = controls;
+        });
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
       } catch (e) {
         setError(
           e instanceof Error
@@ -72,15 +62,29 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
     })();
 
     return () => {
-      controlsRef.current?.stop();
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
     };
-  }, [open, onDetected]);
+  }, [open]);
+
+  const handleCapture = useCallback(async () => {
+    if (!videoRef.current || !readerRef.current || capturing) return;
+    setCapturing(true);
+    try {
+      const result = await readerRef.current.decodeOnceFromVideoElement(videoRef.current);
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      onDetected(result.getText());
+    } catch {
+      setError("Não foi possível ler o código. Aproxime a câmera e tente novamente.");
+      setCapturing(false);
+    }
+  }, [capturing, onDetected]);
 
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
-      {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 text-white">
         <div className="flex items-center gap-2">
           <p className="font-display font-semibold">Escanear código de barras</p>
@@ -95,7 +99,6 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
         </Button>
       </div>
 
-      {/* Camera area */}
       <div className="flex-1 relative flex items-center justify-center">
         {error ? (
           <div className="px-6 text-center space-y-3">
@@ -106,7 +109,6 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
           </div>
         ) : (
           <>
-            {/* Full video feed */}
             <video
               ref={videoRef}
               className="absolute inset-0 w-full h-full object-cover"
@@ -114,43 +116,39 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
               muted
             />
 
-            {/* Dark overlay with cutout via box-shadow */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div
-                className={`w-72 h-44 rounded-2xl transition-all duration-150 ${
-                  scanning
-                    ? "border-4 border-primary shadow-[0_0_0_9999px_rgba(0,0,0,0.6),0_0_20px_4px_hsl(var(--primary))]"
-                    : "border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.6)]"
-                }`}
-              >
-                {/* Corner accents */}
+              <div className="w-72 h-44 rounded-2xl border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.6)]">
                 <span className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-primary rounded-tl-2xl" />
                 <span className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-primary rounded-tr-2xl" />
                 <span className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-primary rounded-bl-2xl" />
                 <span className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-primary rounded-br-2xl" />
 
-                {/* Animated scan line */}
-                {!scanning && (
+                {!capturing && (
                   <span className="absolute left-2 right-2 h-0.5 bg-primary/80 rounded-full animate-[scanline_2s_ease-in-out_infinite]" />
                 )}
               </div>
             </div>
 
-            {/* Status pill */}
-            <div className="absolute bottom-10 left-0 right-0 flex justify-center">
+            <div className="absolute bottom-24 left-0 right-0 flex justify-center">
               <div className="bg-black/70 text-white text-xs px-4 py-2 rounded-full flex items-center gap-2 backdrop-blur-sm">
-                {scanning ? (
-                  <>
-                    <span className="h-2 w-2 rounded-full bg-primary animate-ping" />
-                    Código detectado!
-                  </>
-                ) : (
-                  <>
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Aponte a câmera para o código de barras
-                  </>
-                )}
+                <Camera className="h-3 w-3" />
+                Enquadre o código e capture
               </div>
+            </div>
+
+            <div className="absolute bottom-10 left-0 right-0 flex justify-center">
+              <Button
+                size="lg"
+                disabled={capturing}
+                onClick={handleCapture}
+                className="h-14 w-14 rounded-full bg-white hover:bg-white/90"
+              >
+                {capturing ? (
+                  <Loader2 className="h-6 w-6 text-black animate-spin" />
+                ) : (
+                  <Camera className="h-6 w-6 text-black" />
+                )}
+              </Button>
             </div>
           </>
         )}
