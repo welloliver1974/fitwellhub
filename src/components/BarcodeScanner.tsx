@@ -12,8 +12,6 @@ type Props = {
 
 export function BarcodeScanner({ open, onClose, onDetected }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
-  const controlsRef = useRef<{ stop: () => void } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
 
@@ -22,7 +20,6 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
     setError(null);
     setScanning(false);
 
-    // Configure hints for best barcode reading performance
     const hints = new Map();
     hints.set(DecodeHintType.POSSIBLE_FORMATS, [
       BarcodeFormat.EAN_13,
@@ -33,40 +30,37 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
       BarcodeFormat.UPC_E,
       BarcodeFormat.QR_CODE,
     ]);
-    hints.set(DecodeHintType.TRY_HARDER, true);
 
     const reader = new BrowserMultiFormatReader(hints);
-    readerRef.current = reader;
 
     (async () => {
       try {
         if (!videoRef.current) return;
 
-        // Request high-resolution rear camera
         const constraints: MediaStreamConstraints = {
           video: {
             facingMode: { ideal: "environment" },
-            width: { ideal: 1920, min: 640 },
-            height: { ideal: 1080, min: 480 },
-            focusMode: "continuous" as ConstrainDOMString,
-            advanced: [{ focusMode: "continuous" }] as MediaTrackConstraintSet[],
+            width: { ideal: 1280, min: 480 },
+            height: { ideal: 720, min: 360 },
           },
         };
 
-        const controls = await reader.decodeFromConstraints(
-          constraints,
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+
+        await reader.decodeFromVideoElement(
           videoRef.current,
-          (result) => {
+          (result, err) => {
             if (result) {
               setScanning(true);
               setTimeout(() => {
-                controls.stop();
+                stream.getTracks().forEach((t) => t.stop());
                 onDetected(result.getText());
               }, 150);
             }
           },
         );
-        controlsRef.current = controls;
       } catch (e) {
         setError(
           e instanceof Error
@@ -81,7 +75,9 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
     })();
 
     return () => {
-      controlsRef.current?.stop();
+      if (videoRef.current?.srcObject instanceof MediaStream) {
+        videoRef.current.srcObject.getTracks().forEach((t) => t.stop());
+      }
     };
   }, [open, onDetected]);
 
