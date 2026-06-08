@@ -12,6 +12,7 @@ type Props = {
 
 export function BarcodeScanner({ open, onClose, onDetected }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const controlsRef = useRef<{ stop: () => void } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
 
@@ -37,31 +38,26 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
       try {
         if (!videoRef.current) return;
 
-        const constraints: MediaStreamConstraints = {
-          video: {
-            facingMode: { exact: "environment" },
-            width: { min: 640, ideal: 1280 },
-            height: { min: 480, ideal: 720 },
-            focusMode: "continuous",
+        const controls = await reader.decodeFromConstraints(
+          {
+            video: {
+              facingMode: "environment",
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
           },
-        };
-
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-
-        await reader.decodeFromVideoElement(
           videoRef.current,
-          (result, err) => {
+          (result) => {
             if (result) {
               setScanning(true);
               setTimeout(() => {
-                stream.getTracks().forEach((t) => t.stop());
+                controls.stop();
                 onDetected(result.getText());
               }, 150);
             }
           },
         );
+        controlsRef.current = controls;
       } catch (e) {
         setError(
           e instanceof Error
@@ -76,9 +72,7 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
     })();
 
     return () => {
-      if (videoRef.current?.srcObject instanceof MediaStream) {
-        videoRef.current.srcObject.getTracks().forEach((t) => t.stop());
-      }
+      controlsRef.current?.stop();
     };
   }, [open, onDetected]);
 
