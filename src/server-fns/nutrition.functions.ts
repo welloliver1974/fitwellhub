@@ -22,6 +22,30 @@ const macroSchema = {
 export const lookupNutrition = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => inputSchema.parse(d))
   .handler(async ({ data }) => {
+    const grams = data.grams;
+
+    // try Open Food Facts first
+    try {
+      const offUrl = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(data.query)}&search_simple=1&action=process&json=1&page_size=1`;
+      const offRes = await fetch(offUrl, { signal: AbortSignal.timeout(5000) });
+      if (offRes.ok) {
+        const body = await offRes.json();
+        const p = body.products?.[0]?.nutriments;
+        if (p?.["energy-kcal_100g"]) {
+          const ratio = grams / 100;
+          return {
+            name: body.products[0].product_name || data.query,
+            calories: Math.round(p["energy-kcal_100g"] * ratio),
+            protein_g: Math.round((p["proteins_100g"] ?? 0) * ratio * 10) / 10,
+            carbs_g: Math.round((p["carbohydrates_100g"] ?? 0) * ratio * 10) / 10,
+            fat_g: Math.round((p["fat_100g"] ?? 0) * ratio * 10) / 10,
+          };
+        }
+      }
+    } catch {
+      // fallback to IA
+    }
+
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) throw new Error("GROQ_API_KEY não configurada no arquivo .env");
 
@@ -41,7 +65,7 @@ export const lookupNutrition = createServerFn({ method: "POST" })
           },
           {
             role: "user",
-            content: `Alimento: "${data.query}". Porção: ${data.grams}g. Estime os macros para essa porção exata.`,
+            content: `Alimento: "${data.query}". Porção: ${grams}g. Estime os macros para essa porção exata.`,
           },
         ],
         tools: [
