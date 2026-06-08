@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MultiFormatReader, RGBLuminanceSource, BinaryBitmap, HybridBinarizer, BarcodeFormat, DecodeHintType, NotFoundException } from "@zxing/library";
 import { Button } from "@/components/ui/button";
 import { Camera, Loader2, X } from "lucide-react";
 
@@ -48,7 +47,7 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
     };
   }, [open]);
 
-  const handleCapture = useCallback(() => {
+  const handleCapture = useCallback(async () => {
     if (capturing) return;
     const video = videoRef.current;
     if (!video || !video.videoWidth || !video.videoHeight) {
@@ -66,35 +65,25 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
       if (!ctx) { setCapturing(false); return; }
       ctx.drawImage(video, 0, 0);
 
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const rgba = imageData.data;
-      const pixels = new Int32Array(canvas.width * canvas.height);
-      for (let i = 0, j = 0; i < rgba.length; i += 4, j++) {
-        pixels[j] = (rgba[i + 3] << 24) | (rgba[i] << 16) | (rgba[i + 1] << 8) | rgba[i + 2];
-      }
+      if ("BarcodeDetector" in window) {
+        const formats = ["ean_13", "ean_8", "code_128", "code_39", "upc_a", "upc_e", "qr_code"] as BarcodeFormat[];
+        const detector = new BarcodeDetector({ formats });
+        const barcodes = await detector.detect(canvas);
 
-      const hints = new Map();
-      hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-        BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.CODE_128,
-        BarcodeFormat.CODE_39, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
-        BarcodeFormat.QR_CODE,
-      ]);
-
-      const luminance = new RGBLuminanceSource(pixels, canvas.width, canvas.height);
-      const bitmap = new BinaryBitmap(new HybridBinarizer(luminance));
-      const reader = new MultiFormatReader();
-      reader.setHints(hints);
-
-      const result = reader.decode(bitmap);
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-      onDetected(result.getText());
-    } catch (e) {
-      if (e instanceof NotFoundException) {
+        if (barcodes.length > 0) {
+          streamRef.current?.getTracks().forEach((t) => t.stop());
+          streamRef.current = null;
+          onDetected(barcodes[0].rawValue);
+          return;
+        }
         setError("Nenhum código encontrado. Aproxime a câmera e tente novamente.");
+        setCapturing(false);
       } else {
-        setError("Erro ao processar a imagem. Tente novamente.");
+        setError("Seu navegador não suporta leitura de código de barras. Digite o código manualmente.");
+        setCapturing(false);
       }
+    } catch {
+      setError("Erro ao processar a imagem. Tente novamente.");
       setCapturing(false);
     }
   }, [capturing, onDetected]);
