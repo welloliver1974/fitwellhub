@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import { BrowserMultiFormatReader } from "@zxing/browser";
-import { BarcodeFormat, DecodeHintType } from "@zxing/library";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { MultiFormatReader, RGBLuminanceSource, BinaryBitmap, HybridBinarizer, BarcodeFormat, NotFoundException } from "@zxing/library";
 import { Button } from "@/components/ui/button";
-import { Loader2, X } from "lucide-react";
+import { Camera, Loader2, X } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -12,52 +11,24 @@ type Props = {
 
 export function BarcodeScanner({ open, onClose, onDetected }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const controlsRef = useRef<{ stop: () => void } | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [scanning, setScanning] = useState(false);
+  const [capturing, setCapturing] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setError(null);
-    setScanning(false);
-
-    const hints = new Map();
-    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-      BarcodeFormat.EAN_13,
-      BarcodeFormat.EAN_8,
-      BarcodeFormat.CODE_128,
-      BarcodeFormat.CODE_39,
-      BarcodeFormat.UPC_A,
-      BarcodeFormat.UPC_E,
-      BarcodeFormat.QR_CODE,
-    ]);
-
-    const reader = new BrowserMultiFormatReader(hints);
 
     (async () => {
       try {
-        if (!videoRef.current) return;
-
-        const controls = await reader.decodeFromConstraints(
-          {
-            video: {
-              facingMode: { ideal: "environment" },
-              width: { ideal: 1920, min: 640 },
-              height: { ideal: 1080, min: 480 },
-            },
-          },
-          videoRef.current,
-          (result) => {
-            if (result) {
-              setScanning(true);
-              setTimeout(() => {
-                controls.stop();
-                onDetected(result.getText());
-              }, 150);
-            }
-          },
-        );
-        controlsRef.current = controls;
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+        });
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
       } catch (e) {
         setError(
           e instanceof Error
@@ -72,9 +43,47 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
     })();
 
     return () => {
-      controlsRef.current?.stop();
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
     };
-  }, [open, onDetected]);
+  }, [open]);
+
+  const handleCapture = useCallback(() => {
+    if (capturing) return;
+    const video = videoRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) {
+      setError("Câmera ainda não está pronta. Tente novamente.");
+      return;
+    }
+
+    setCapturing(true);
+
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { setCapturing(false); return; }
+      ctx.drawImage(video, 0, 0);
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const luminance = new RGBLuminanceSource(imageData.data, imageData.width, imageData.height);
+      const bitmap = new BinaryBitmap(new HybridBinarizer(luminance));
+      const reader = new MultiFormatReader();
+
+      const result = reader.decode(bitmap);
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      onDetected(result.getText());
+    } catch (e) {
+      if (e instanceof NotFoundException) {
+        setError("Nenhum código encontrado. Aproxime a câmera e tente novamente.");
+      } else {
+        setError("Erro ao processar a imagem. Tente novamente.");
+      }
+      setCapturing(false);
+    }
+  }, [capturing, onDetected]);
 
   if (!open) return null;
 
@@ -112,38 +121,34 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
             />
 
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div
-                className={`w-72 h-44 rounded-2xl transition-all duration-150 ${
-                  scanning
-                    ? "border-4 border-primary shadow-[0_0_0_9999px_rgba(0,0,0,0.6),0_0_20px_4px_hsl(var(--primary))]"
-                    : "border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.6)]"
-                }`}
-              >
+              <div className="w-72 h-44 rounded-2xl border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.6)]">
                 <span className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-primary rounded-tl-2xl" />
                 <span className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-primary rounded-tr-2xl" />
                 <span className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-primary rounded-bl-2xl" />
                 <span className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-primary rounded-br-2xl" />
+              </div>
+            </div>
 
-                {!scanning && (
-                  <span className="absolute left-2 right-2 h-0.5 bg-primary/80 rounded-full animate-[scanline_2s_ease-in-out_infinite]" />
-                )}
+            <div className="absolute bottom-24 left-0 right-0 flex justify-center">
+              <div className="bg-black/70 text-white text-xs px-4 py-2 rounded-full flex items-center gap-2 backdrop-blur-sm">
+                <Camera className="h-3 w-3" />
+                Enquadre o código e capture
               </div>
             </div>
 
             <div className="absolute bottom-10 left-0 right-0 flex justify-center">
-              <div className="bg-black/70 text-white text-xs px-4 py-2 rounded-full flex items-center gap-2 backdrop-blur-sm">
-                {scanning ? (
-                  <>
-                    <span className="h-2 w-2 rounded-full bg-primary animate-ping" />
-                    Código detectado!
-                  </>
+              <Button
+                size="lg"
+                disabled={capturing}
+                onClick={handleCapture}
+                className="h-14 w-14 rounded-full bg-white hover:bg-white/90"
+              >
+                {capturing ? (
+                  <Loader2 className="h-6 w-6 text-black animate-spin" />
                 ) : (
-                  <>
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Aponte a câmera para o código de barras
-                  </>
+                  <Camera className="h-6 w-6 text-black" />
                 )}
-              </div>
+              </Button>
             </div>
           </>
         )}
