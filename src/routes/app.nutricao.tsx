@@ -113,7 +113,15 @@ function NutricaoPage() {
 
   const onBarcode = async (code: string) => {
     setScanOpen(false);
+    setOpen(false);
     setScanLoading(true);
+    setQuery("");
+    setGrams(100);
+    setManual(false);
+    setMCal("");
+    setMProt("");
+    setMCarb("");
+    setMFat("");
     try {
       const r = await fetch(
         `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`,
@@ -124,7 +132,6 @@ function NutricaoPage() {
         const n = p.nutriments ?? {};
         const name = p.product_name_pt || p.product_name || `EAN ${code}`;
         setQuery(name);
-        setGrams(100);
         setManual(true);
         setMCal(Math.round(Number(n["energy-kcal_100g"] ?? n["energy-kcal"] ?? 0)));
         setMProt(Math.round(Number(n["proteins_100g"] ?? 0) * 10) / 10);
@@ -137,7 +144,6 @@ function NutricaoPage() {
 
       const macros = await lookupNutrition({ data: { query: code, grams: 100 } });
       setQuery(macros.name);
-      setGrams(100);
       setManual(true);
       setMCal(macros.calories);
       setMProt(macros.protein_g);
@@ -145,14 +151,9 @@ function NutricaoPage() {
       setMFat(macros.fat_g);
       setOpen(true);
       toast.success(`${macros.name} (estimado por IA)`);
-    } catch (e) {
+    } catch {
       setQuery(`Código ${code}`);
-      setGrams(100);
       setManual(true);
-      setMCal("");
-      setMProt("");
-      setMCarb("");
-      setMFat("");
       setOpen(true);
       toast("Preencha o nome e os macros manualmente");
     } finally {
