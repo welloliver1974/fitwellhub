@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Camera, Loader2, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { X, ScanLine } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -11,8 +12,12 @@ type Props = {
 export function BarcodeScanner({ open, onClose, onDetected }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const rafRef = useRef<number>(0);
+  const lastDetectRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
-  const [capturing, setCapturing] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [manualCode, setManualCode] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -31,6 +36,7 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           await videoRef.current.play();
+          setScanning(true);
         }
       } catch (e) {
         setError(
@@ -46,60 +52,80 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
     })();
 
     return () => {
+      cancelAnimationFrame(rafRef.current);
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     };
   }, [open]);
 
-  const handleCapture = useCallback(async () => {
-    if (capturing) return;
-    const video = videoRef.current;
-    if (!video || !video.videoWidth || !video.videoHeight) {
-      setError("Câmera ainda não está pronta. Tente novamente.");
+  useEffect(() => {
+    if (!scanning || !open) return;
+    if (!("BarcodeDetector" in window)) {
+      setError("Seu navegador não suporta leitura de código de barras. Digite o código manualmente.");
+      setScanning(false);
       return;
     }
 
-    setCapturing(true);
+    const formats = ["ean_13", "ean_8", "code_128", "code_39", "upc_a", "upc_e", "qr_code"] as BarcodeFormat[];
+    const detector = new BarcodeDetector({ formats });
+    const video = videoRef.current;
 
-    try {
-      const canvas = document.createElement("canvas");
+    const detect = async () => {
+      if (!video || !video.videoWidth || !video.videoHeight) {
+        rafRef.current = requestAnimationFrame(detect);
+        return;
+      }
+
+      const now = Date.now();
+      if (now - lastDetectRef.current < 500) {
+        rafRef.current = requestAnimationFrame(detect);
+        return;
+      }
+      lastDetectRef.current = now;
+
+      const canvas = canvasRef.current;
+      if (!canvas) return;
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext("2d");
-      if (!ctx) { setCapturing(false); return; }
+      if (!ctx) return;
       ctx.drawImage(video, 0, 0);
 
-      if ("BarcodeDetector" in window) {
-        const formats = ["ean_13", "ean_8", "code_128", "code_39", "upc_a", "upc_e", "qr_code"] as BarcodeFormat[];
-        const detector = new BarcodeDetector({ formats });
+      try {
         const barcodes = await detector.detect(canvas);
-
         if (barcodes.length > 0) {
+          setScanning(false);
           streamRef.current?.getTracks().forEach((t) => t.stop());
           streamRef.current = null;
           onDetected(barcodes[0].rawValue);
           return;
         }
-        setError("Nenhum código encontrado. Aproxime a câmera e tente novamente.");
-        setCapturing(false);
-      } else {
-        setError("Seu navegador não suporta leitura de código de barras. Digite o código manualmente.");
-        setCapturing(false);
+      } catch {
+        // ignore detection errors, keep scanning
       }
-    } catch {
-      setError("Erro ao processar a imagem. Tente novamente.");
-      setCapturing(false);
-    }
-  }, [capturing, onDetected]);
+
+      rafRef.current = requestAnimationFrame(detect);
+    };
+
+    rafRef.current = requestAnimationFrame(detect);
+
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [scanning, open, onDetected]);
+
+  const handleManualSubmit = () => {
+    const code = manualCode.trim();
+    if (code.length < 3) return;
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    onDetected(code);
+  };
 
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
       <div className="flex items-center justify-between px-5 py-4 text-white">
-        <div className="flex items-center gap-2">
-          <p className="font-display font-semibold">Escanear código de barras</p>
-        </div>
+        <p className="font-display font-semibold">Escanear código de barras</p>
         <Button
           variant="ghost"
           size="icon"
@@ -127,6 +153,8 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
               muted
             />
 
+            <canvas ref={canvasRef} className="hidden" />
+
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="w-72 h-44 rounded-2xl border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.6)]">
                 <span className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-primary rounded-tl-2xl" />
@@ -136,25 +164,27 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
               </div>
             </div>
 
-            <div className="absolute bottom-24 left-0 right-0 flex justify-center">
+            <div className="absolute bottom-32 left-0 right-0 flex justify-center">
               <div className="bg-black/70 text-white text-xs px-4 py-2 rounded-full flex items-center gap-2 backdrop-blur-sm">
-                <Camera className="h-3 w-3" />
-                Enquadre o código e capture
+                <ScanLine className="h-3 w-3 animate-pulse" />
+                Escaneando... Aproxime o código
               </div>
             </div>
 
-            <div className="absolute bottom-10 left-0 right-0 flex justify-center">
+            <div className="absolute bottom-4 left-4 right-4 flex gap-2">
+              <Input
+                value={manualCode}
+                onChange={(e) => setManualCode(e.target.value)}
+                placeholder="Ou digite o código manualmente"
+                className="flex-1 bg-white/10 border-white/20 text-white placeholder:text-white/40"
+                onKeyDown={(e) => e.key === "Enter" && handleManualSubmit()}
+              />
               <Button
-                size="lg"
-                disabled={capturing}
-                onClick={handleCapture}
-                className="h-14 w-14 rounded-full bg-white hover:bg-white/90"
+                variant="secondary"
+                disabled={manualCode.trim().length < 3}
+                onClick={handleManualSubmit}
               >
-                {capturing ? (
-                  <Loader2 className="h-6 w-6 text-black animate-spin" />
-                ) : (
-                  <Camera className="h-6 w-6 text-black" />
-                )}
+                OK
               </Button>
             </div>
           </>
