@@ -119,25 +119,42 @@ function NutricaoPage() {
         `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`,
       );
       const j = await r.json();
-      if (j.status !== 1 || !j.product) {
-        toast.error("Produto não encontrado. Adicione manualmente.");
+      if (j.status === 1 && j.product) {
+        const p = j.product;
+        const n = p.nutriments ?? {};
+        const name = p.product_name_pt || p.product_name || `EAN ${code}`;
+        setQuery(name);
+        setGrams(100);
+        setManual(true);
+        setMCal(Math.round(Number(n["energy-kcal_100g"] ?? n["energy-kcal"] ?? 0)));
+        setMProt(Math.round(Number(n["proteins_100g"] ?? 0) * 10) / 10);
+        setMCarb(Math.round(Number(n["carbohydrates_100g"] ?? 0) * 10) / 10);
+        setMFat(Math.round(Number(n["fat_100g"] ?? 0) * 10) / 10);
+        setOpen(true);
+        toast.success(`${name} encontrado`);
         return;
       }
-      const p = j.product;
-      const n = p.nutriments ?? {};
-      const name = p.product_name_pt || p.product_name || `EAN ${code}`;
-      const g = 100;
-      setQuery(name);
-      setGrams(g);
+
+      const macros = await lookupNutrition({ data: { query: code, grams: 100 } });
+      setQuery(macros.name);
+      setGrams(100);
       setManual(true);
-      setMCal(Math.round(Number(n["energy-kcal_100g"] ?? n["energy-kcal"] ?? 0)));
-      setMProt(Math.round(Number(n["proteins_100g"] ?? 0) * 10) / 10);
-      setMCarb(Math.round(Number(n["carbohydrates_100g"] ?? 0) * 10) / 10);
-      setMFat(Math.round(Number(n["fat_100g"] ?? 0) * 10) / 10);
+      setMCal(macros.calories);
+      setMProt(macros.protein_g);
+      setMCarb(macros.carbs_g);
+      setMFat(macros.fat_g);
       setOpen(true);
-      toast.success(`${name} encontrado`);
+      toast.success(`${macros.name} (estimado por IA)`);
     } catch (e) {
-      toast.error("Erro ao buscar produto");
+      setQuery(`Código ${code}`);
+      setGrams(100);
+      setManual(true);
+      setMCal("");
+      setMProt("");
+      setMCarb("");
+      setMFat("");
+      setOpen(true);
+      toast("Preencha o nome e os macros manualmente");
     } finally {
       setScanLoading(false);
     }
