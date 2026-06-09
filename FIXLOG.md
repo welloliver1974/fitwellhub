@@ -430,4 +430,42 @@ O usuário notou que em alguns treinos a IA sugeria aumento de carga e em outros
 - ✅ Configurável via variável de ambiente (reversível sem alterar código)
 - ✅ Build validado com sucesso
 
+---
+
+## Sessão: 09/06/2026 — Melhorias no Barcode Scanner (Câmera, Detecção e Fallback)
+
+### 🎯 Funcionalidades trabalhadas
+- `src/components/BarcodeScanner.tsx` → Refatoração completa do leitor de código de barras
+- `src/routes/app.nutricao.tsx` → Fluxo de fallback na busca por código de barras
+
+### 🔍 Problemas e Soluções
+
+**1. Câmera com baixa resolução:**
+- **Problema:** A câmera traseira estava com resolução muito baixa, dificultando a leitura de códigos de barras — o foco não estabilizava e a imagem era granulada.
+- **Solução:** As constraints de `getUserMedia` foram alteradas:
+  - `facingMode` mudou de `{ ideal: "environment" }` (sugestão) para `"environment"` (exato) — força a câmera traseira de fato.
+  - Adicionadas constraints de resolução: `width: { ideal: 1920 }, height: { ideal: 1080 }` — a câmera agora tenta capturar em HD/Full HD, melhorando drasticamente a nitidez.
+
+**2. Detecção manual com falha:**
+- **Problema:** O usuário precisava apertar um botão "Capturar" para tirar um snapshot e depois detectar. Isso exigia timing perfeito — o frame frequentemente saía borrado e o `BarcodeDetector` retornava "Nenhum código encontrado".
+- **Solução:** Substituída a captura manual por um loop de detecção contínua via `requestAnimationFrame` a cada ~500ms. Agora o usuário só precisa apontar a câmera para o código que ele é detectado automaticamente quando entra em foco. Removido o botão de captura e adicionado um campo de input manual como fallback na parte inferior.
+
+**3. Código lido mas produto não encontrado no Open Food Facts:**
+- **Problema:** Mesmo com o código de barras sendo lido corretamente (ex: `7896263501391` — água mineral brasileira), a API direta do OFF (`/api/v2/product/{code}.json`) retornava "status: 0" (produto não cadastrado), e o app mostrava apenas um toast de erro.
+- **Solução:** Novo fluxo em cascata no `onBarcode`:
+  1. Tenta API direta do OFF por código de barras
+  2. Se falhar, tenta `lookupNutrition` (busca textual OFF + quando falha, IA Groq estima macros)
+  3. Se tudo falhar, abre diálogo em modo manual para o usuário preencher nome e macros
+
+**4. Dados misturados entre leituras:**
+- **Problema:** Após escanear um produto, escanear outro podia mostrar dados mesclados ou errados. O estado React do modal não era limpo entre as operações.
+- **Solução:** Reset completo de todos os estados no início de `onBarcode`: `setQuery("")`, `setManual(false)`, `setMCal("")`, `setMProt("")`, `setMCarb("")`, `setMFat("")`, `setOpen(false)`. Cada leitura começa com estado zero e preenche apenas os dados certos.
+
+### ✅ Estado final
+- ✅ Câmera com resolução HD e estabilidade
+- ✅ Detecção contínua automática — só apontar e esperar
+- ✅ Fallback IA quando produto não está no Open Food Facts
+- ✅ Input manual para digitar código à mão
+- ✅ Estado limpo entre leituras — sem dados vazarem
+
 
