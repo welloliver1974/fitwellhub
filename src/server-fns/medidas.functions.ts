@@ -1,14 +1,29 @@
 import { createServerFn } from "@tanstack/react-start";
-import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import {
+  callAiChatCompletion,
+  fetchAiSettings,
+  getTextModel,
+  resolveAiApiKey,
+  resolveAiProvider,
+} from "@/server-fns/ai-settings.functions";
+
+type AnalysisConfidence = "baixa" | "media" | "alta";
+
+function getConfidence(measurementsCount: number, workoutsCount: number): AnalysisConfidence {
+  if (measurementsCount >= 6 && workoutsCount >= 4) return "alta";
+  if (measurementsCount >= 3 && workoutsCount >= 2) return "media";
+  return "baixa";
+}
 
 export const analyzeMeasurements = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey) throw new Error("GROQ_API_KEY não configurada");
-    
     const { supabase, userId } = context;
+    const settings = await fetchAiSettings(supabase, userId);
+    const provider = resolveAiProvider(settings);
+    const apiKey = resolveAiApiKey(settings, provider);
+    if (!apiKey) throw new Error("Configure uma chave de IA nas configuracoes.");
 
     // 1. Fetch body measurements
     const { data: measurements } = await supabase
@@ -89,24 +104,46 @@ Por favor, faça uma análise da minha evolução física.`;
       { role: "user", content: userPrompt }
     ];
 
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: { 
-        "Authorization": `Bearer ${apiKey}`, 
-        "Content-Type": "application/json" 
-      },
-      body: JSON.stringify({ 
-        model: "llama-3.3-70b-versatile", 
-        messages,
-        temperature: 0.7,
-        max_tokens: 1024
-      }),
+    const json = await callAiChatCompletion({
+      provider,
+      apiKey,
+      model: getTextModel(provider),
+      messages,
+      temperature: 0.7,
+      maxTokens: 1024,
+      baseUrl: settings.omniroute_base_url,
     });
+    const analysis = json.choices[0].message.content as string;
+    const confidence = getConfidence(measurements?.length ?? 0, workoutsData?.length ?? 0);
+    const latestMeasurement = measurements && measurements.length > 0 ? measurements[measurements.length - 1] : null;
+    const previousMeasurement = measurements && measurements.length > 1 ? measurements[measurements.length - 2] : null;
 
-    if (!response.ok) {
-      throw new Error("Erro ao chamar a API de IA: " + await response.text());
+    let nextAction = "Registre uma nova medida nos próximos 7 dias para acompanhar a tendência com mais segurança.";
+    if (latestMeasurement && previousMeasurement && latestMeasurement.label === previousMeasurement.label) {
+      const diff = Number(latestMeasurement.value_cm) - Number(previousMeasurement.value_cm);
+      if (diff > 0.5) {
+        nextAction = `Mantenha a progressão e observe se ${latestMeasurement.label.toLowerCase()} continua subindo nas próximas medições.`;
+      } else if (diff < -0.5) {
+        nextAction = `Boa queda em ${latestMeasurement.label.toLowerCase()}; repita a medição em 7 dias para confirmar a tendência.`;
+      } else {
+        nextAction = `A tendência de ${latestMeasurement.label.toLowerCase()} está estável; vale revisar treino, sono e alimentação.`;
+      }
     }
 
-    const json = await response.json();
-    return { analysis: json.choices[0].message.content };
+    const sources = [
+      `${measurements?.length ?? 0} medições registradas`,
+      `${workoutsData?.length ?? 0} treinos nos últimos 30 dias`,
+    ];
+    if (latestMeasurement) {
+      sources.push(`Última medida: ${latestMeasurement.label} em ${latestMeasurement.log_date}`);
+    }
+
+    return {
+      analysis,
+      snapshot: {
+        confidence,
+        nextAction,
+        sources,
+      },
+    };
   });

@@ -5,7 +5,6 @@ import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FileDown, Loader2, History } from "lucide-react";
-import jsPDF from "jspdf";
 import { toast } from "sonner";
 
 type CompletedLog = {
@@ -58,6 +57,7 @@ function RelatorioPage() {
     if (!user) return;
     setLoading(true);
     try {
+      const { default: jsPDF } = await import("jspdf");
       const start = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
       const today = new Date().toISOString().slice(0, 10);
 

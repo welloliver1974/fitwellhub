@@ -32,6 +32,47 @@ export type Database = {
         };
         Relationships: [];
       };
+      ai_settings: {
+        Row: {
+          created_at: string;
+          groq_api_key: string | null;
+          omniroute_api_key: string | null;
+          omniroute_base_url: string | null;
+          openrouter_api_key: string | null;
+          provider: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          groq_api_key?: string | null;
+          omniroute_api_key?: string | null;
+          omniroute_base_url?: string | null;
+          openrouter_api_key?: string | null;
+          provider?: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          groq_api_key?: string | null;
+          omniroute_api_key?: string | null;
+          omniroute_base_url?: string | null;
+          openrouter_api_key?: string | null;
+          provider?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ai_settings_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: true;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       chat_messages: {
         Row: {
           content: string;

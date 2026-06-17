@@ -42,7 +42,7 @@ const MEAL_TYPES = ["Café da manhã", "Almoço", "Lanche", "Jantar", "Ceia"];
 
 function RecipeDetail() {
   const { id } = Route.useParams();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [open, setOpen] = useState(false);
@@ -99,7 +99,12 @@ function RecipeDetail() {
     if (!user || !query.trim()) return;
     setBusy(true);
     try {
-      const m = await lookupNutrition({ data: { query: query.trim(), grams: Number(grams) || 100 } });
+      const m = await lookupNutrition({
+        headers: session?.access_token
+          ? { Authorization: `Bearer ${session.access_token}` }
+          : undefined,
+        data: { query: query.trim(), grams: Number(grams) || 100 },
+      });
       await supabase.from("recipe_items").insert({
         user_id: user.id,
         recipe_id: id,

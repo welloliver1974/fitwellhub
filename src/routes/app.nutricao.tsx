@@ -70,7 +70,7 @@ type FavoriteFood = {
 const MEAL_TYPES = ["Café da manhã", "Almoço", "Lanche", "Jantar", "Ceia"];
 
 function NutricaoPage() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [meals, setMeals] = useState<Meal[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [recent, setRecent] = useState<Item[]>([]);
@@ -142,7 +142,12 @@ function NutricaoPage() {
         return;
       }
 
-      const macros = await lookupNutrition({ data: { query: code, grams: 100 } });
+      const macros = await lookupNutrition({
+        headers: session?.access_token
+          ? { Authorization: `Bearer ${session.access_token}` }
+          : undefined,
+        data: { query: code, grams: 100 },
+      });
       setQuery(macros.name);
       setManual(true);
       setMCal(macros.calories);
@@ -246,7 +251,12 @@ function NutricaoPage() {
             carbs_g: Number(mCarb) || 0,
             fat_g: Number(mFat) || 0,
           }
-        : await lookupNutrition({ data: { query: query.trim(), grams: Number(grams) || 100 } });
+        : await lookupNutrition({
+            headers: session?.access_token
+              ? { Authorization: `Bearer ${session.access_token}` }
+              : undefined,
+            data: { query: query.trim(), grams: Number(grams) || 100 },
+          });
 
       const meal = await ensureMeal(mealType);
       const { error: e2 } = await supabase.from("meal_items").insert({
@@ -389,7 +399,12 @@ function NutricaoPage() {
         r.onerror = reject;
         r.readAsDataURL(file);
       });
-      const res = await analyzePhoto({ data: { imageBase64: dataUrl } });
+      const res = await analyzePhoto({
+        headers: session?.access_token
+          ? { Authorization: `Bearer ${session.access_token}` }
+          : undefined,
+        data: { imageBase64: dataUrl },
+      });
       setPhotoItems(res.items.map((i) => ({ ...i, selected: true })));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao analisar foto");

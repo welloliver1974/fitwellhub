@@ -87,20 +87,32 @@ function MedidasPage() {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [activeGroup, setActiveGroup] = useState<string | null>(null);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [aiSnapshot, setAiSnapshot] = useState<{
+    confidence: "baixa" | "media" | "alta";
+    nextAction: string;
+    sources: string[];
+  } | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showAiInfo, setShowAiInfo] = useState(false);
   const [activeTab, setActiveTab] = useState("individual");
+  const confidenceLabel: Record<"baixa" | "media" | "alta", string> = {
+    baixa: "Baixa",
+    media: "Média",
+    alta: "Alta",
+  };
 
   const runAiAnalysis = async () => {
     try {
       setIsAnalyzing(true);
       setAiAnalysis(null);
+      setAiSnapshot(null);
       const res = await analyzeMeasurements({
         headers: {
           Authorization: `Bearer ${session?.access_token}`,
         },
       });
       setAiAnalysis(res.analysis);
+      setAiSnapshot(res.snapshot ?? null);
     } catch (e) {
       console.error(e);
       toast.error(e instanceof Error ? e.message : "Erro ao analisar");
@@ -336,7 +348,7 @@ function MedidasPage() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Cruze dados de medidas físicas com seu histórico de treinos dos últimos 30 dias para obter feedbacks biomecânicos e nutricionais avançados.
+              Cruze dados de medidas físicas com seu histórico de treinos dos últimos 30 dias para receber uma leitura mais clara da sua evolução.
             </p>
 
             {showAiInfo && (
@@ -362,7 +374,7 @@ function MedidasPage() {
                 {isAnalyzing ? (
                   <>
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Analisando dados...
+                    Analisando medidas e treinos...
                   </>
                 ) : (
                   <>
@@ -414,9 +426,31 @@ function MedidasPage() {
               </div>
               <div className="mt-4 border-t border-muted/50 pt-3 text-[10px] text-muted-foreground flex items-center justify-between font-mono">
                 <span>FitWell Hub AI Engine</span>
-                <span>Baseado em treinos e medidas</span>
+                <span>Baseado em medidas registradas e treinos recentes</span>
               </div>
             </Card>
+          )}
+
+          {aiSnapshot && (
+            <div className="grid gap-2.5 sm:grid-cols-3">
+              <Card className="rounded-3xl border-border/70 p-4 shadow-sm">
+                <p className="text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground">Confiança</p>
+                <p className="mt-2 text-base font-black font-display text-foreground">{confidenceLabel[aiSnapshot.confidence]}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Baseada na quantidade de medições e treinos recentes.</p>
+              </Card>
+              <Card className="rounded-3xl border-border/70 p-4 shadow-sm">
+                <p className="text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground">Próxima ação</p>
+                <p className="mt-2 text-sm font-semibold leading-relaxed text-foreground">{aiSnapshot.nextAction}</p>
+              </Card>
+              <Card className="rounded-3xl border-border/70 p-4 shadow-sm">
+                <p className="text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground">Base usada</p>
+                <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                  {aiSnapshot.sources.map((source) => (
+                    <li key={source}>• {source}</li>
+                  ))}
+                </ul>
+              </Card>
+            </div>
           )}
 
           {/* Bento Grid Summary cards with timestamps and evolution tags */}

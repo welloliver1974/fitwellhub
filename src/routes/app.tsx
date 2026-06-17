@@ -1,7 +1,18 @@
 import { createFileRoute, Outlet, Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { Home, Dumbbell, Apple, LogOut, Sun, Moon, MessageCircle, Bell, Ruler } from "lucide-react";
+import {
+  Home,
+  Dumbbell,
+  Apple,
+  LogOut,
+  Sun,
+  Moon,
+  MessageCircle,
+  Bell,
+  Ruler,
+  SlidersHorizontal,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
@@ -41,6 +52,7 @@ function AppLayout() {
     { to: "/app/nutricao", icon: Apple, label: "Nutrição" },
     { to: "/app/medidas", icon: Ruler, label: "Medidas" },
     { to: "/app/chat", icon: MessageCircle, label: "Coach" },
+    { to: "/app/ia", icon: SlidersHorizontal, label: "IA" },
   ] as const;
 
   return (

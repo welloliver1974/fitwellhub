@@ -23,6 +23,7 @@ import { Route as AppNutricaoRouteImport } from './routes/app.nutricao'
 import { Route as AppMetasRouteImport } from './routes/app.metas'
 import { Route as AppMedidasRouteImport } from './routes/app.medidas'
 import { Route as AppLembretesRouteImport } from './routes/app.lembretes'
+import { Route as AppIaRouteImport } from './routes/app.ia'
 import { Route as AppExerciciosRouteImport } from './routes/app.exercicios'
 import { Route as AppCoachRouteImport } from './routes/app.coach'
 import { Route as AppChatRouteImport } from './routes/app.chat'
@@ -105,6 +106,11 @@ const AppLembretesRoute = AppLembretesRouteImport.update({
   path: '/lembretes',
   getParentRoute: () => AppRoute,
 } as any)
+const AppIaRoute = AppIaRouteImport.update({
+  id: '/ia',
+  path: '/ia',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppExerciciosRoute = AppExerciciosRouteImport.update({
   id: '/exercicios',
   path: '/exercicios',
@@ -168,6 +174,7 @@ export interface FileRoutesByFullPath {
   '/app/chat': typeof AppChatRoute
   '/app/coach': typeof AppCoachRoute
   '/app/exercicios': typeof AppExerciciosRouteWithChildren
+  '/app/ia': typeof AppIaRoute
   '/app/lembretes': typeof AppLembretesRoute
   '/app/medidas': typeof AppMedidasRoute
   '/app/metas': typeof AppMetasRoute
@@ -194,6 +201,7 @@ export interface FileRoutesByTo {
   '/app/chat': typeof AppChatRoute
   '/app/coach': typeof AppCoachRoute
   '/app/exercicios': typeof AppExerciciosRouteWithChildren
+  '/app/ia': typeof AppIaRoute
   '/app/lembretes': typeof AppLembretesRoute
   '/app/medidas': typeof AppMedidasRoute
   '/app/metas': typeof AppMetasRoute
@@ -219,6 +227,7 @@ export interface FileRoutesById {
   '/app/chat': typeof AppChatRoute
   '/app/coach': typeof AppCoachRoute
   '/app/exercicios': typeof AppExerciciosRouteWithChildren
+  '/app/ia': typeof AppIaRoute
   '/app/lembretes': typeof AppLembretesRoute
   '/app/medidas': typeof AppMedidasRoute
   '/app/metas': typeof AppMetasRoute
@@ -248,6 +257,7 @@ export interface FileRouteTypes {
     | '/app/chat'
     | '/app/coach'
     | '/app/exercicios'
+    | '/app/ia'
     | '/app/lembretes'
     | '/app/medidas'
     | '/app/metas'
@@ -274,6 +284,7 @@ export interface FileRouteTypes {
     | '/app/chat'
     | '/app/coach'
     | '/app/exercicios'
+    | '/app/ia'
     | '/app/lembretes'
     | '/app/medidas'
     | '/app/metas'
@@ -298,6 +309,7 @@ export interface FileRouteTypes {
     | '/app/chat'
     | '/app/coach'
     | '/app/exercicios'
+    | '/app/ia'
     | '/app/lembretes'
     | '/app/medidas'
     | '/app/metas'
@@ -423,6 +435,13 @@ declare module '@tanstack/react-router' {
       path: '/lembretes'
       fullPath: '/app/lembretes'
       preLoaderRoute: typeof AppLembretesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/ia': {
+      id: '/app/ia'
+      path: '/ia'
+      fullPath: '/app/ia'
+      preLoaderRoute: typeof AppIaRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/exercicios': {
@@ -575,6 +594,7 @@ interface AppRouteChildren {
   AppChatRoute: typeof AppChatRoute
   AppCoachRoute: typeof AppCoachRoute
   AppExerciciosRoute: typeof AppExerciciosRouteWithChildren
+  AppIaRoute: typeof AppIaRoute
   AppLembretesRoute: typeof AppLembretesRoute
   AppMedidasRoute: typeof AppMedidasRoute
   AppMetasRoute: typeof AppMetasRoute
@@ -592,6 +612,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppChatRoute: AppChatRoute,
   AppCoachRoute: AppCoachRoute,
   AppExerciciosRoute: AppExerciciosRouteWithChildren,
+  AppIaRoute: AppIaRoute,
   AppLembretesRoute: AppLembretesRoute,
   AppMedidasRoute: AppMedidasRoute,
   AppMetasRoute: AppMetasRoute,
