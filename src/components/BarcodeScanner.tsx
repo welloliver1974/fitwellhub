@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { X, ScanLine } from "lucide-react";
+import { X, ScanLine, Flashlight, FlashlightOff } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -13,11 +13,14 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const guideRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef<number>(0);
   const lastDetectRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [manualCode, setManualCode] = useState("");
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -25,14 +28,30 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
 
     (async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "environment",
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-          },
-        });
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: "environment",
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+          });
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "environment" },
+          });
+        }
         streamRef.current = stream;
+
+        const track = stream.getVideoTracks()[0];
+        if (track && typeof track.getCapabilities === "function") {
+          const caps = track.getCapabilities() as Record<string, unknown>;
+          if (caps && caps.torch) {
+            setTorchSupported(true);
+          }
+        }
+
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           await videoRef.current.play();
@@ -84,12 +103,32 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
       lastDetectRef.current = now;
 
       const canvas = canvasRef.current;
-      if (!canvas) return;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext("2d");
+      const guideEl = guideRef.current;
+      if (!canvas || !guideEl) return;
+
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      const vpW = window.innerWidth;
+      const vpH = window.innerHeight;
+
+      // object-fit:cover math: map the guide area to native video coordinates
+      const scale = Math.max(vpW / vw, vpH / vh);
+      const guideRect = guideEl.getBoundingClientRect();
+      const gcX = guideRect.left + guideRect.width / 2;
+      const gcY = guideRect.top + guideRect.height / 2;
+      const offsetX = (vpW - vw * scale) / 2;
+      const offsetY = (vpH - vh * scale) / 2;
+
+      const sx = Math.max(0, (gcX - offsetX) / scale - (guideRect.width / 2) / scale);
+      const sy = Math.max(0, (gcY - offsetY) / scale - (guideRect.height / 2) / scale);
+      const sw = Math.min(vw - sx, guideRect.width / scale);
+      const sh = Math.min(vh - sy, guideRect.height / scale);
+
+      canvas.width = Math.max(80, Math.round(sw));
+      canvas.height = Math.max(60, Math.round(sh));
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
       if (!ctx) return;
-      ctx.drawImage(video, 0, 0);
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
 
       try {
         const barcodes = await detector.detect(canvas);
@@ -111,6 +150,17 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
 
     return () => cancelAnimationFrame(rafRef.current);
   }, [scanning, open, onDetected]);
+
+  const toggleTorch = async () => {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track) return;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: !torchOn } as unknown as MediaTrackConstraintSet] });
+      setTorchOn((prev) => !prev);
+    } catch {
+      // torch not available on this device
+    }
+  };
 
   const handleManualSubmit = () => {
     const code = manualCode.trim();
@@ -156,13 +206,28 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
             <canvas ref={canvasRef} className="hidden" />
 
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-72 h-44 rounded-2xl border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.6)]">
+              <div ref={guideRef} className="w-72 h-44 rounded-2xl border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.6)]">
                 <span className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-primary rounded-tl-2xl" />
                 <span className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-primary rounded-tr-2xl" />
                 <span className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-primary rounded-bl-2xl" />
                 <span className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-primary rounded-br-2xl" />
               </div>
             </div>
+
+            {torchSupported && (
+              <button
+                type="button"
+                onClick={toggleTorch}
+                className="absolute top-6 right-6 z-10 bg-black/60 text-white p-3 rounded-full backdrop-blur-sm hover:bg-black/80 active:scale-95 transition-all"
+                title={torchOn ? "Desligar flash" : "Ligar flash"}
+              >
+                {torchOn ? (
+                  <FlashlightOff className="h-5 w-5" />
+                ) : (
+                  <Flashlight className="h-5 w-5" />
+                )}
+              </button>
+            )}
 
             <div className="absolute bottom-32 left-0 right-0 flex justify-center">
               <div className="bg-black/70 text-white text-xs px-4 py-2 rounded-full flex items-center gap-2 backdrop-blur-sm">

@@ -468,4 +468,34 @@ O usuário notou que em alguns treinos a IA sugeria aumento de carga e em outros
 - ✅ Input manual para digitar código à mão
 - ✅ Estado limpo entre leituras — sem dados vazarem
 
+---
+
+## Sessão: 20/06/2026 — Correção de Leitura do Barcode Scanner
+
+### 🎯 Funcionalidade trabalhada
+`src/components/BarcodeScanner.tsx` — scanner de código de barras via câmera
+
+### 🔍 Problemas e Soluções
+
+**1. Leitura intermitente — às vezes lia, às vezes não:**
+- **Problema:** O `BarcodeDetector` escaneava o frame inteiro da câmera em vez de apenas a área do guia visual. Em códigos longe ou mal centralizados, a detecção falhava.
+- **Solução:** Crop do canvas — o `drawImage` agora recorta apenas a região equivalente ao guia visual (calculado com math de `object-fit: cover`) e passa só esse recorte para o detector.
+
+**2. Falha em ambientes com pouca luz:**
+- **Problema:** Sem flash, qualquer ambiente com iluminação não-ideal impedia a leitura.
+- **Solução:** Adicionado botão de flash (torch) que usa `track.applyConstraints({ advanced: [{ torch: true }] })`. Só aparece se o dispositivo suportar.
+
+**3. Imagem instável/borrada em celulares de gama média:**
+- **Problema:** A resolução `1920x1080` causava motion blur em celulares mais fracos.
+- **Solução:** Reduzido para `1280x720` com fallback genérico.
+
+**4. Performance do canvas:**
+- **Problema:** Canvas 2D sem flag de leitura frequente.
+- **Solução:** Adicionado `{ willReadFrequently: true }` no `getContext`.
+
+### ✅ Estado final
+- ✅ Crop do canvas — escaneia só a área do guia
+- ✅ Flash/torch para ambientes escuros
+- ✅ Resolução 720p mais estável
+- ✅ willReadFrequent para performance
 
