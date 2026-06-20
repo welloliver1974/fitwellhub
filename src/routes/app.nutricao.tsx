@@ -69,6 +69,48 @@ type FavoriteFood = {
 
 const MEAL_TYPES = ["Café da manhã", "Almoço", "Lanche", "Jantar", "Ceia"];
 
+function parseFoodWeight(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
+  if (typeof value !== "string") return null;
+
+  const match = value.replace(",", ".").match(/(\d+(?:\.\d+)?)\s*(kg|g|gr|gramas?|grams?)?/i);
+  if (!match) return null;
+
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+
+  const unit = (match[2] ?? "g").toLowerCase();
+  if (unit.startsWith("kg")) return amount * 1000;
+  return amount;
+}
+
+function scaleMacros(n: Record<string, unknown>, grams: number) {
+  const ratio = grams / 100;
+  const servingCalories = Number(n["energy-kcal_serving"] ?? n["energy_serving"]);
+  const servingProtein = Number(n["proteins_serving"]);
+  const servingCarbs = Number(n["carbohydrates_serving"]);
+  const servingFat = Number(n["fat_serving"]);
+  const hasServingMacros = [servingCalories, servingProtein, servingCarbs, servingFat].some(
+    (v) => Number.isFinite(v) && v > 0,
+  );
+
+  if (hasServingMacros) {
+    return {
+      calories: Math.round(Number.isFinite(servingCalories) ? servingCalories : 0),
+      protein_g: Math.round((Number.isFinite(servingProtein) ? servingProtein : 0) * 10) / 10,
+      carbs_g: Math.round((Number.isFinite(servingCarbs) ? servingCarbs : 0) * 10) / 10,
+      fat_g: Math.round((Number.isFinite(servingFat) ? servingFat : 0) * 10) / 10,
+    };
+  }
+
+  return {
+    calories: Math.round(Number(n["energy-kcal_100g"] ?? n["energy-kcal"] ?? 0) * ratio),
+    protein_g: Math.round(Number(n["proteins_100g"] ?? 0) * ratio * 10) / 10,
+    carbs_g: Math.round(Number(n["carbohydrates_100g"] ?? 0) * ratio * 10) / 10,
+    fat_g: Math.round(Number(n["fat_100g"] ?? 0) * ratio * 10) / 10,
+  };
+}
+
 function NutricaoPage() {
   const { user, session } = useAuth();
   const [meals, setMeals] = useState<Meal[]>([]);
@@ -85,6 +127,7 @@ function NutricaoPage() {
   const [mProt, setMProt] = useState<number | "">("");
   const [mCarb, setMCarb] = useState<number | "">("");
   const [mFat, setMFat] = useState<number | "">("");
+  const [barcodePortionLabel, setBarcodePortionLabel] = useState("");
 
   // edit quantity
   const [editItem, setEditItem] = useState<Item | null>(null);
@@ -122,6 +165,7 @@ function NutricaoPage() {
     setMProt("");
     setMCarb("");
     setMFat("");
+    setBarcodePortionLabel("");
     try {
       const r = await fetch(
         `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`,
@@ -131,14 +175,25 @@ function NutricaoPage() {
         const p = j.product;
         const n = p.nutriments ?? {};
         const name = p.product_name_pt || p.product_name || `EAN ${code}`;
+        const servingGrams =
+          parseFoodWeight(p.serving_size) ?? parseFoodWeight(p.quantity) ?? 100;
         setQuery(name);
+        setGrams(servingGrams);
+        setBarcodePortionLabel(
+          p.serving_size
+            ? `Porção detectada: ${p.serving_size}`
+            : `Porção detectada: ${servingGrams}g`,
+        );
         setManual(true);
-        setMCal(Math.round(Number(n["energy-kcal_100g"] ?? n["energy-kcal"] ?? 0)));
-        setMProt(Math.round(Number(n["proteins_100g"] ?? 0) * 10) / 10);
-        setMCarb(Math.round(Number(n["carbohydrates_100g"] ?? 0) * 10) / 10);
-        setMFat(Math.round(Number(n["fat_100g"] ?? 0) * 10) / 10);
+        const macros = scaleMacros(n, servingGrams);
+        setMCal(macros.calories);
+        setMProt(macros.protein_g);
+        setMCarb(macros.carbs_g);
+        setMFat(macros.fat_g);
         setOpen(true);
-        toast.success(`${name} encontrado`);
+        toast.success(
+          servingGrams === 100 ? `${name} encontrado` : `${name} encontrado (${servingGrams}g)`,
+        );
         return;
       }
 
@@ -154,11 +209,13 @@ function NutricaoPage() {
       setMProt(macros.protein_g);
       setMCarb(macros.carbs_g);
       setMFat(macros.fat_g);
+      setBarcodePortionLabel("Porção estimada pela IA");
       setOpen(true);
       toast.success(`${macros.name} (estimado por IA)`);
     } catch {
       setQuery(`Código ${code}`);
       setManual(true);
+      setBarcodePortionLabel("");
       setOpen(true);
       toast("Preencha o nome e os macros manualmente");
     } finally {
@@ -278,6 +335,7 @@ function NutricaoPage() {
       setMProt("");
       setMCarb("");
       setMFat("");
+      setBarcodePortionLabel("");
       setOpen(false);
       await load();
     } catch (e) {
@@ -627,6 +685,9 @@ function NutricaoPage() {
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                   />
+                  {barcodePortionLabel && (
+                    <p className="mt-1 text-xs text-muted-foreground">{barcodePortionLabel}</p>
+                  )}
                 </div>
                 <div>
                   <Label>Porção (g)</Label>
