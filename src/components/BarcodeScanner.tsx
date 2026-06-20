@@ -151,11 +151,20 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
     const track = streamRef.current?.getVideoTracks()[0];
     if (!track) return;
     try {
-      await track.applyConstraints({ advanced: [{ torch: !torchOn } as unknown as MediaTrackConstraintSet] });
-      setTorchOn((prev) => !prev);
+      // Try both syntaxes: advanced (Chrome) and plain (Samsung)
+      await track.applyConstraints({
+        advanced: [{ torch: !torchOn } as unknown as MediaTrackConstraintSet],
+      });
     } catch {
-      setTorchSupported(false);
+      try {
+        await track.applyConstraints({
+          torch: !torchOn,
+        } as unknown as MediaTrackConstraints);
+      } catch {
+        return; // torch genuinely not available
+      }
     }
+    setTorchOn((prev) => !prev);
   };
 
   const handleManualSubmit = () => {
