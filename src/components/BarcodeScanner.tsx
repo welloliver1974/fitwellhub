@@ -1,13 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { X, ScanLine, ZoomIn, ZoomOut } from "lucide-react";
+import { Camera, X, ScanLine, ZoomIn, ZoomOut } from "lucide-react";
 
 type Props = {
   open: boolean;
   onClose: () => void;
   onDetected: (code: string) => void;
 };
+
+const BARCODE_FORMATS = ["ean_13", "ean_8", "code_128", "code_39", "upc_a", "upc_e", "qr_code"] as BarcodeFormat[];
+
+function createBarcodeDetector() {
+  return new BarcodeDetector({ formats: BARCODE_FORMATS });
+}
 
 export function BarcodeScanner({ open, onClose, onDetected }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -23,6 +29,7 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
   const [maxZoom, setMaxZoom] = useState(1);
   const [hint, setHint] = useState("Aponte o codigo para a moldura");
   const [photoHint, setPhotoHint] = useState(false);
+  const [captureLoading, setCaptureLoading] = useState(false);
 
   const updateZoom = async (delta: number) => {
     const track = streamRef.current?.getVideoTracks()[0];
@@ -37,6 +44,99 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
       setZoom(newZoom);
     } catch (e) {
       console.error("Failed to apply zoom:", e);
+    }
+  };
+
+  const detectFromSource = async (detector: BarcodeDetector, source: CanvasImageSource) => {
+    const barcodes = await detector.detect(source);
+    if (barcodes.length > 0) {
+      setScanning(false);
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      onDetected(barcodes[0].rawValue);
+      return true;
+    }
+    return false;
+  };
+
+  const captureAndRead = async () => {
+    const stream = streamRef.current;
+    const video = videoRef.current;
+    if (!stream || !video) return;
+
+    setCaptureLoading(true);
+    setHint("Capturando foto...");
+    setPhotoHint(true);
+
+    try {
+      if (!("BarcodeDetector" in window)) {
+        setError("Seu navegador nao suporta leitura de codigo de barras.");
+        return;
+      }
+
+      const detector = createBarcodeDetector();
+      const track = stream.getVideoTracks()[0];
+
+      const makeCanvasFromBitmap = async (bitmap: ImageBitmap) => {
+        const maxSide = 1600;
+        const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+        const width = Math.max(80, Math.round(bitmap.width * scale));
+        const height = Math.max(60, Math.round(bitmap.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) return null;
+        ctx.drawImage(bitmap, 0, 0, width, height);
+        return canvas;
+      };
+
+      const tryFromBitmap = async (bitmap: ImageBitmap) => {
+        const canvas = await makeCanvasFromBitmap(bitmap);
+        bitmap.close?.();
+        if (!canvas) return false;
+        return detectFromSource(detector, canvas);
+      };
+
+      if ("ImageCapture" in window) {
+        try {
+          const imageCapture = new ImageCapture(track);
+          const blob = await imageCapture.takePhoto();
+          const bitmap = await createImageBitmap(blob);
+          if (await tryFromBitmap(bitmap)) return;
+        } catch (e) {
+          console.error("Failed to take photo for barcode detection:", e);
+        }
+      }
+
+      const fallbackCanvas = document.createElement("canvas");
+      fallbackCanvas.width = video.videoWidth;
+      fallbackCanvas.height = video.videoHeight;
+      const fallbackCtx = fallbackCanvas.getContext("2d", { willReadFrequently: true });
+      if (!fallbackCtx) throw new Error("Canvas nao suportado");
+      fallbackCtx.drawImage(video, 0, 0, fallbackCanvas.width, fallbackCanvas.height);
+
+      const maxSide = 1600;
+      const fallbackScale = Math.min(1, maxSide / Math.max(fallbackCanvas.width, fallbackCanvas.height));
+      if (fallbackScale < 1) {
+        const scaled = document.createElement("canvas");
+        scaled.width = Math.max(80, Math.round(fallbackCanvas.width * fallbackScale));
+        scaled.height = Math.max(60, Math.round(fallbackCanvas.height * fallbackScale));
+        const scaledCtx = scaled.getContext("2d", { willReadFrequently: true });
+        if (scaledCtx) {
+          scaledCtx.drawImage(fallbackCanvas, 0, 0, scaled.width, scaled.height);
+          if (await detectFromSource(detector, scaled)) return;
+        }
+      }
+
+      if (await detectFromSource(detector, fallbackCanvas)) return;
+
+      setHint("Nao achei na foto. Tente aproximar mais.");
+    } catch (e) {
+      console.error("Failed to capture and read barcode:", e);
+      setHint("Nao consegui ler a foto. Tente novamente.");
+    } finally {
+      setCaptureLoading(false);
     }
   };
 
@@ -131,23 +231,9 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
       return;
     }
 
-    const formats = ["ean_13", "ean_8", "code_128", "code_39", "upc_a", "upc_e", "qr_code"] as BarcodeFormat[];
-    const detector = new BarcodeDetector({ formats });
+    const detector = createBarcodeDetector();
     const video = videoRef.current;
     let frameAttempts = 0;
-    let photoAttempts = 0;
-
-    const detectSource = async (source: CanvasImageSource) => {
-      const barcodes = await detector.detect(source);
-      if (barcodes.length > 0) {
-        setScanning(false);
-        streamRef.current?.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
-        onDetected(barcodes[0].rawValue);
-        return true;
-      }
-      return false;
-    };
 
     const detect = async () => {
       if (!video || !video.videoWidth || !video.videoHeight) {
@@ -191,7 +277,7 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
       ctx.drawImage(video, sx, sy, scanWidth, scanHeight, 0, 0, canvas.width, canvas.height);
 
       try {
-        if (await detectSource(canvas)) return;
+        if (await detectFromSource(detector, canvas)) return;
       } catch {
         // keep scanning
       }
@@ -199,34 +285,7 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
       frameAttempts += 1;
       if (frameAttempts % 4 === 0) {
         try {
-          if (await detectSource(video)) return;
-        } catch {
-          // keep scanning
-        }
-      }
-
-      photoAttempts += 1;
-      if (photoAttempts % 10 === 0 && streamRef.current && "ImageCapture" in window) {
-        try {
-          const track = streamRef.current.getVideoTracks()[0];
-          const imageCapture = new ImageCapture(track);
-          const blob = await imageCapture.takePhoto();
-          const bitmap = await createImageBitmap(blob);
-          setPhotoHint(true);
-          const photoCanvas = canvasRef.current;
-          if (photoCanvas) {
-            photoCanvas.width = bitmap.width;
-            photoCanvas.height = bitmap.height;
-            const photoCtx = photoCanvas.getContext("2d", { willReadFrequently: true });
-            if (photoCtx) {
-              photoCtx.drawImage(bitmap, 0, 0);
-              if (await detectSource(photoCanvas)) {
-                bitmap.close?.();
-                return;
-              }
-            }
-          }
-          bitmap.close?.();
+          if (await detectFromSource(detector, video)) return;
         } catch {
           // keep scanning
         }
@@ -309,7 +368,7 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
 
                 <div className="bg-black/70 text-white text-xs px-4 py-2 rounded-full flex items-center gap-2 backdrop-blur-sm">
                   <ScanLine className="h-3 w-3 animate-pulse" />
-                  {zoom > 1 ? `Zoom: ${zoom.toFixed(1)}x` : photoHint ? "Foto em alta resolucao sendo testada" : hint}
+                  {zoom > 1 ? `Zoom: ${zoom.toFixed(1)}x` : photoHint ? "Foto pronta para leitura" : hint}
                 </div>
 
                 <Button
@@ -322,6 +381,15 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
                   <ZoomIn className="h-5 w-5" />
                 </Button>
               </div>
+              <Button
+                variant="secondary"
+                onClick={captureAndRead}
+                disabled={captureLoading}
+                className="rounded-full bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm px-4"
+              >
+                <Camera className="h-4 w-4 mr-2" />
+                {captureLoading ? "Lendo foto..." : "Capturar e ler"}
+              </Button>
             </div>
 
             <div className="absolute bottom-4 left-4 right-4 flex gap-2">
