@@ -128,6 +128,9 @@ function NutricaoPage() {
   const [mCarb, setMCarb] = useState<number | "">("");
   const [mFat, setMFat] = useState<number | "">("");
   const [barcodePortionLabel, setBarcodePortionLabel] = useState("");
+  const [barcodePortionSource, setBarcodePortionSource] = useState<"barcode" | "ai" | "manual" | "">(
+    "",
+  );
 
   // edit quantity
   const [editItem, setEditItem] = useState<Item | null>(null);
@@ -166,6 +169,7 @@ function NutricaoPage() {
     setMCarb("");
     setMFat("");
     setBarcodePortionLabel("");
+    setBarcodePortionSource("");
     try {
       const r = await fetch(
         `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`,
@@ -184,6 +188,7 @@ function NutricaoPage() {
             ? `Porção detectada: ${p.serving_size}`
             : `Porção detectada: ${servingGrams}g`,
         );
+        setBarcodePortionSource("barcode");
         setManual(true);
         const macros = scaleMacros(n, servingGrams);
         setMCal(macros.calories);
@@ -210,12 +215,14 @@ function NutricaoPage() {
       setMCarb(macros.carbs_g);
       setMFat(macros.fat_g);
       setBarcodePortionLabel("Porção estimada pela IA");
+      setBarcodePortionSource("ai");
       setOpen(true);
       toast.success(`${macros.name} (estimado por IA)`);
     } catch {
       setQuery(`Código ${code}`);
       setManual(true);
       setBarcodePortionLabel("");
+      setBarcodePortionSource("manual");
       setOpen(true);
       toast("Preencha o nome e os macros manualmente");
     } finally {
@@ -336,6 +343,7 @@ function NutricaoPage() {
       setMCarb("");
       setMFat("");
       setBarcodePortionLabel("");
+      setBarcodePortionSource("");
       setOpen(false);
       await load();
     } catch (e) {
@@ -614,6 +622,19 @@ function NutricaoPage() {
                 <DialogTitle className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-primary" /> Adicionar alimento
                 </DialogTitle>
+                {barcodePortionLabel && (
+                  <div
+                    className={`inline-flex w-fit items-center rounded-full border px-3 py-1 text-xs font-medium ${
+                      barcodePortionSource === "barcode"
+                        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                        : barcodePortionSource === "ai"
+                          ? "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                          : "border-slate-500/20 bg-slate-500/10 text-slate-700 dark:text-slate-300"
+                    }`}
+                  >
+                    {barcodePortionLabel}
+                  </div>
+                )}
               </DialogHeader>
               <div className="space-y-3">
                 <div>
@@ -685,9 +706,6 @@ function NutricaoPage() {
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                   />
-                  {barcodePortionLabel && (
-                    <p className="mt-1 text-xs text-muted-foreground">{barcodePortionLabel}</p>
-                  )}
                 </div>
                 <div>
                   <Label>Porção (g)</Label>
