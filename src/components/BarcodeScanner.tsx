@@ -148,23 +148,49 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
   }, [scanning, open, onDetected]);
 
   const toggleTorch = async () => {
+    // Method 1: applyConstraints with advanced (Padrão Chrome/Android)
     const track = streamRef.current?.getVideoTracks()[0];
-    if (!track) return;
-    try {
-      // Try both syntaxes: advanced (Chrome) and plain (Samsung)
-      await track.applyConstraints({
-        advanced: [{ torch: !torchOn } as unknown as MediaTrackConstraintSet],
-      });
-    } catch {
+    if (track) {
+      try {
+        await track.applyConstraints({
+          advanced: [{ torch: !torchOn } as unknown as MediaTrackConstraintSet],
+        });
+        setTorchOn((prev) => !prev);
+        return;
+      } catch {}
       try {
         await track.applyConstraints({
           torch: !torchOn,
         } as unknown as MediaTrackConstraints);
-      } catch {
-        return; // torch genuinely not available
-      }
+        setTorchOn((prev) => !prev);
+        return;
+      } catch {}
     }
-    setTorchOn((prev) => !prev);
+
+    // Method 2: Restart stream com torch na constraint inicial (Samsung)
+    try {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      setScanning(false);
+
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "environment",
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          torch: !torchOn,
+        } as unknown as MediaTrackConstraints,
+      });
+      streamRef.current = newStream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = newStream;
+        await videoRef.current.play();
+        setScanning(true);
+        setTorchOn((prev) => !prev);
+      }
+    } catch {
+      // torch genuinely not available on this device
+    }
   };
 
   const handleManualSubmit = () => {
