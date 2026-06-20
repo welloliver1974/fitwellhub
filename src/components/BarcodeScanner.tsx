@@ -76,9 +76,34 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
 
       const detector = createBarcodeDetector();
       const track = stream.getVideoTracks()[0];
+      const capabilities = track.getCapabilities() as any;
+
+      // Tenta dar prioridade ao foco automático antes de capturar a imagem.
+      try {
+        const focusMode = capabilities.focusMode?.includes("single-shot")
+          ? "single-shot"
+          : capabilities.focusMode?.includes("continuous")
+            ? "continuous"
+            : null;
+        if (focusMode) {
+          await track.applyConstraints({
+            advanced: [
+              {
+                focusMode,
+                exposureMode: "continuous",
+                whiteBalanceMode: "continuous",
+              },
+            ],
+          });
+        }
+      } catch (e) {
+        console.error("Failed to prepare focus before capture:", e);
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, 450));
 
       const makeCanvasFromBitmap = async (bitmap: ImageBitmap) => {
-        const maxSide = 1600;
+        const maxSide = 1400;
         const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
         const width = Math.max(80, Math.round(bitmap.width * scale));
         const height = Math.max(60, Math.round(bitmap.height * scale));
@@ -131,7 +156,7 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
 
       if (await detectFromSource(detector, fallbackCanvas)) return;
 
-      setHint("Nao achei na foto. Tente aproximar mais.");
+      setHint("Nao achei na foto. Tente afastar um pouco e alinhar.");
     } catch (e) {
       console.error("Failed to capture and read barcode:", e);
       setHint("Nao consegui ler a foto. Tente novamente.");
@@ -388,7 +413,7 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
                 className="rounded-full bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm px-4"
               >
                 <Camera className="h-4 w-4 mr-2" />
-                {captureLoading ? "Lendo foto..." : "Capturar e ler"}
+                {captureLoading ? "Focando e lendo..." : "Capturar e ler"}
               </Button>
             </div>
 
