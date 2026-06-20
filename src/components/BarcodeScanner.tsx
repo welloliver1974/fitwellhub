@@ -50,8 +50,9 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
           stream = await navigator.mediaDevices.getUserMedia({
             video: {
               facingMode: "environment",
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+              frameRate: { ideal: 30 },
             },
           });
         } catch {
@@ -67,7 +68,17 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
           
           const track = stream.getVideoTracks()[0];
           const capabilities = track.getCapabilities() as any;
+          
+          if (capabilities.focusMode && capabilities.focusMode.includes("continuous")) {
+            try {
+              await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] });
+            } catch (e) {
+              console.error("Failed to set continuous focus:", e);
+            }
+          }
+
           if (capabilities.zoom) {
+
             setMaxZoom(capabilities.zoom.max);
             setZoom(capabilities.zoom.min || 1);
           }
