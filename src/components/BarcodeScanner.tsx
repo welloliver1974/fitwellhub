@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { X, ScanLine, Flashlight, FlashlightOff } from "lucide-react";
+import { X, ScanLine } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -19,8 +19,7 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [manualCode, setManualCode] = useState("");
-  const [torchSupported, setTorchSupported] = useState(false);
-  const [torchOn, setTorchOn] = useState(false);
+
 
   useEffect(() => {
     if (!open) return;
@@ -43,10 +42,6 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
           });
         }
         streamRef.current = stream;
-
-        // Always offer torch — many devices support it even when
-        // getCapabilities() doesn't report it. toggleTorch handles errors.
-        setTorchSupported(true);
 
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -147,52 +142,6 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
     return () => cancelAnimationFrame(rafRef.current);
   }, [scanning, open, onDetected]);
 
-  const toggleTorch = async () => {
-    // Method 1: applyConstraints with advanced (Padrão Chrome/Android)
-    const track = streamRef.current?.getVideoTracks()[0];
-    if (track) {
-      try {
-        await track.applyConstraints({
-          advanced: [{ torch: !torchOn } as unknown as MediaTrackConstraintSet],
-        });
-        setTorchOn((prev) => !prev);
-        return;
-      } catch {}
-      try {
-        await track.applyConstraints({
-          torch: !torchOn,
-        } as unknown as MediaTrackConstraints);
-        setTorchOn((prev) => !prev);
-        return;
-      } catch {}
-    }
-
-    // Method 2: Restart stream com torch na constraint inicial (Samsung)
-    try {
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-      setScanning(false);
-
-      const newStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "environment",
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          torch: !torchOn,
-        } as unknown as MediaTrackConstraints,
-      });
-      streamRef.current = newStream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = newStream;
-        await videoRef.current.play();
-        setScanning(true);
-        setTorchOn((prev) => !prev);
-      }
-    } catch {
-      // torch genuinely not available on this device
-    }
-  };
-
   const handleManualSubmit = () => {
     const code = manualCode.trim();
     if (code.length < 3) return;
@@ -244,21 +193,6 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
                 <span className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-primary rounded-br-2xl" />
               </div>
             </div>
-
-            {torchSupported && (
-              <button
-                type="button"
-                onClick={toggleTorch}
-                className="absolute top-6 right-6 z-10 bg-black/60 text-white p-3 rounded-full backdrop-blur-sm hover:bg-black/80 active:scale-95 transition-all"
-                title={torchOn ? "Desligar flash" : "Ligar flash"}
-              >
-                {torchOn ? (
-                  <FlashlightOff className="h-5 w-5" />
-                ) : (
-                  <Flashlight className="h-5 w-5" />
-                )}
-              </button>
-            )}
 
             <div className="absolute bottom-32 left-0 right-0 flex justify-center">
               <div className="bg-black/70 text-white text-xs px-4 py-2 rounded-full flex items-center gap-2 backdrop-blur-sm">
