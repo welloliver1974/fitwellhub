@@ -19,6 +19,7 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const nativeInputRef = useRef<HTMLInputElement | null>(null);
   const guideRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef<number>(0);
   const lastDetectRef = useRef(0);
@@ -30,6 +31,7 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
   const [hint, setHint] = useState("Aponte o codigo para a moldura");
   const [photoHint, setPhotoHint] = useState(false);
   const [captureLoading, setCaptureLoading] = useState(false);
+  const [nativeLoading, setNativeLoading] = useState(false);
 
   const updateZoom = async (delta: number) => {
     const track = streamRef.current?.getVideoTracks()[0];
@@ -57,6 +59,58 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
       return true;
     }
     return false;
+  };
+
+  const readImageFile = async (file: File) => {
+    if (!file) return;
+    setNativeLoading(true);
+    setHint("Lendo foto da camera...");
+    setPhotoHint(true);
+
+    try {
+      if (!("BarcodeDetector" in window)) {
+        setError("Seu navegador nao suporta leitura de codigo de barras.");
+        return;
+      }
+
+      const detector = createBarcodeDetector();
+      const bitmap = await createImageBitmap(file);
+
+      const maxSide = 1400;
+      const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+      const width = Math.max(80, Math.round(bitmap.width * scale));
+      const height = Math.max(60, Math.round(bitmap.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) throw new Error("Canvas nao suportado");
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      bitmap.close?.();
+
+      if (await detectFromSource(detector, canvas)) return;
+
+      // Tenta um recorte central, caso o código esteja no miolo da imagem.
+      const cropCanvas = document.createElement("canvas");
+      const cropWidth = Math.max(80, Math.round(width * 0.8));
+      const cropHeight = Math.max(60, Math.round(height * 0.8));
+      cropCanvas.width = cropWidth;
+      cropCanvas.height = cropHeight;
+      const cropCtx = cropCanvas.getContext("2d", { willReadFrequently: true });
+      if (cropCtx) {
+        const sx = Math.max(0, Math.round((width - cropWidth) / 2));
+        const sy = Math.max(0, Math.round((height - cropHeight) / 2));
+        cropCtx.drawImage(canvas, sx, sy, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+        if (await detectFromSource(detector, cropCanvas)) return;
+      }
+
+      setHint("Nao achei na foto. Tente aproximar mais ou alinhar.");
+    } catch (e) {
+      console.error("Failed to read native camera photo:", e);
+      setHint("Nao consegui ler a foto. Tente novamente.");
+    } finally {
+      setNativeLoading(false);
+    }
   };
 
   const captureAndRead = async () => {
@@ -163,6 +217,10 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
     } finally {
       setCaptureLoading(false);
     }
+  };
+
+  const openNativeCamera = () => {
+    nativeInputRef.current?.click();
   };
 
   useEffect(() => {
@@ -415,7 +473,31 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
                 <Camera className="h-4 w-4 mr-2" />
                 {captureLoading ? "Focando e lendo..." : "Capturar e ler"}
               </Button>
+              <Button
+                variant="secondary"
+                onClick={openNativeCamera}
+                disabled={nativeLoading}
+                className="rounded-full bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm px-4"
+              >
+                <Camera className="h-4 w-4 mr-2" />
+                {nativeLoading ? "Abrindo camera..." : "Camera nativa"}
+              </Button>
             </div>
+
+            <input
+              ref={nativeInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  void readImageFile(file);
+                }
+                e.target.value = "";
+              }}
+            />
 
             <div className="absolute bottom-4 left-4 right-4 flex gap-2">
               <Input
