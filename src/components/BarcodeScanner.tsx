@@ -44,13 +44,9 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
         }
         streamRef.current = stream;
 
-        const track = stream.getVideoTracks()[0];
-        if (track && typeof track.getCapabilities === "function") {
-          const caps = track.getCapabilities() as Record<string, unknown>;
-          if (caps && caps.torch) {
-            setTorchSupported(true);
-          }
-        }
+        // Always offer torch — many devices support it even when
+        // getCapabilities() doesn't report it. toggleTorch handles errors.
+        setTorchSupported(true);
 
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -158,7 +154,7 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
       await track.applyConstraints({ advanced: [{ torch: !torchOn } as unknown as MediaTrackConstraintSet] });
       setTorchOn((prev) => !prev);
     } catch {
-      // torch not available on this device
+      setTorchSupported(false);
     }
   };
 
