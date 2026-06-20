@@ -22,6 +22,7 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
   const [zoom, setZoom] = useState(1);
   const [maxZoom, setMaxZoom] = useState(1);
   const [hint, setHint] = useState("Aponte o codigo para a moldura");
+  const [photoHint, setPhotoHint] = useState(false);
 
   const updateZoom = async (delta: number) => {
     const track = streamRef.current?.getVideoTracks()[0];
@@ -43,6 +44,7 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
     if (!open) return;
     setError(null);
     setHint("Aponte o codigo para a moldura");
+    setPhotoHint(false);
 
     (async () => {
       try {
@@ -133,6 +135,19 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
     const detector = new BarcodeDetector({ formats });
     const video = videoRef.current;
     let frameAttempts = 0;
+    let photoAttempts = 0;
+
+    const detectSource = async (source: CanvasImageSource) => {
+      const barcodes = await detector.detect(source);
+      if (barcodes.length > 0) {
+        setScanning(false);
+        streamRef.current?.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+        onDetected(barcodes[0].rawValue);
+        return true;
+      }
+      return false;
+    };
 
     const detect = async () => {
       if (!video || !video.videoWidth || !video.videoHeight) {
@@ -176,14 +191,7 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
       ctx.drawImage(video, sx, sy, scanWidth, scanHeight, 0, 0, canvas.width, canvas.height);
 
       try {
-        const barcodes = await detector.detect(canvas);
-        if (barcodes.length > 0) {
-          setScanning(false);
-          streamRef.current?.getTracks().forEach((t) => t.stop());
-          streamRef.current = null;
-          onDetected(barcodes[0].rawValue);
-          return;
-        }
+        if (await detectSource(canvas)) return;
       } catch {
         // keep scanning
       }
@@ -191,14 +199,34 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
       frameAttempts += 1;
       if (frameAttempts % 4 === 0) {
         try {
-          const barcodes = await detector.detect(video);
-          if (barcodes.length > 0) {
-            setScanning(false);
-            streamRef.current?.getTracks().forEach((t) => t.stop());
-            streamRef.current = null;
-            onDetected(barcodes[0].rawValue);
-            return;
+          if (await detectSource(video)) return;
+        } catch {
+          // keep scanning
+        }
+      }
+
+      photoAttempts += 1;
+      if (photoAttempts % 10 === 0 && streamRef.current && "ImageCapture" in window) {
+        try {
+          const track = streamRef.current.getVideoTracks()[0];
+          const imageCapture = new ImageCapture(track);
+          const blob = await imageCapture.takePhoto();
+          const bitmap = await createImageBitmap(blob);
+          setPhotoHint(true);
+          const photoCanvas = canvasRef.current;
+          if (photoCanvas) {
+            photoCanvas.width = bitmap.width;
+            photoCanvas.height = bitmap.height;
+            const photoCtx = photoCanvas.getContext("2d", { willReadFrequently: true });
+            if (photoCtx) {
+              photoCtx.drawImage(bitmap, 0, 0);
+              if (await detectSource(photoCanvas)) {
+                bitmap.close?.();
+                return;
+              }
+            }
           }
+          bitmap.close?.();
         } catch {
           // keep scanning
         }
@@ -281,7 +309,7 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
 
                 <div className="bg-black/70 text-white text-xs px-4 py-2 rounded-full flex items-center gap-2 backdrop-blur-sm">
                   <ScanLine className="h-3 w-3 animate-pulse" />
-                  {zoom > 1 ? `Zoom: ${zoom.toFixed(1)}x` : hint}
+                  {zoom > 1 ? `Zoom: ${zoom.toFixed(1)}x` : photoHint ? "Foto em alta resolucao sendo testada" : hint}
                 </div>
 
                 <Button
