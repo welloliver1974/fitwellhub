@@ -498,4 +498,35 @@ O usuário notou que em alguns treinos a IA sugeria aumento de carga e em outros
 - ✅ Flash/torch para ambientes escuros
 - ✅ Resolução 720p mais estável
 - ✅ willReadFrequent para performance
+---
 
+## Sessão: 20/06/2026 — Câmera Nativa, Porção Detectada e Chip de Origem
+
+### 🎯 Funcionalidades trabalhadas
+- `src/components/BarcodeScanner.tsx` — botão de câmera nativa para leitura por foto local
+- `src/routes/app.nutricao.tsx` — correção de porção detectada e chip visual de origem
+
+### 🔍 Problemas e Soluções
+
+**1. Câmera ao vivo com foco insuficiente em códigos pequenos:**
+- **Problema:** No Samsung A56, o preview ao vivo não estabilizava bem o foco em códigos de barras miúdos.
+- **Solução:** Adicionado um fallback de `Camera nativa` que abre a captura de imagem do celular para tirar uma foto mais estável e tentar a leitura sobre a imagem capturada.
+
+**2. Consumo de tokens por imagem:**
+- **Problema:** O usuário precisava preservar a cota free da API.
+- **Solução:** A leitura por foto do barcode é feita localmente no navegador, com redimensionamento e descarte imediato da imagem. Nenhuma imagem é enviada para IA nesse fluxo.
+
+**3. Produto detectado com porção errada:**
+- **Problema:** Produtos como whey de `30g` estavam sendo tratados como `100g`, distorcendo os macros exibidos.
+- **Solução:** O fluxo agora tenta interpretar `serving_size` ou `quantity` do Open Food Facts e escala os macros para a porção real detectada quando possível.
+
+**4. Falta de clareza sobre a origem dos dados:**
+- **Problema:** Não ficava claro se a porção veio do barcode, da IA ou do preenchimento manual.
+- **Solução:** Criado um chip visual no topo do modal com cores distintas por origem: barcode em verde, IA em âmbar e manual em cinza.
+
+### ✅ Estado final
+- ✅ Leitura por câmera nativa como alternativa ao preview ao vivo
+- ✅ Leitura local da foto sem custo de tokens
+- ✅ Porção detectada e corrigida para produtos de 30g, 40g etc.
+- ✅ Chip visual por origem dos dados no modal
+- ✅ Build validado com sucesso
