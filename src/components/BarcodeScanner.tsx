@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { X, ScanLine } from "lucide-react";
+import { X, ScanLine, ZoomIn, ZoomOut } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -19,6 +19,24 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [manualCode, setManualCode] = useState("");
+  const [zoom, setZoom] = useState(1);
+  const [maxZoom, setMaxZoom] = useState(1);
+
+  const updateZoom = async (delta: number) => {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track) return;
+
+    const capabilities = track.getCapabilities() as any;
+    if (!capabilities.zoom) return;
+
+    const newZoom = Math.max(capabilities.zoom.min, Math.min(capabilities.zoom.max, zoom + delta));
+    try {
+      await track.applyConstraints({ advanced: [{ zoom: newZoom }] });
+      setZoom(newZoom);
+    } catch (e) {
+      console.error("Failed to apply zoom:", e);
+    }
+  };
 
 
   useEffect(() => {
@@ -46,6 +64,14 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           await videoRef.current.play();
+          
+          const track = stream.getVideoTracks()[0];
+          const capabilities = track.getCapabilities() as any;
+          if (capabilities.zoom) {
+            setMaxZoom(capabilities.zoom.max);
+            setZoom(capabilities.zoom.min || 1);
+          }
+          
           setScanning(true);
         }
       } catch (e) {
@@ -194,10 +220,32 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
               </div>
             </div>
 
-            <div className="absolute bottom-32 left-0 right-0 flex justify-center">
-              <div className="bg-black/70 text-white text-xs px-4 py-2 rounded-full flex items-center gap-2 backdrop-blur-sm">
-                <ScanLine className="h-3 w-3 animate-pulse" />
-                Escaneando... Aproxime o código
+            <div className="absolute bottom-32 left-0 right-0 flex flex-col items-center gap-4">
+              <div className="flex items-center gap-4">
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm"
+                  onClick={() => updateZoom(-0.5)}
+                  disabled={zoom <= 1}
+                >
+                  <ZoomOut className="h-5 w-5" />
+                </Button>
+                
+                <div className="bg-black/70 text-white text-xs px-4 py-2 rounded-full flex items-center gap-2 backdrop-blur-sm">
+                  <ScanLine className="h-3 w-3 animate-pulse" />
+                  {zoom > 1 ? `Zoom: ${zoom.toFixed(1)}x` : "Escaneando... Aproxime o código"}
+                </div>
+
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm"
+                  onClick={() => updateZoom(0.5)}
+                  disabled={zoom >= maxZoom}
+                >
+                  <ZoomIn className="h-5 w-5" />
+                </Button>
               </div>
             </div>
 
