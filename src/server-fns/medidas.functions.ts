@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
   callAiChatCompletion,
@@ -148,12 +149,14 @@ Por favor, faça uma análise da minha evolução física.`;
     };
   });
 
+const compareSchema = z.object({
+  dateA: z.string().trim().min(1),
+  dateB: z.string().trim().min(1),
+});
+
 export const compareMeasurementsWithAi = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((data: { dateA: string; dateB: string }) => {
-    if (!data.dateA || !data.dateB) throw new Error("Selecione duas datas válidas.");
-    return data;
-  })
+  .inputValidator((d: unknown) => compareSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { dateA, dateB } = data;
     const { supabase, userId } = context;
