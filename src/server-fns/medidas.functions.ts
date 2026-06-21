@@ -147,3 +147,131 @@ Por favor, faça uma análise da minha evolução física.`;
       },
     };
   });
+
+export const compareMeasurementsWithAi = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: { dateA: string; dateB: string }) => {
+    if (!data.dateA || !data.dateB) throw new Error("Selecione duas datas válidas.");
+    return data;
+  })
+  .handler(async ({ data, context }) => {
+    const { dateA, dateB } = data;
+    const { supabase, userId } = context;
+    const settings = await fetchAiSettings(supabase, userId);
+    const provider = resolveAiProvider(settings);
+    const apiKey = resolveAiApiKey(settings, provider);
+    if (!apiKey) throw new Error("Configure uma chave de IA nas configuracoes.");
+
+    // 1. Buscar medidas para as duas datas
+    const { data: measurements } = await supabase
+      .from("body_measurements")
+      .select("log_date, label, value_cm")
+      .eq("user_id", userId)
+      .in("log_date", [dateA, dateB])
+      .order("log_date", { ascending: true });
+
+    // 2. Buscar peso na data A (ou mais próximo anterior)
+    const { data: weightAData } = await supabase
+      .from("body_weights")
+      .select("weight_kg, log_date")
+      .eq("user_id", userId)
+      .lte("log_date", dateA)
+      .order("log_date", { ascending: false })
+      .limit(1);
+
+    // 3. Buscar peso na data B (ou mais próximo anterior)
+    const { data: weightBData } = await supabase
+      .from("body_weights")
+      .select("weight_kg, log_date")
+      .eq("user_id", userId)
+      .lte("log_date", dateB)
+      .order("log_date", { ascending: false })
+      .limit(1);
+
+    const weightA = weightAData && weightAData.length > 0 ? Number(weightAData[0].weight_kg) : null;
+    const weightADate = weightAData && weightAData.length > 0 ? weightAData[0].log_date : null;
+
+    const weightB = weightBData && weightBData.length > 0 ? Number(weightBData[0].weight_kg) : null;
+    const weightBDate = weightBData && weightBData.length > 0 ? weightBData[0].log_date : null;
+
+    // 4. Formatar os dados para a IA
+    // Agrupar medidas por label, depois comparar dateA e dateB
+    const measurementsMap = new Map<string, { valA?: number; valB?: number }>();
+    if (measurements) {
+      for (const m of measurements) {
+        if (!measurementsMap.has(m.label)) {
+          measurementsMap.set(m.label, {});
+        }
+        const valObj = measurementsMap.get(m.label)!;
+        if (m.log_date === dateA) {
+          valObj.valA = Number(m.value_cm);
+        } else if (m.log_date === dateB) {
+          valObj.valB = Number(m.value_cm);
+        }
+      }
+    }
+
+    const lines: string[] = [];
+    for (const [label, vals] of measurementsMap.entries()) {
+      const aStr = vals.valA !== undefined ? `${vals.valA.toFixed(1)} cm` : "não registrado";
+      const bStr = vals.valB !== undefined ? `${vals.valB.toFixed(1)} cm` : "não registrado";
+      
+      let diffStr = "";
+      if (vals.valA !== undefined && vals.valB !== undefined) {
+        const diff = vals.valB - vals.valA;
+        diffStr = ` (Variação: ${diff >= 0 ? "+" : ""}${diff.toFixed(1)} cm)`;
+      }
+      lines.push(`- ${label}: de ${aStr} em ${dateA} para ${bStr} em ${dateB}${diffStr}`);
+    }
+
+    const measurementsText = lines.length > 0 ? lines.join("\n") : "Nenhuma medida registrada nessas datas.";
+
+    const weightAText = weightA ? `${weightA.toFixed(1)} kg${weightADate !== dateA ? ` (registrado mais próximo em ${weightADate})` : ""}` : "não registrado";
+    const weightBText = weightB ? `${weightB.toFixed(1)} kg${weightBDate !== dateB ? ` (registrado mais próximo em ${weightBDate})` : ""}` : "não registrado";
+    
+    let weightDiffText = "";
+    if (weightA && weightB) {
+      const wDiff = weightB - weightA;
+      weightDiffText = ` (Variação de peso: ${wDiff >= 0 ? "+" : ""}${wDiff.toFixed(1)} kg)`;
+    }
+
+    const systemPrompt = `Você é um Personal Trainer e Coach de Nutrição altamente especializado e focado em recomposição corporal.
+Sua tarefa é analisar a evolução de todas as medidas corporais e pesos de um usuário entre duas datas específicas.
+
+Orientações de análise:
+1. Avalie a variação do peso corporal em relação às mudanças das medidas de gordura (Cintura, Quadril, Pochete) e massa muscular (Braços, Ombros, Peito, Coxas, Panturrilhas).
+2. Explique se a evolução representa queima de gordura, ganho de massa muscular ou recomposição corporal.
+3. Compare a simetria corporal (ex: diferença de evolução entre braço esquerdo e direito, ou coxa esquerda e direita) caso esses dados estejam disponíveis nas duas datas.
+4. Mantenha a resposta motivadora, objetiva e formatada em Markdown de forma muito elegante e limpa. Use negritos para destacar números e termos importantes.
+5. Seja conciso (máximo de 3 a 4 parágrafos curtos).`;
+
+    const userPrompt = `Por favor, analise a evolução dos meus dados físicos entre as duas datas fornecidas:
+
+### Período de Comparação:
+- Data Base (A): ${dateA} (Peso: ${weightAText})
+- Data Comparação (B): ${dateB} (Peso: ${weightBText})${weightDiffText}
+
+### Comparativo de Medidas Corporais:
+${measurementsText}
+
+Por favor, forneça um diagnóstico sobre a minha evolução física com base nesses dados.`;
+
+    const messages = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ];
+
+    const json = await callAiChatCompletion({
+      provider,
+      apiKey,
+      model: getTextModel(provider),
+      messages,
+      temperature: 0.7,
+      maxTokens: 1024,
+      baseUrl: settings.omniroute_base_url,
+    });
+    
+    const analysis = json.choices[0].message.content as string;
+    return { analysis };
+  });
+

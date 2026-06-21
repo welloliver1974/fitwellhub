@@ -35,7 +35,7 @@ import {
   ChevronDown, 
   ChevronUp 
 } from "lucide-react";
-import { analyzeMeasurements } from "@/server-fns/medidas.functions";
+import { analyzeMeasurements, compareMeasurementsWithAi } from "@/server-fns/medidas.functions";
 import { toast } from "sonner";
 import {
   LineChart,
@@ -95,6 +95,95 @@ function MedidasPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showAiInfo, setShowAiInfo] = useState(false);
   const [activeTab, setActiveTab] = useState("individual");
+  const [dateA, setDateA] = useState<string>("");
+  const [dateB, setDateB] = useState<string>("");
+  const [comparisonAnalysis, setComparisonAnalysis] = useState<string | null>(null);
+  const [isComparing, setIsComparing] = useState(false);
+  const [comparisonWeights, setComparisonWeights] = useState<{ weightA: number | null; weightB: number | null }>({ weightA: null, weightB: null });
+  const [isLoadingWeights, setIsLoadingWeights] = useState(false);
+
+  // Extrai todas as datas únicas que possuem alguma medida cadastrada
+  const availableDates = useMemo(() => {
+    const dates = [...new Set(entries.map((e) => e.log_date))];
+    // Ordenar da mais recente para a mais antiga
+    return dates.sort((a, b) => b.localeCompare(a));
+  }, [entries]);
+
+  useEffect(() => {
+    if (availableDates.length > 0) {
+      if (!dateA) setDateA(availableDates[0]);
+      if (!dateB && availableDates.length > 1) setDateB(availableDates[1]);
+    }
+  }, [availableDates, dateA, dateB]);
+
+  // Carrega pesos correspondentes para as datas A e B para mostrar na tela
+  useEffect(() => {
+    async function fetchWeightsForComparison() {
+      if (!user) return;
+      setIsLoadingWeights(true);
+      try {
+        let wA: number | null = null;
+        let wB: number | null = null;
+
+        if (dateA) {
+          const { data } = await supabase
+            .from("body_weights")
+            .select("weight_kg")
+            .eq("user_id", user.id)
+            .lte("log_date", dateA)
+            .order("log_date", { ascending: false })
+            .limit(1);
+          if (data && data.length > 0) wA = Number(data[0].weight_kg);
+        }
+
+        if (dateB) {
+          const { data } = await supabase
+            .from("body_weights")
+            .select("weight_kg")
+            .eq("user_id", user.id)
+            .lte("log_date", dateB)
+            .order("log_date", { ascending: false })
+            .limit(1);
+          if (data && data.length > 0) wB = Number(data[0].weight_kg);
+        }
+
+        setComparisonWeights({ weightA: wA, weightB: wB });
+      } catch (e) {
+        console.error("Erro ao buscar pesos do comparador", e);
+      } finally {
+        setIsLoadingWeights(false);
+      }
+    }
+    fetchWeightsForComparison();
+  }, [dateA, dateB, user]);
+
+  const runComparisonAnalysis = async () => {
+    if (!dateA || !dateB) {
+      toast.error("Por favor, selecione duas datas.");
+      return;
+    }
+    if (dateA === dateB) {
+      toast.error("As datas de comparação devem ser diferentes.");
+      return;
+    }
+    try {
+      setIsComparing(true);
+      setComparisonAnalysis(null);
+      const res = await compareMeasurementsWithAi({
+        data: { dateA, dateB },
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+      });
+      setComparisonAnalysis(res.analysis);
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Erro ao comparar medidas");
+    } finally {
+      setIsComparing(false);
+    }
+  };
+
   const confidenceLabel: Record<"baixa" | "media" | "alta", string> = {
     baixa: "Baixa",
     media: "Média",
@@ -520,7 +609,7 @@ function MedidasPage() {
 
           {/* Tabs System for detailed data navigation */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full pt-4">
-            <TabsList className="grid w-full grid-cols-2 rounded-2xl bg-secondary/50 p-1 mb-6">
+            <TabsList className="grid w-full grid-cols-3 rounded-2xl bg-secondary/50 p-1 mb-6">
               <TabsTrigger value="individual" className="rounded-xl font-bold text-xs py-2 data-[state=active]:bg-background data-[state=active]:text-primary transition-all">
                 <TrendingUp className="h-3.5 w-3.5 mr-1.5 stroke-[2.5]" />
                 Evolução Individual
@@ -528,6 +617,10 @@ function MedidasPage() {
               <TabsTrigger value="timeline" className="rounded-xl font-bold text-xs py-2 data-[state=active]:bg-background data-[state=active]:text-primary transition-all">
                 <Clock className="h-3.5 w-3.5 mr-1.5 stroke-[2.5]" />
                 Linha do Tempo Geral
+              </TabsTrigger>
+              <TabsTrigger value="comparador" className="rounded-xl font-bold text-xs py-2 data-[state=active]:bg-background data-[state=active]:text-primary transition-all">
+                <Sparkles className="h-3.5 w-3.5 mr-1.5 stroke-[2.5]" />
+                Comparador IA
               </TabsTrigger>
             </TabsList>
 
@@ -703,6 +796,203 @@ function MedidasPage() {
                   );
                 })}
               </div>
+            </TabsContent>
+
+            {/* Comparador IA Tab */}
+            <TabsContent value="comparador" className="space-y-4 focus-visible:outline-none">
+              {availableDates.length < 2 ? (
+                <Card className="p-8 text-center rounded-3xl border-dashed">
+                  <Sparkles className="h-8 w-8 mx-auto text-muted-foreground/60 mb-2.5" />
+                  <p className="text-sm font-semibold text-muted-foreground mb-1">
+                    Registros insuficientes para comparação
+                  </p>
+                  <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+                    Você precisa ter medidas registradas em pelo menos <strong className="text-foreground">duas datas diferentes</strong> para usar o comparador.
+                  </p>
+                </Card>
+              ) : (
+                <div className="space-y-5">
+                  {/* Selects for Dates */}
+                  <Card className="p-5 rounded-3xl border-border/70 shadow-sm space-y-4">
+                    <div>
+                      <h3 className="font-display font-extrabold text-sm text-foreground">Escolha as datas para comparar</h3>
+                      <p className="text-[10px] text-muted-foreground">Selecione uma data base e uma data posterior para cruzar medidas e peso.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Data A */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                          <Calendar className="h-3.5 w-3.5 text-primary" />
+                          Data Base (Anterior)
+                        </label>
+                        <Select value={dateA} onValueChange={setDateA}>
+                          <SelectTrigger className="rounded-xl border-border/80">
+                            <SelectValue placeholder="Selecione a data base" />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-xl">
+                            {availableDates.map((d) => (
+                              <SelectItem key={d} value={d}>
+                                {new Date(d + "T00:00").toLocaleDateString("pt-BR", {
+                                  day: "2-digit",
+                                  month: "long",
+                                  year: "numeric",
+                                })}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Data B */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                          <Calendar className="h-3.5 w-3.5 text-primary" />
+                          Data Comparação (Nova)
+                        </label>
+                        <Select value={dateB} onValueChange={setDateB}>
+                          <SelectTrigger className="rounded-xl border-border/80">
+                            <SelectValue placeholder="Selecione a data de comparação" />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-xl">
+                            {availableDates.map((d) => (
+                              <SelectItem key={d} value={d}>
+                                {new Date(d + "T00:00").toLocaleDateString("pt-BR", {
+                                  day: "2-digit",
+                                  month: "long",
+                                  year: "numeric",
+                                })}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {dateA === dateB && dateA !== "" && (
+                      <p className="text-xs text-rose-500 font-semibold animate-pulse">
+                        Por favor, selecione duas datas diferentes para a comparação.
+                      </p>
+                    )}
+
+                    <Button
+                      onClick={runComparisonAnalysis}
+                      disabled={isComparing || dateA === dateB || !dateA || !dateB}
+                      className="rounded-full w-full bg-primary hover:bg-primary/95 text-primary-foreground font-semibold px-6 shadow-md transition-all hover:scale-[1.01] active:scale-[0.99] h-10 flex items-center justify-center gap-2"
+                    >
+                      {isComparing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Processando comparativo de evolução...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4" />
+                          Gerar Diagnóstico de Evolução com IA
+                        </>
+                      )}
+                    </Button>
+                  </Card>
+
+                  {/* Resumos rápidos lado a lado */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Resumo A */}
+                    {dateA && (
+                      <Card className="rounded-3xl border-border/70 overflow-hidden shadow-sm">
+                        <div className="px-5 py-3 border-b border-border/60 bg-muted/40 flex items-center justify-between">
+                          <span className="text-xs uppercase font-extrabold text-foreground">
+                            Resumo de {new Date(dateA + "T00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}
+                          </span>
+                        </div>
+                        <div className="p-4 space-y-3">
+                          <div className="bg-secondary/40 p-3 rounded-xl flex items-center justify-between">
+                            <span className="text-xs font-semibold text-muted-foreground">Peso Corporal</span>
+                            <span className="text-sm font-extrabold text-foreground font-mono">
+                              {isLoadingWeights ? (
+                                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                              ) : comparisonWeights.weightA ? (
+                                `${comparisonWeights.weightA.toFixed(1)} kg`
+                              ) : (
+                                "Não registrado"
+                              )}
+                            </span>
+                          </div>
+                          
+                          <div className="max-h-[220px] overflow-y-auto space-y-2">
+                            {entries
+                              .filter((e) => e.log_date === dateA)
+                              .map((e) => (
+                                <div key={e.id} className="flex justify-between items-center text-xs py-1.5 border-b border-border/40 last:border-0 font-medium">
+                                  <span className="text-muted-foreground">{e.label}</span>
+                                  <span className="text-foreground font-mono">{e.value_cm.toFixed(1)} cm</span>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      </Card>
+                    )}
+
+                    {/* Resumo B */}
+                    {dateB && (
+                      <Card className="rounded-3xl border-border/70 overflow-hidden shadow-sm">
+                        <div className="px-5 py-3 border-b border-border/60 bg-muted/40 flex items-center justify-between">
+                          <span className="text-xs uppercase font-extrabold text-foreground">
+                            Resumo de {new Date(dateB + "T00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}
+                          </span>
+                        </div>
+                        <div className="p-4 space-y-3">
+                          <div className="bg-secondary/40 p-3 rounded-xl flex items-center justify-between">
+                            <span className="text-xs font-semibold text-muted-foreground">Peso Corporal</span>
+                            <span className="text-sm font-extrabold text-foreground font-mono">
+                              {isLoadingWeights ? (
+                                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                              ) : comparisonWeights.weightB ? (
+                                `${comparisonWeights.weightB.toFixed(1)} kg`
+                              ) : (
+                                "Não registrado"
+                              )}
+                            </span>
+                          </div>
+                          
+                          <div className="max-h-[220px] overflow-y-auto space-y-2">
+                            {entries
+                              .filter((e) => e.log_date === dateB)
+                              .map((e) => (
+                                <div key={e.id} className="flex justify-between items-center text-xs py-1.5 border-b border-border/40 last:border-0 font-medium">
+                                  <span className="text-muted-foreground">{e.label}</span>
+                                  <span className="text-foreground font-mono">{e.value_cm.toFixed(1)} cm</span>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      </Card>
+                    )}
+                  </div>
+
+                  {/* Diagnóstico da IA */}
+                  {comparisonAnalysis && (
+                    <Card className="p-5 border border-primary/20 bg-gradient-to-b from-primary/[0.04] to-card relative rounded-3xl shadow-sm overflow-hidden animate-in fade-in duration-300">
+                      <div className="absolute top-0 right-0 h-32 w-32 bg-primary/5 rounded-full blur-2xl pointer-events-none" />
+                      <div className="flex items-center gap-2 mb-4 border-b border-primary/15 pb-3">
+                        <Sparkles className="h-4.5 w-4.5 text-primary" />
+                        <h4 className="font-display font-black text-foreground tracking-tight text-sm">
+                          Diagnóstico Evolutivo AI
+                        </h4>
+                        <span className="ml-auto text-[9px] uppercase font-extrabold tracking-wider px-2.5 py-0.5 rounded-full bg-primary/10 text-primary">
+                          Comparação Direta
+                        </span>
+                      </div>
+                      <div className="text-xs sm:text-sm leading-relaxed whitespace-pre-wrap text-foreground/90 font-medium">
+                        {comparisonAnalysis}
+                      </div>
+                      <div className="mt-4 border-t border-muted/50 pt-3 text-[10px] text-muted-foreground flex items-center justify-between font-mono">
+                        <span>FitWell Hub AI Engine</span>
+                        <span>Medidas & Peso: {new Date(dateA + "T00:00").toLocaleDateString("pt-BR")} vs {new Date(dateB + "T00:00").toLocaleDateString("pt-BR")}</span>
+                      </div>
+                    </Card>
+                  )}
+                </div>
+              )}
             </TabsContent>
           </Tabs>
         </>
