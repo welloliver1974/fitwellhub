@@ -609,18 +609,36 @@ function MedidasPage() {
 
           {/* Tabs System for detailed data navigation */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full pt-4">
-            <TabsList className="grid w-full grid-cols-3 rounded-2xl bg-secondary/50 p-1 mb-6">
-              <TabsTrigger value="individual" className="rounded-xl font-bold text-xs py-2 data-[state=active]:bg-background data-[state=active]:text-primary transition-all">
-                <TrendingUp className="h-3.5 w-3.5 mr-1.5 stroke-[2.5]" />
-                Evolução Individual
+            <TabsList className="grid w-full grid-cols-3 gap-1 rounded-2xl bg-secondary/50 p-1 mb-6">
+              <TabsTrigger 
+                value="individual" 
+                className="rounded-xl font-bold text-xs py-2 flex items-center justify-center gap-1.5 data-[state=active]:bg-background data-[state=active]:text-primary transition-all px-1 sm:px-3 text-center cursor-pointer"
+              >
+                <TrendingUp className="h-3.5 w-3.5 shrink-0 stroke-[2.5]" />
+                <span className="truncate">
+                  <span className="sm:hidden">Evolução</span>
+                  <span className="hidden sm:inline">Evolução Individual</span>
+                </span>
               </TabsTrigger>
-              <TabsTrigger value="timeline" className="rounded-xl font-bold text-xs py-2 data-[state=active]:bg-background data-[state=active]:text-primary transition-all">
-                <Clock className="h-3.5 w-3.5 mr-1.5 stroke-[2.5]" />
-                Linha do Tempo Geral
+              <TabsTrigger 
+                value="timeline" 
+                className="rounded-xl font-bold text-xs py-2 flex items-center justify-center gap-1.5 data-[state=active]:bg-background data-[state=active]:text-primary transition-all px-1 sm:px-3 text-center cursor-pointer"
+              >
+                <Clock className="h-3.5 w-3.5 shrink-0 stroke-[2.5]" />
+                <span className="truncate">
+                  <span className="sm:hidden">Histórico</span>
+                  <span className="hidden sm:inline">Linha do Tempo Geral</span>
+                </span>
               </TabsTrigger>
-              <TabsTrigger value="comparador" className="rounded-xl font-bold text-xs py-2 data-[state=active]:bg-background data-[state=active]:text-primary transition-all">
-                <Sparkles className="h-3.5 w-3.5 mr-1.5 stroke-[2.5]" />
-                Comparador IA
+              <TabsTrigger 
+                value="comparador" 
+                className="rounded-xl font-bold text-xs py-2 flex items-center justify-center gap-1.5 data-[state=active]:bg-background data-[state=active]:text-primary transition-all px-1 sm:px-3 text-center cursor-pointer"
+              >
+                <Sparkles className="h-3.5 w-3.5 shrink-0 stroke-[2.5]" />
+                <span className="truncate">
+                  <span className="sm:hidden">Comparador</span>
+                  <span className="hidden sm:inline">Comparador IA</span>
+                </span>
               </TabsTrigger>
             </TabsList>
 

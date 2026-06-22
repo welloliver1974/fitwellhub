@@ -2,6 +2,11 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [22/06/2026] - Antigravity (Melhoria de Responsividade e Espaçamento nas Abas de Medidas)
+- **Escopo**:
+  - **Responsividade e Spacing em Abas**: Correção da renderização de abas em `src/routes/app.medidas.tsx`. Adicionado `gap-1` na lista de abas para distanciamento elegante. Implementada a exibição dinâmica de nomes simplificados em telas menores ("Evolução", "Histórico", "Comparador") com expansão para nomes completos em telas maiores, além do alinhamento flexível e centralizado dos ícones com `shrink-0`.
+- **Status**: Concluído, build de produção validado com sucesso.
+
 ## [21/06/2026] - Antigravity (Comparador IA de Medidas e Peso Corporal)
 - **Escopo**:
   - **Server Function de Comparação**: Criação de `compareMeasurementsWithAi` em `src/server-fns/medidas.functions.ts` para buscar circunferências e pesos nas duas datas selecionadas (com fallback inteligente para o peso mais recente até cada data) e invocar a Groq API.
