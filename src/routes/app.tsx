@@ -12,6 +12,7 @@ import {
   Bell,
   Ruler,
   SlidersHorizontal,
+  Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -51,6 +52,7 @@ function AppLayout() {
     { to: "/app/treinos", icon: Dumbbell, label: "Treinos" },
     { to: "/app/nutricao", icon: Apple, label: "Nutrição" },
     { to: "/app/medidas", icon: Ruler, label: "Medidas" },
+    { to: "/app/corpo", icon: Activity, label: "Corpo" },
     { to: "/app/chat", icon: MessageCircle, label: "Coach" },
     { to: "/app/ia", icon: SlidersHorizontal, label: "IA" },
   ] as const;

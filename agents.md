@@ -2,6 +2,14 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [23/06/2026] - Antigravity (Perfil Corporal & Bioimpedância)
+- **Escopo**:
+  - **Novas Migrations**: Criação de `20260623000001_add_profile_columns.sql` para adicionar campos de dados pessoais (`sex`, `height_cm`, `birth_date`) em `profiles`, e `20260623000002_bioimpedance_logs.sql` para a tabela `bioimpedance_logs` com suporte a RLS.
+  - **Tipagem Supabase**: Sincronização do arquivo `src/integrations/supabase/types.ts`.
+  - **Server Functions**: Desenvolvimento de `corpo.functions.ts` com cálculo local de TDEE/TMB (Mifflin-St Jeor) e diagnósticos de IA com base em múltiplos pilares no Groq.
+  - **Interface do Usuário**: Criação da rota `app.corpo.tsx` fornecendo tabs para edição de perfil, cards metabólicos dinâmicos, gráficos evolutivos de bioimpedância (`recharts`), formulários interativos e diagnósticos por IA. Integração no menu inferior do app (`app.tsx`).
+- **Status**: Concluído, build de produção validado com sucesso.
+
 ## [22/06/2026] - Antigravity (Melhoria de Responsividade e Espaçamento nas Abas de Medidas)
 - **Escopo**:
   - **Responsividade e Spacing em Abas**: Correção da renderização de abas em `src/routes/app.medidas.tsx`. Adicionado `gap-1` na lista de abas para distanciamento elegante. Implementada a exibição dinâmica de nomes simplificados em telas menores ("Evolução", "Histórico", "Comparador") com expansão para nomes completos em telas maiores, além do alinhamento flexível e centralizado dos ícones com `shrink-0`.

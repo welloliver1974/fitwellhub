@@ -32,6 +32,62 @@ export type Database = {
         };
         Relationships: [];
       };
+      bioimpedance_logs: {
+        Row: {
+          id: string;
+          user_id: string;
+          log_date: string;
+          weight_kg: number | null;
+          body_fat_pct: number | null;
+          muscle_mass_kg: number | null;
+          bone_mass_kg: number | null;
+          body_water_pct: number | null;
+          visceral_fat: number | null;
+          bmr_machine: number | null;
+          metabolic_age: number | null;
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          log_date?: string;
+          weight_kg?: number | null;
+          body_fat_pct?: number | null;
+          muscle_mass_kg?: number | null;
+          bone_mass_kg?: number | null;
+          body_water_pct?: number | null;
+          visceral_fat?: number | null;
+          bmr_machine?: number | null;
+          metabolic_age?: number | null;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          log_date?: string;
+          weight_kg?: number | null;
+          body_fat_pct?: number | null;
+          muscle_mass_kg?: number | null;
+          bone_mass_kg?: number | null;
+          body_water_pct?: number | null;
+          visceral_fat?: number | null;
+          bmr_machine?: number | null;
+          metabolic_age?: number | null;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "bioimpedance_logs_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       ai_settings: {
         Row: {
           created_at: string;
@@ -275,18 +331,27 @@ export type Database = {
           display_name: string | null;
           id: string;
           updated_at: string;
+          sex: string | null;
+          height_cm: number | null;
+          birth_date: string | null;
         };
         Insert: {
           created_at?: string;
           display_name?: string | null;
           id: string;
           updated_at?: string;
+          sex?: string | null;
+          height_cm?: number | null;
+          birth_date?: string | null;
         };
         Update: {
           created_at?: string;
           display_name?: string | null;
           id?: string;
           updated_at?: string;
+          sex?: string | null;
+          height_cm?: number | null;
+          birth_date?: string | null;
         };
         Relationships: [];
       };
