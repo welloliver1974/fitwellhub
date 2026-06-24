@@ -406,7 +406,37 @@ function CorpoPage() {
       if (result.metabolic_age !== null) { setBioAge(String(result.metabolic_age)); filled++; }
       if (result.log_date !== null) { setBioDate(result.log_date); filled++; }
 
-      toast.success(`${filled} de 9 campos preenchidos pela IA! Revise e salve.`);
+      // Sanity validation - warn about suspicious values
+      const warnings: string[] = [];
+      if (result.body_fat_pct !== null && (result.body_fat_pct < 3 || result.body_fat_pct > 60))
+        warnings.push("% Gordura");
+      if (result.muscle_mass_kg !== null && (result.muscle_mass_kg < 15 || result.muscle_mass_kg > 120))
+        warnings.push("Massa Muscular");
+      if (result.visceral_fat !== null && (result.visceral_fat < 1 || result.visceral_fat > 30))
+        warnings.push("Gordura Visceral");
+      if (result.bmr_machine !== null && (result.bmr_machine < 500 || result.bmr_machine > 5000))
+        warnings.push("TMB");
+      if (result.metabolic_age !== null && (result.metabolic_age < 10 || result.metabolic_age > 100))
+        warnings.push("Idade Metabólica");
+      if (result.bone_mass_kg !== null && (result.bone_mass_kg < 1 || result.bone_mass_kg > 6))
+        warnings.push("Massa Óssea");
+      if (result.body_water_pct !== null && (result.body_water_pct < 30 || result.body_water_pct > 80))
+        warnings.push("Água Corporal");
+
+      // Build preview
+      const previewParts: string[] = [];
+      if (result.weight_kg) previewParts.push(`Peso ${result.weight_kg}kg`);
+      if (result.body_fat_pct) previewParts.push(`Gordura ${result.body_fat_pct}%`);
+      if (result.muscle_mass_kg) previewParts.push(`Músculo ${result.muscle_mass_kg}kg`);
+      if (result.visceral_fat) previewParts.push(`Visc. ${result.visceral_fat}`);
+
+      if (warnings.length > 0) {
+        toast.warning(`Confira os campos: ${warnings.join(", ")}`);
+      }
+
+      toast.success(`${filled} de 9 campos preenchidos!${previewParts.length > 0 ? " " + previewParts.join(" | ") : ""}`, {
+        duration: 5000,
+      });
     } catch (e) {
       console.error(e);
       toast.error(e instanceof Error ? e.message : "Erro ao escanear exame.");

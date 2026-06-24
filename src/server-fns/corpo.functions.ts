@@ -413,12 +413,27 @@ export const analyzeBioimpedancePhoto = createServerFn({ method: "POST" })
       messages: [
         {
           role: "system",
-          content: `Você é um especialista em leitura de exames de bioimpedância. Extraia os valores numéricos visíveis na foto do laudo/exame.
+          content: `Você é um especialista em leitura de exames de bioimpedância padrão farmácia brasileira. Extraia os valores numéricos visíveis na foto do laudo/exame.
+
+Mapeamento de campos do laudo para o JSON:
+- weight_kg: "Peso", "Massa Corporal", "Body Mass" (kg)
+- body_fat_pct: "Gordura Corporal", "% Gordura", "Body Fat", "Percentual de Gordura" (%)
+- muscle_mass_kg: "Massa Muscular", "Músculo Esquelético", "Massa Muscular Esquelética", "Músculo", "Muscle Mass" (kg)
+- bone_mass_kg: "Massa Óssea", "Conteúdo Mineral Ósseo", "Bone Mass" (kg)
+- body_water_pct: "Água Corporal", "Hidratação", "Body Water", "TBW" (%)
+- visceral_fat: "Gordura Visceral", "Visceral Fat", "Nível Gordura Visceral", "Gordura Intestinal"
+- bmr_machine: "TMB", "Metabolismo Basal", "Taxa Metabólica Basal", "Basal Metabolic Rate", "BMR" (kcal/dia ou kcal)
+- metabolic_age: "Idade Metabólica", "Idade Corporal", "Metabolic Age", "Body Age" (anos)
+- log_date: "Data da realização do exame", "Data", "Date" (YYYY-MM-DD)
+
+IMPORTANTE:
+- Confira se o número está na unidade correta antes de atribuir (kg, %, kcal, anos).
+- Não confunda "Gordura Corporal (%)" com "Gordura Visceral" — são campos diferentes.
+- "Músculo Esquelético" e "Massa Muscular" são o mesmo campo (muscle_mass_kg).
+- A data pode estar no canto superior do laudo.
 
 Retorne APENAS um JSON válido (sem markdown, sem explicação) no formato:
-{"weight_kg": number|null, "body_fat_pct": number|null, "muscle_mass_kg": number|null, "bone_mass_kg": number|null, "body_water_pct": number|null, "visceral_fat": number|null, "bmr_machine": number|null, "metabolic_age": number|null, "log_date": string|null}
-
-Use null para campos que não conseguir identificar. O log_date deve estar no formato YYYY-MM-DD se visível.`,
+{"weight_kg": number|null, "body_fat_pct": number|null, "muscle_mass_kg": number|null, "bone_mass_kg": number|null, "body_water_pct": number|null, "visceral_fat": number|null, "bmr_machine": number|null, "metabolic_age": number|null, "log_date": string|null}`,
         },
         {
           role: "user",
