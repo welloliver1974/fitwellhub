@@ -369,7 +369,7 @@ function CorpoPage() {
             const canvas = document.createElement("canvas");
             let width = img.width;
             let height = img.height;
-            const maxSize = 800;
+            const maxSize = 600;
             if (width > height && width > maxSize) {
               height = Math.round((height * maxSize) / width);
               width = maxSize;
@@ -382,7 +382,7 @@ function CorpoPage() {
             const ctx = canvas.getContext("2d");
             if (!ctx) return reject(new Error("Canvas não suportado"));
             ctx.drawImage(img, 0, 0, width, height);
-            resolve(canvas.toDataURL("image/jpeg", 0.7));
+            resolve(canvas.toDataURL("image/jpeg", 0.6));
           };
           img.src = e.target?.result as string;
         };

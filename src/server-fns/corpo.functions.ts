@@ -409,6 +409,7 @@ export const analyzeBioimpedancePhoto = createServerFn({ method: "POST" })
       apiKey,
       model: "qwen/qwen2.5-vl-72b-instruct",
       baseUrl: settings.omniroute_base_url,
+      maxTokens: 500,
       messages: [
         {
           role: "system",
