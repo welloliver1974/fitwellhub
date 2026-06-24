@@ -388,3 +388,62 @@ Por favor, faça uma análise direta dessa bioimpedância.`;
 
     return { analysis };
   });
+
+const bioPhotoSchema = z.object({
+  imageBase64: z.string().min(50),
+});
+
+export const analyzeBioimpedancePhoto = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => bioPhotoSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const settings = await fetchAiSettings(supabase, userId);
+    const photoProvider: "openrouter" | "omniroute" =
+      settings.provider === "omniroute" ? "omniroute" : "openrouter";
+    const apiKey = resolveAiApiKey(settings, photoProvider);
+    if (!apiKey) throw new Error("Configure a chave do OpenRouter nas configuracoes.");
+
+    const res = await callAiChatCompletion({
+      provider: photoProvider,
+      apiKey,
+      model: "qwen/qwen2.5-vl-72b-instruct",
+      baseUrl: settings.omniroute_base_url,
+      messages: [
+        {
+          role: "system",
+          content: `Você é um especialista em leitura de exames de bioimpedância. Extraia os valores numéricos visíveis na foto do laudo/exame.
+
+Retorne APENAS um JSON válido (sem markdown, sem explicação) no formato:
+{"weight_kg": number|null, "body_fat_pct": number|null, "muscle_mass_kg": number|null, "bone_mass_kg": number|null, "body_water_pct": number|null, "visceral_fat": number|null, "bmr_machine": number|null, "metabolic_age": number|null, "log_date": string|null}
+
+Use null para campos que não conseguir identificar. O log_date deve estar no formato YYYY-MM-DD se visível.`,
+        },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Extraia todos os valores numéricos deste laudo de bioimpedância. Retorne apenas o JSON." },
+            { type: "image_url", image_url: { url: data.imageBase64 } },
+          ],
+        },
+      ],
+    });
+
+    const content = (res as any).choices?.[0]?.message?.content;
+    if (!content) throw new Error("Resposta vazia da IA");
+
+    const match = content.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("IA não retornou um JSON válido");
+
+    return JSON.parse(match[0]) as {
+      weight_kg: number | null;
+      body_fat_pct: number | null;
+      muscle_mass_kg: number | null;
+      bone_mass_kg: number | null;
+      body_water_pct: number | null;
+      visceral_fat: number | null;
+      bmr_machine: number | null;
+      metabolic_age: number | null;
+      log_date: string | null;
+    };
+  });

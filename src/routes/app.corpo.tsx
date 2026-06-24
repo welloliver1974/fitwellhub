@@ -35,11 +35,13 @@ import {
   Scale,
   Zap,
   Info,
+  Camera,
 } from "lucide-react";
 import {
   calculateTdee,
   analyzeFullBodyStatus,
   analyzeBioimpedanceLog,
+  analyzeBioimpedancePhoto,
 } from "@/server-fns/corpo.functions";
 import { toast } from "sonner";
 import {
@@ -130,6 +132,9 @@ function CorpoPage() {
   const [selectedBioLog, setSelectedBioLog] = useState<BioimpedanceLog | null>(null);
   const [isAnalyzingBioLog, setIsAnalyzingBioLog] = useState(false);
   const [bioLogAnalysis, setBioLogAnalysis] = useState<string | null>(null);
+
+  // Bioimpedance photo scanning
+  const [isScanningBio, setIsScanningBio] = useState(false);
 
   // Load Data
   const loadProfileAndTdee = async () => {
@@ -349,6 +354,64 @@ function CorpoPage() {
     } catch (e) {
       console.error(e);
       toast.error("Erro ao excluir registro.");
+    }
+  };
+
+  // Scan bioimpedance exam photo with IA
+  const scanBioPhoto = async (file: File) => {
+    setIsScanningBio(true);
+    try {
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const img = new Image();
+        const r = new FileReader();
+        r.onload = (e) => {
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            let width = img.width;
+            let height = img.height;
+            const maxSize = 800;
+            if (width > height && width > maxSize) {
+              height = Math.round((height * maxSize) / width);
+              width = maxSize;
+            } else if (height > maxSize) {
+              width = Math.round((width * maxSize) / height);
+              height = maxSize;
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) return reject(new Error("Canvas não suportado"));
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL("image/jpeg", 0.7));
+          };
+          img.src = e.target?.result as string;
+        };
+        r.onerror = reject;
+        r.readAsDataURL(file);
+      });
+
+      const result = await analyzeBioimpedancePhoto({
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+        data: { imageBase64: dataUrl },
+      });
+
+      let filled = 0;
+      if (result.weight_kg !== null) { setBioWeight(String(result.weight_kg)); filled++; }
+      if (result.body_fat_pct !== null) { setBioFat(String(result.body_fat_pct)); filled++; }
+      if (result.muscle_mass_kg !== null) { setBioMuscle(String(result.muscle_mass_kg)); filled++; }
+      if (result.bone_mass_kg !== null) { setBioBone(String(result.bone_mass_kg)); filled++; }
+      if (result.body_water_pct !== null) { setBioWater(String(result.body_water_pct)); filled++; }
+      if (result.visceral_fat !== null) { setBioVisceral(String(result.visceral_fat)); filled++; }
+      if (result.bmr_machine !== null) { setBioBmr(String(result.bmr_machine)); filled++; }
+      if (result.metabolic_age !== null) { setBioAge(String(result.metabolic_age)); filled++; }
+      if (result.log_date !== null) { setBioDate(result.log_date); filled++; }
+
+      toast.success(`${filled} de 9 campos preenchidos pela IA! Revise e salve.`);
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Erro ao escanear exame.");
+    } finally {
+      setIsScanningBio(false);
     }
   };
 
@@ -743,6 +806,31 @@ function CorpoPage() {
                     Nova Leitura de Bioimpedância
                   </DialogTitle>
                 </DialogHeader>
+                <div className="flex items-center gap-2 pb-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full text-xs font-semibold h-9 px-4 gap-1.5 border-dashed flex-1 sm:flex-none"
+                    disabled={isScanningBio}
+                    onClick={() => {
+                      const input = document.createElement("input");
+                      input.type = "file";
+                      input.accept = "image/*";
+                      input.onchange = (e) => {
+                        const file = (e.target as HTMLInputElement).files?.[0];
+                        if (file) scanBioPhoto(file);
+                      };
+                      input.click();
+                    }}
+                  >
+                    {isScanningBio ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Camera className="h-4 w-4" />
+                    )}
+                    {isScanningBio ? "Escaneando..." : "Escanear exame com IA"}
+                  </Button>
+                </div>
                 <div className="grid gap-3 py-2 sm:grid-cols-2">
                   <div className="space-y-1.5 sm:col-span-2">
                     <label className="text-xs font-semibold text-muted-foreground">Data da medição</label>

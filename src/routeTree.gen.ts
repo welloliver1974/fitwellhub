@@ -25,6 +25,7 @@ import { Route as AppMedidasRouteImport } from './routes/app.medidas'
 import { Route as AppLembretesRouteImport } from './routes/app.lembretes'
 import { Route as AppIaRouteImport } from './routes/app.ia'
 import { Route as AppExerciciosRouteImport } from './routes/app.exercicios'
+import { Route as AppCorpoRouteImport } from './routes/app.corpo'
 import { Route as AppCoachRouteImport } from './routes/app.coach'
 import { Route as AppChatRouteImport } from './routes/app.chat'
 import { Route as AppTreinosIndexRouteImport } from './routes/app.treinos.index'
@@ -116,6 +117,11 @@ const AppExerciciosRoute = AppExerciciosRouteImport.update({
   path: '/exercicios',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCorpoRoute = AppCorpoRouteImport.update({
+  id: '/corpo',
+  path: '/corpo',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppCoachRoute = AppCoachRouteImport.update({
   id: '/coach',
   path: '/coach',
@@ -173,6 +179,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/app/chat': typeof AppChatRoute
   '/app/coach': typeof AppCoachRoute
+  '/app/corpo': typeof AppCorpoRoute
   '/app/exercicios': typeof AppExerciciosRouteWithChildren
   '/app/ia': typeof AppIaRoute
   '/app/lembretes': typeof AppLembretesRoute
@@ -200,6 +207,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/app/chat': typeof AppChatRoute
   '/app/coach': typeof AppCoachRoute
+  '/app/corpo': typeof AppCorpoRoute
   '/app/exercicios': typeof AppExerciciosRouteWithChildren
   '/app/ia': typeof AppIaRoute
   '/app/lembretes': typeof AppLembretesRoute
@@ -226,6 +234,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/app/chat': typeof AppChatRoute
   '/app/coach': typeof AppCoachRoute
+  '/app/corpo': typeof AppCorpoRoute
   '/app/exercicios': typeof AppExerciciosRouteWithChildren
   '/app/ia': typeof AppIaRoute
   '/app/lembretes': typeof AppLembretesRoute
@@ -256,6 +265,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/app/chat'
     | '/app/coach'
+    | '/app/corpo'
     | '/app/exercicios'
     | '/app/ia'
     | '/app/lembretes'
@@ -283,6 +293,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/app/chat'
     | '/app/coach'
+    | '/app/corpo'
     | '/app/exercicios'
     | '/app/ia'
     | '/app/lembretes'
@@ -308,6 +319,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/app/chat'
     | '/app/coach'
+    | '/app/corpo'
     | '/app/exercicios'
     | '/app/ia'
     | '/app/lembretes'
@@ -449,6 +461,13 @@ declare module '@tanstack/react-router' {
       path: '/exercicios'
       fullPath: '/app/exercicios'
       preLoaderRoute: typeof AppExerciciosRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/corpo': {
+      id: '/app/corpo'
+      path: '/corpo'
+      fullPath: '/app/corpo'
+      preLoaderRoute: typeof AppCorpoRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/coach': {
@@ -593,6 +612,7 @@ const AppTreinosRouteWithChildren = AppTreinosRoute._addFileChildren(
 interface AppRouteChildren {
   AppChatRoute: typeof AppChatRoute
   AppCoachRoute: typeof AppCoachRoute
+  AppCorpoRoute: typeof AppCorpoRoute
   AppExerciciosRoute: typeof AppExerciciosRouteWithChildren
   AppIaRoute: typeof AppIaRoute
   AppLembretesRoute: typeof AppLembretesRoute
@@ -611,6 +631,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppChatRoute: AppChatRoute,
   AppCoachRoute: AppCoachRoute,
+  AppCorpoRoute: AppCorpoRoute,
   AppExerciciosRoute: AppExerciciosRouteWithChildren,
   AppIaRoute: AppIaRoute,
   AppLembretesRoute: AppLembretesRoute,
