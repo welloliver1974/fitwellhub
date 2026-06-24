@@ -806,11 +806,35 @@ function CorpoPage() {
                     Nova Leitura de Bioimpedância
                   </DialogTitle>
                 </DialogHeader>
-                <div className="flex items-center gap-2 pb-1">
+                <div className="flex items-center gap-1.5 pb-1">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="rounded-full text-xs font-semibold h-9 px-4 gap-1.5 border-dashed flex-1 sm:flex-none"
+                    className="rounded-full text-xs font-semibold h-9 px-3 gap-1.5 border-dashed flex-1"
+                    disabled={isScanningBio}
+                    onClick={() => {
+                      const input = document.createElement("input");
+                      input.type = "file";
+                      input.accept = "image/*";
+                      input.capture = "environment";
+                      input.onchange = (e) => {
+                        const file = (e.target as HTMLInputElement).files?.[0];
+                        if (file) scanBioPhoto(file);
+                      };
+                      input.click();
+                    }}
+                  >
+                    {isScanningBio ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Camera className="h-4 w-4 shrink-0" />
+                    )}
+                    {isScanningBio ? "Escaneando..." : "Câmera"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full text-xs font-semibold h-9 px-3 gap-1.5 border-dashed flex-1"
                     disabled={isScanningBio}
                     onClick={() => {
                       const input = document.createElement("input");
@@ -823,12 +847,8 @@ function CorpoPage() {
                       input.click();
                     }}
                   >
-                    {isScanningBio ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Camera className="h-4 w-4" />
-                    )}
-                    {isScanningBio ? "Escaneando..." : "Escanear exame com IA"}
+                    <Camera className="h-4 w-4 shrink-0" />
+                    Galeria
                   </Button>
                 </div>
                 <div className="grid gap-3 py-2 sm:grid-cols-2">
