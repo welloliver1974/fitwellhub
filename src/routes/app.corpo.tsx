@@ -1251,7 +1251,7 @@ function CorpoPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="rounded-full hover:bg-destructive/15 hover:text-destructive text-muted-foreground/80 h-7 w-7 transition-colors"
+                                className="rounded-full hover:bg-destructive/15 hover:text-destructive text-muted-foreground/80 h-7 w-7 transition-colors pointer-events-auto z-10"
                                 title="Excluir"
                                 onClick={() => deleteBioLog(log.id)}
                               >

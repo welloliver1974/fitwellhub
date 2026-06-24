@@ -2,6 +2,11 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [24/06/2026] - Antigravity (Correção do Botão Excluir Bioimpedância sem Clique)
+- **Escopo**:
+  - **Correção de z-index**: O botão 🗑️ (Trash2) em `src/routes/app.corpo.tsx` estava sem clique porque ficava atrás do `div` decorativo `blur-xl` no canto do Card. Adicionado `z-10` e `pointer-events-auto` ao `<Button>` para garantir que ele fique acima no empilhamento e receba eventos de clique.
+- **Status**: Concluído, type-check validado.
+
 ## [24/06/2026] - Antigravity (Correção de Datas UTC vs Local em Todo o App)
 - **Escopo**:
   - **Nova função `getLocalDate()`**: Criada em `src/lib/utils.ts` para retornar data local (YYYY-MM-DD) em vez de data UTC.
