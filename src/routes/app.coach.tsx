@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
+import { getLocalDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Sparkles, Loader2 } from "lucide-react";
@@ -53,8 +54,8 @@ function CoachPage() {
     setSnapshot(null);
     setPlan(null);
     try {
-      const start = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
-      const today = new Date().toISOString().slice(0, 10);
+      const start = getLocalDate(new Date(Date.now() - 7 * 86400000));
+      const today = getLocalDate();
 
       const [
         { data: goals },

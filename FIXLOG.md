@@ -648,3 +648,51 @@ Adicionada **dupla camada de segurança** contra propagação indevida de evento
 - ✅ Clique no card ainda abre IA normalmente (sem quebra de UX)
 - ✅ Camada dupla de proteção contra propagação
 - ✅ Build de produção validado com sucesso
+
+---
+
+## Sessão: 24/06/2026 — Correção de Datas UTC vs Local em Todo o App
+
+### 🎯 Funcionalidades trabalhadas
+- `src/lib/utils.ts` → nova função `getLocalDate()`
+- 12 arquivos de rota: substituição de `new Date().toISOString().slice(0, 10)` por `getLocalDate()`
+
+### 🔍 Problema
+Todas as datas "hoje" eram calculadas com `new Date().toISOString().slice(0, 10)`, que retorna a data em **UTC**. Para usuários em fusos atrás do UTC (como Brasil, UTC-3), a partir das 21h o UTC já avançava pro dia seguinte, causando:
+1. Nutrição mostrava/comia dados do dia errado
+2. Dashboard mostrava calorias de "ontem" no card de calorias
+3. Botão deletar parecia não funcionar (após deletar, `load()` recarregava com data UTC errada)
+4. Coach IA, relatório PDF, medidas, peso — todos com datas desalinhadas
+
+### 🛠️ Solução implementada
+
+**`src/lib/utils.ts`** — Criada função utilitária:
+```ts
+export function getLocalDate(date?: Date): string {
+  const d = date ?? new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+```
+
+**Arquivos alterados** (substituição de UTC por data local):
+
+| Arquivo | Linhas | Mudança |
+|---------|--------|---------|
+| `app.nutricao.tsx` | 158, 511 | `today` + `y` (ontem) |
+| `app.index.tsx` | 54 | `today` do dashboard |
+| `app.index.tsx` | 62-64 | `findTodayWorkout` — range UTC calculado via `setHours(0/23)` |
+| `app.coach.tsx` | 56, 57 | `start` + `today` do Coach IA |
+| `app.corpo.tsx` | 120 | `bioDate` default |
+| `app.medidas.tsx` | 87 | `date` default |
+| `app.peso.tsx` | 40 | `date` default |
+| `app.receitas.$id.tsx` | 137 | `today` ao criar refeição |
+| `app.relatorio.tsx` | 61, 62 | `start` + `today` do PDF |
+| `app.nutricao-historico.tsx` | 32, 46 | `since` + `d` iterador |
+| `app.treinos.index.tsx` | 79 | `today` ao duplicar |
+| `app.templates.index.tsx` | 80 | `today` ao aplicar template |
+
+### ✅ Estado final
+- ✅ Todas as datas do app usam fuso horário **local**
+- ✅ Dashboard, nutrição, medidas, peso, bioimpedância, treinos — datas consistentes
+- ✅ Botão deletar funciona corretamente (load pós-delete usa data local)
+- ✅ Build de produção validado com sucesso

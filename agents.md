@@ -2,6 +2,13 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [24/06/2026] - Antigravity (Correção de Datas UTC vs Local em Todo o App)
+- **Escopo**:
+  - **Nova função `getLocalDate()`**: Criada em `src/lib/utils.ts` para retornar data local (YYYY-MM-DD) em vez de data UTC.
+  - **Substituição em 12 arquivos**: Todas as ocorrências de `new Date().toISOString().slice(0, 10)` substituídas por `getLocalDate()` em `app.nutricao.tsx`, `app.index.tsx`, `app.coach.tsx`, `app.corpo.tsx`, `app.medidas.tsx`, `app.peso.tsx`, `app.receitas.$id.tsx`, `app.relatorio.tsx`, `app.nutricao-historico.tsx`, `app.treinos.index.tsx`, `app.templates.index.tsx`.
+  - **Correção do `findTodayWorkout`**: Em `app.index.tsx`, query de `completed_at` (timestamptz) agora calcula range UTC correto via `setHours(0/23/59)` para refletir o dia local.
+- **Status**: Concluído, build de produção validado com sucesso.
+
 ## [24/06/2026] - Antigravity (Correção do Scanner de Bioimpedância: Leitura, Confirmação e Erro de Análise)
 - **Escopo**:
   - **Correção da Resolução**: Aumento de 600px para 1200px e JPEG 60% para 85% no redimensionamento da foto do exame em `src/routes/app.corpo.tsx`, com `willReadFrequently: true`.

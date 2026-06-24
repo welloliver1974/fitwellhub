@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
+import { getLocalDate } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -134,7 +135,7 @@ function RecipeDetail() {
 
   const sendToMeal = async () => {
     if (!user || !recipe) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getLocalDate();
     let { data: meal } = await supabase
       .from("meals")
       .select("id")

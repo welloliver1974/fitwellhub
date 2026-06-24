@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
+import { getLocalDate } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,16 +52,18 @@ function TodayPage() {
   const [weightInput, setWeightInput] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDate();
 
   const findTodayWorkout = async (userId: string) => {
-    // 1. Treino concluído hoje (da tabela workout_sessions)
+    const now = new Date();
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).toISOString();
+    const dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
     const { data: completedToday } = await supabase
       .from("workout_sessions")
       .select("workout_id, name")
       .eq("user_id", userId)
-      .gte("completed_at", today + "T00:00:00")
-      .lte("completed_at", today + "T23:59:59")
+      .gte("completed_at", dayStart)
+      .lte("completed_at", dayEnd)
       .order("completed_at", { ascending: false })
       .limit(1);
 

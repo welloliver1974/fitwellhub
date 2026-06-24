@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
+import { getLocalDate } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,7 +78,7 @@ function TemplatesPage() {
     e.preventDefault();
     e.stopPropagation();
     if (!user) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getLocalDate();
     const { data: w, error } = await supabase
       .from("workouts")
       .insert({ user_id: user.id, name: tpl.name, workout_date: today })

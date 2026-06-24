@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
+import { getLocalDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -117,7 +118,7 @@ function CorpoPage() {
   const [isAddingBio, setIsAddingBio] = useState(false);
 
   // Bioimpedance Form State
-  const [bioDate, setBioDate] = useState(new Date().toISOString().slice(0, 10));
+  const [bioDate, setBioDate] = useState(getLocalDate());
   const [bioWeight, setBioWeight] = useState("");
   const [bioFat, setBioFat] = useState("");
   const [bioMuscle, setBioMuscle] = useState("");

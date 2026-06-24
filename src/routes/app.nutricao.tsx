@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
+import { getLocalDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -155,7 +156,7 @@ function NutricaoPage() {
   const [scanOpen, setScanOpen] = useState(false);
   const [scanLoading, setScanLoading] = useState(false);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDate();
 
   const onBarcode = async (code: string) => {
     setScanOpen(false);
@@ -508,7 +509,7 @@ function NutricaoPage() {
 
   const duplicateYesterday = async (type: string) => {
     if (!user) return;
-    const y = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const y = getLocalDate(new Date(Date.now() - 86400000));
     const { data: yMeal } = await supabase
       .from("meals")
       .select("id")
