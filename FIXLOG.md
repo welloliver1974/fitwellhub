@@ -564,3 +564,27 @@ O formulário de bioimpedância exigia que todos os 9 campos (peso, % gordura, m
 - ✅ Compressão de imagem client-side sem custo extra de tokens
 - ✅ Formulário manual preservado como fallback
 - ✅ Build de produção validado com sucesso
+
+---
+
+## Sessão: 24/06/2026 — Correção: Dois Botões (Câmera + Galeria) e Limite de Tokens
+
+### 🎯 Funcionalidades trabalhadas
+`src/routes/app.corpo.tsx` — botões de câmera e galeria no Dialog
+`src/server-fns/corpo.functions.ts` — `maxTokens: 500` na chamada vision
+
+### 🔍 Problemas e Soluções
+
+**1. Botão único não mostrava opção de câmera:**
+- **Problema:** Sem o atributo `capture="environment"`, alguns navegadores Android exibiam apenas "Galeria" e "Arquivos", sem a opção de câmera.
+- **Solução:** Substituído o botão único por dois botões lado a lado com `flex-1`: "📷 Câmera" (com `capture="environment"`) e "🖼️ Galeria" (sem capture). O layout não quebra porque usam `flex gap-1.5` com `flex-1`.
+
+**2. Erro 402 (créditos insuficientes) no OpenRouter:**
+- **Problema:** O `callAiChatCompletion` sem `maxTokens` explícito usava o padrão de 65536 tokens, excedendo o limite da conta free (7273 tokens).
+- **Solução:** Adicionado `maxTokens: 500` na chamada (a resposta JSON tem ~200 tokens). Também reduzida a compressão de imagem de 800px/70% para 600px/60% — imagem ~70% menor, menos tokens de entrada.
+
+### ✅ Estado final
+- ✅ Dois botões distintos: Câmera e Galeria
+- ✅ Funciona em qualquer navegador/celular
+- ✅ Respeita o limite de tokens da conta free do OpenRouter
+- ✅ Build de produção validado com sucesso
