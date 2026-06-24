@@ -530,3 +530,37 @@ O usuário notou que em alguns treinos a IA sugeria aumento de carga e em outros
 - ✅ Porção detectada e corrigida para produtos de 30g, 40g etc.
 - ✅ Chip visual por origem dos dados no modal
 - ✅ Build validado com sucesso
+
+---
+
+## Sessão: 24/06/2026 — Scanner de Bioimpedância com IA Vision
+
+### 🎯 Funcionalidade trabalhada
+`src/server-fns/corpo.functions.ts` → função `analyzeBioimpedancePhoto`
+`src/routes/app.corpo.tsx` → botão "Escanear exame com IA" no Dialog de bioimpedância
+
+### 🔍 Problema ou Motivação
+O formulário de bioimpedância exigia que todos os 9 campos (peso, % gordura, massa muscular, massa óssea, água corporal, gordura visceral, TMB máquina, idade metabólica, data) fossem digitados manualmente — processo tedioso e propenso a erros.
+
+### 🛠️ Solução implementada
+
+1. **Nova server function `analyzeBioimpedancePhoto`:**
+   - Aceita imagem base64 de um laudo/exame de bioimpedância.
+   - Usa modelo vision `qwen/qwen2.5-vl-72b-instruct` via OpenRouter/Omniroute (mesmo já usado na nutrição).
+   - Prompt instrui extração de todos os valores numéricos visíveis no laudo.
+   - Retorna JSON estruturado com os 9 campos + data.
+
+2. **Botão "Escanear exame com IA" no Dialog:**
+   - Inserido dentro do Dialog existente de "Adicionar Bioimpedância", sem quebrar o layout.
+   - Abre seletor de arquivo (`accept="image/*"`) — o SO pergunta se quer câmera ou galeria.
+   - Compressão client-side: redimensiona para max 800px, JPEG 70% (economiza tokens).
+   - Chamada à IA → preenche automaticamente os campos encontrados.
+   - Toast informativo: `"5 de 9 campos preenchidos pela IA! Revise e salve."`
+   - Formulário manual continua disponível normalmente.
+
+### ✅ Estado final
+- ✅ Leitura de exames por foto da câmera ou imagem da galeria
+- ✅ Preenchimento automático de campos detectados pela IA vision
+- ✅ Compressão de imagem client-side sem custo extra de tokens
+- ✅ Formulário manual preservado como fallback
+- ✅ Build de produção validado com sucesso
