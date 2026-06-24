@@ -430,7 +430,13 @@ IMPORTANTE:
 - Confira se o número está na unidade correta antes de atribuir (kg, %, kcal, anos).
 - Não confunda "Gordura Corporal (%)" com "Gordura Visceral" — são campos diferentes.
 - "Músculo Esquelético" e "Massa Muscular" são o mesmo campo (muscle_mass_kg).
-- A data pode estar no canto superior do laudo.
+
+REGRAS PARA A DATA (log_date):
+- A data do exame está SEMPRE no canto superior direito ou central do laudo, no formato DD/MM/AAAA.
+- Converta para YYYY-MM-DD no JSON (ex: 15/06/2026 → 2026-06-15).
+- Se houver múltiplas datas, escolha a que estiver rotulada como "Data do Exame", "Data da Realização" ou "Data da Medição".
+- NÃO use: data de nascimento, data de impressão, data de validade ou data de pagamento.
+- Se a data não estiver visível ou legível, retorne null — NÃO invente uma data.
 
 Retorne APENAS um JSON válido (sem markdown, sem explicação) no formato:
 {"weight_kg": number|null, "body_fat_pct": number|null, "muscle_mass_kg": number|null, "bone_mass_kg": number|null, "body_water_pct": number|null, "visceral_fat": number|null, "bmr_machine": number|null, "metabolic_age": number|null, "log_date": string|null}`,

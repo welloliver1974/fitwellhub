@@ -404,7 +404,22 @@ function CorpoPage() {
       if (result.visceral_fat !== null) { setBioVisceral(String(result.visceral_fat)); filled++; }
       if (result.bmr_machine !== null) { setBioBmr(String(result.bmr_machine)); filled++; }
       if (result.metabolic_age !== null) { setBioAge(String(result.metabolic_age)); filled++; }
-      if (result.log_date !== null) { setBioDate(result.log_date); filled++; }
+      // Date validation - only accept sensible dates
+      if (result.log_date !== null) {
+        const parsed = new Date(result.log_date + "T12:00:00");
+        const today = new Date();
+        const minDate = new Date("2020-01-01T12:00:00");
+        const isValid =
+          !isNaN(parsed.getTime()) &&
+          parsed <= today &&
+          parsed >= minDate;
+        if (isValid) {
+          setBioDate(result.log_date);
+          filled++;
+        } else {
+          toast.warning("Data do exame não reconhecida — preencha manualmente.");
+        }
+      }
 
       // Sanity validation - warn about suspicious values
       const warnings: string[] = [];

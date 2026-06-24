@@ -533,6 +533,43 @@ O usuário notou que em alguns treinos a IA sugeria aumento de carga e em outros
 
 ---
 
+## Sessão: 24/06/2026 — Correção de Extração de Data no Scanner de Bioimpedância
+
+### 🎯 Funcionalidade trabalhada
+`src/server-fns/corpo.functions.ts` → prompt da IA vision (`analyzeBioimpedancePhoto`)
+`src/routes/app.corpo.tsx` → validação de data no client
+
+### 🔍 Problema
+A data extraída da foto do laudo de bioimpedância da farmácia vinha errada. A IA vision (Qwen 2.5 VL 72B) frequentemente:
+1. Confundia a data do exame com data de nascimento ou data de impressão do laudo
+2. Errava a conversão de DD/MM/AAAA (formato brasileiro) para YYYY-MM-DD
+3. Alucinava datas completamente quando não enxergava claramente
+
+### 🛠️ Solução implementada
+
+**1. Prompt da IA aprimorado (`corpo.functions.ts`):**
+- Instrução explícita: data está SEMPRE no canto superior direito ou central do laudo, formato DD/MM/AAAA
+- Conversão obrigatória: DD/MM/AAAA → YYYY-MM-DD (ex: 15/06/2026 → 2026-06-15)
+- Ordem de prioridade: "Data do Exame" > "Data da Realização" > "Data da Medição"
+- Proibição explícita: NÃO usar data de nascimento, impressão, validade ou pagamento
+- Se ilegível → retornar null (NÃO inventar data)
+
+**2. Validação de data no client (`app.corpo.tsx`):**
+- Após extração, verifica se a data é:
+  - Um `Date` válido (não NaN)
+  - ≤ data atual (não no futuro)
+  - ≥ 2020-01-01 (não absurdamente antiga)
+- Se inválido → não preenche o campo de data + toast: "Data do exame não reconhecida — preencha manualmente"
+- Usuário mantém controle manual total
+
+### ✅ Estado final
+- ✅ Prompt mais específico reduz chances de data errada
+- ✅ Validação client-side com toast avisando se data for inválida
+- ✅ Fallback manual preservado — usuário sempre pode corrigir
+- ✅ Build de produção validado com sucesso
+
+---
+
 ## Sessão: 24/06/2026 — Scanner de Bioimpedância com IA Vision
 
 ### 🎯 Funcionalidade trabalhada

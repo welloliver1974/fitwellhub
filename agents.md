@@ -137,6 +137,19 @@ Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hu
   - **Escala de macros**: Criação de lógica auxiliar para escalar macros por porção real detectada, com fallback para os campos por `100g` quando não há medida de porção disponível.
 - **Status**: Concluído, build de produção validado com sucesso.
 
+## [24/06/2026] - Antigravity (Correção de Extração de Data no Scanner de Bioimpedância)
+- **Escopo**:
+  - **Prompt da IA Aprimorado**: Em `src/server-fns/corpo.functions.ts`, instruções específicas para extração de data em laudos brasileiros: formato DD/MM/AAAA → YYYY-MM-DD, prioridade para "Data do Exame", proibição de usar data de nascimento/impressão/validade, e retorno null se ilegível
+  - **Validação Client-Side**: Em `src/routes/app.corpo.tsx`, validação pós-extração que rejeita datas inválidas, futuras ou anteriores a 2020, com toast avisando "Data do exame não reconhecida — preencha manualmente"
+- **Status**: Concluído, build de produção validado com sucesso.
+
+## [24/06/2026] - Antigravity (Scanner de Bioimpedância com IA Vision)
+- **Escopo**:
+  - **Nova Server Function**: Criação de `analyzeBioimpedancePhoto` em `src/server-fns/corpo.functions.ts` para receber foto de exame de bioimpedância, extrair valores numéricos via modelo vision (`qwen/qwen2.5-vl-72b-instruct`) com `maxTokens: 500` e retornar JSON estruturado com os 9 campos.
+  - **Interface do Usuário**: Adição de dois botões ("Câmera" e "Galeria") dentro do Dialog de bioimpedância em `src/routes/app.corpo.tsx`. Aceita imagem da câmera (`capture="environment"`) ou galeria (`accept="image/*"`), comprime client-side (600px, JPEG 60%), envia para a IA e preenche automaticamente os campos detectados. O formulário manual continua disponível.
+- **Correções de Precisão**: Prompt da IA expandido com mapeamento completo de sinônimos de laudos brasileiros (`Músculo Esquelético` → `muscle_mass_kg`, `Metabolismo Basal` → `bmr_machine`, `Idade Corporal` → `metabolic_age`, etc.) para reduzir erros de nomenclatura. Adicionada validação de sanidade client-side com ranges realistas (gordura 3-60%, músculo 15-120kg, visceral 1-30, etc.) e preview dos valores detectados no toast de sucesso.
+- **Status**: Concluído, build de produção validado com sucesso.
+
 ## [09/06/2026] - Antigravity (Melhorias no Barcode Scanner e Busca por Código de Barras)
 - **Escopo**:
   - **Resolução HD na câmera**: Constraints do `getUserMedia` alteradas de `facingMode: { ideal: "environment" }` para `facingMode: "environment"` (exato) e adicionadas `width: { ideal: 1920 }, height: { ideal: 1080 }` em `src/components/BarcodeScanner.tsx`.
