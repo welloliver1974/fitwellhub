@@ -1228,7 +1228,11 @@ function CorpoPage() {
                         <Card
                           key={log.id}
                           className="p-4 bg-card border-border/60 hover:border-primary/40 hover:bg-secondary/10 transition-all rounded-2xl flex flex-col justify-between group relative overflow-hidden cursor-pointer"
-                          onClick={() => runBioLogAiAnalysis(log)}
+                          onClick={(e) => {
+                            const target = e.target as HTMLElement;
+                            if (target.closest("[data-delete-btn]")) return;
+                            runBioLogAiAnalysis(log);
+                          }}
                         >
                           <div className="absolute top-0 right-0 h-16 w-16 bg-primary/[0.02] rounded-full blur-xl" />
                           <div className="flex items-center justify-between border-b border-muted/50 pb-2 mb-3">
@@ -1241,6 +1245,7 @@ function CorpoPage() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              data-delete-btn="true"
                               className="rounded-full hover:bg-destructive/15 hover:text-destructive text-muted-foreground/80 h-7 w-7 transition-colors"
                               onClick={(e) => {
                                 e.stopPropagation();

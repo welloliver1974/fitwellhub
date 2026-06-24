@@ -625,3 +625,26 @@ O formulário de bioimpedância exigia que todos os 9 campos (peso, % gordura, m
 - ✅ Funciona em qualquer navegador/celular
 - ✅ Respeita o limite de tokens da conta free do OpenRouter
 - ✅ Build de produção validado com sucesso
+
+---
+
+## Sessão: 24/06/2026 — Correção do Botão Apagar que Abria IA em vez de Excluir
+
+### 🎯 Funcionalidade trabalhada
+`src/routes/app.corpo.tsx` — botão de lixeira nos cards de bioimpedância
+
+### 🔍 Problema
+Ao clicar no botão de lixeira (🗑️) para excluir um registro de bioimpedância, o `onClick` do `Card` pai também disparava — abrindo o diálogo de análise IA em vez de excluir o registro. O `e.stopPropagation()` no botão não impedia a propagação para o `Card`.
+
+### 🛠️ Solução implementada
+Adicionada **dupla camada de segurança** contra propagação indevida de eventos:
+
+1. **Filtro no `Card.onClick`:** Antes de chamar `runBioLogAiAnalysis(log)`, verifica se o clique veio de um elemento com o atributo `data-delete-btn="true"` (ou um filho dele) usando `e.target.closest("[data-delete-btn]")`. Se sim, retorna sem abrir a IA.
+
+2. **Marcador `data-delete-btn` no botão deletar:** Adicionado o atributo `data-delete-btn="true"` ao `<Button>` da lixeira. O `e.stopPropagation()` foi mantido como redundância.
+
+### ✅ Estado final
+- ✅ Botão de apagar funciona independente do clique no card
+- ✅ Clique no card ainda abre IA normalmente (sem quebra de UX)
+- ✅ Camada dupla de proteção contra propagação
+- ✅ Build de produção validado com sucesso

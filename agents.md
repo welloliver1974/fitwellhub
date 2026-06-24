@@ -9,6 +9,7 @@ Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hu
   - **Modal de Confirmação**: Novo fluxo em `src/routes/app.corpo.tsx` que exibe card de revisão com todos os valores detectados e sanity checks antes de preencher o formulário (botões "Confirmar & Preencher" / "Cancelar").
   - **Correção do Erro "ao analisar registro de impedância"**: Troca de `.single()` para `.maybeSingle()` no fetch do profile em `analyzeBioimpedanceLog` para não quebrar se o perfil não existir. Adicionada exibição da mensagem real de erro no toast em vez de mensagem genérica.
   - **Validação de Sanidade**: Sanity checks rigorosos exibidos inline no card de confirmação (valores suspeitos destacados em laranja).
+  - **Correção do Botão Apagar**: Adicionado `data-delete-btn="true"` no botão de lixeira + verificação `e.target.closest("[data-delete-btn]")` no `Card.onClick` para impedir que o clique no botão de excluir abrisse acidentalmente a análise IA (`src/routes/app.corpo.tsx`).
 - **Status**: Concluído, build de produção validado com sucesso.
 
 ## [23/06/2026] - Antigravity (Perfil Corporal & Bioimpedância)
