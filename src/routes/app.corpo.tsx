@@ -36,6 +36,7 @@ import {
   Zap,
   Info,
   Camera,
+  Check,
 } from "lucide-react";
 import {
   calculateTdee,
@@ -135,6 +136,17 @@ function CorpoPage() {
 
   // Bioimpedance photo scanning
   const [isScanningBio, setIsScanningBio] = useState(false);
+  const [scannedResult, setScannedResult] = useState<{
+    weight_kg: number | null;
+    body_fat_pct: number | null;
+    muscle_mass_kg: number | null;
+    bone_mass_kg: number | null;
+    body_water_pct: number | null;
+    visceral_fat: number | null;
+    bmr_machine: number | null;
+    metabolic_age: number | null;
+    log_date: string | null;
+  } | null>(null);
 
   // Load Data
   const loadProfileAndTdee = async () => {
@@ -360,6 +372,7 @@ function CorpoPage() {
   // Scan bioimpedance exam photo with IA
   const scanBioPhoto = async (file: File) => {
     setIsScanningBio(true);
+    setScannedResult(null);
     try {
       const dataUrl: string = await new Promise((resolve, reject) => {
         const img = new Image();
@@ -369,7 +382,7 @@ function CorpoPage() {
             const canvas = document.createElement("canvas");
             let width = img.width;
             let height = img.height;
-            const maxSize = 600;
+            const maxSize = 1200;
             if (width > height && width > maxSize) {
               height = Math.round((height * maxSize) / width);
               width = maxSize;
@@ -379,10 +392,10 @@ function CorpoPage() {
             }
             canvas.width = width;
             canvas.height = height;
-            const ctx = canvas.getContext("2d");
+            const ctx = canvas.getContext("2d", { willReadFrequently: true });
             if (!ctx) return reject(new Error("Canvas não suportado"));
             ctx.drawImage(img, 0, 0, width, height);
-            resolve(canvas.toDataURL("image/jpeg", 0.6));
+            resolve(canvas.toDataURL("image/jpeg", 0.85));
           };
           img.src = e.target?.result as string;
         };
@@ -395,69 +408,51 @@ function CorpoPage() {
         data: { imageBase64: dataUrl },
       });
 
-      let filled = 0;
-      if (result.weight_kg !== null) { setBioWeight(String(result.weight_kg)); filled++; }
-      if (result.body_fat_pct !== null) { setBioFat(String(result.body_fat_pct)); filled++; }
-      if (result.muscle_mass_kg !== null) { setBioMuscle(String(result.muscle_mass_kg)); filled++; }
-      if (result.bone_mass_kg !== null) { setBioBone(String(result.bone_mass_kg)); filled++; }
-      if (result.body_water_pct !== null) { setBioWater(String(result.body_water_pct)); filled++; }
-      if (result.visceral_fat !== null) { setBioVisceral(String(result.visceral_fat)); filled++; }
-      if (result.bmr_machine !== null) { setBioBmr(String(result.bmr_machine)); filled++; }
-      if (result.metabolic_age !== null) { setBioAge(String(result.metabolic_age)); filled++; }
-      // Date validation - only accept sensible dates
-      if (result.log_date !== null) {
-        const parsed = new Date(result.log_date + "T12:00:00");
-        const today = new Date();
-        const minDate = new Date("2020-01-01T12:00:00");
-        const isValid =
-          !isNaN(parsed.getTime()) &&
-          parsed <= today &&
-          parsed >= minDate;
-        if (isValid) {
-          setBioDate(result.log_date);
-          filled++;
-        } else {
-          toast.warning("Data do exame não reconhecida — preencha manualmente.");
-        }
-      }
-
-      // Sanity validation - warn about suspicious values
-      const warnings: string[] = [];
-      if (result.body_fat_pct !== null && (result.body_fat_pct < 3 || result.body_fat_pct > 60))
-        warnings.push("% Gordura");
-      if (result.muscle_mass_kg !== null && (result.muscle_mass_kg < 15 || result.muscle_mass_kg > 120))
-        warnings.push("Massa Muscular");
-      if (result.visceral_fat !== null && (result.visceral_fat < 1 || result.visceral_fat > 30))
-        warnings.push("Gordura Visceral");
-      if (result.bmr_machine !== null && (result.bmr_machine < 500 || result.bmr_machine > 5000))
-        warnings.push("TMB");
-      if (result.metabolic_age !== null && (result.metabolic_age < 10 || result.metabolic_age > 100))
-        warnings.push("Idade Metabólica");
-      if (result.bone_mass_kg !== null && (result.bone_mass_kg < 1 || result.bone_mass_kg > 6))
-        warnings.push("Massa Óssea");
-      if (result.body_water_pct !== null && (result.body_water_pct < 30 || result.body_water_pct > 80))
-        warnings.push("Água Corporal");
-
-      // Build preview
-      const previewParts: string[] = [];
-      if (result.weight_kg) previewParts.push(`Peso ${result.weight_kg}kg`);
-      if (result.body_fat_pct) previewParts.push(`Gordura ${result.body_fat_pct}%`);
-      if (result.muscle_mass_kg) previewParts.push(`Músculo ${result.muscle_mass_kg}kg`);
-      if (result.visceral_fat) previewParts.push(`Visc. ${result.visceral_fat}`);
-
-      if (warnings.length > 0) {
-        toast.warning(`Confira os campos: ${warnings.join(", ")}`);
-      }
-
-      toast.success(`${filled} de 9 campos preenchidos!${previewParts.length > 0 ? " " + previewParts.join(" | ") : ""}`, {
-        duration: 5000,
-      });
+      setScannedResult(result);
+      toast.info("Valores detectados! Confira antes de confirmar.", { duration: 4000 });
     } catch (e) {
       console.error(e);
       toast.error(e instanceof Error ? e.message : "Erro ao escanear exame.");
     } finally {
       setIsScanningBio(false);
     }
+  };
+
+  const confirmScanResult = () => {
+    const result = scannedResult;
+    if (!result) return;
+
+    let filled = 0;
+    if (result.weight_kg !== null) { setBioWeight(String(result.weight_kg)); filled++; }
+    if (result.body_fat_pct !== null) { setBioFat(String(result.body_fat_pct)); filled++; }
+    if (result.muscle_mass_kg !== null) { setBioMuscle(String(result.muscle_mass_kg)); filled++; }
+    if (result.bone_mass_kg !== null) { setBioBone(String(result.bone_mass_kg)); filled++; }
+    if (result.body_water_pct !== null) { setBioWater(String(result.body_water_pct)); filled++; }
+    if (result.visceral_fat !== null) { setBioVisceral(String(result.visceral_fat)); filled++; }
+    if (result.bmr_machine !== null) { setBioBmr(String(result.bmr_machine)); filled++; }
+    if (result.metabolic_age !== null) { setBioAge(String(result.metabolic_age)); filled++; }
+    if (result.log_date !== null) {
+      const parsed = new Date(result.log_date + "T12:00:00");
+      const today = new Date();
+      const minDate = new Date("2020-01-01T12:00:00");
+      const isValid =
+        !isNaN(parsed.getTime()) &&
+        parsed <= today &&
+        parsed >= minDate;
+      if (isValid) {
+        setBioDate(result.log_date);
+        filled++;
+      } else {
+        toast.warning("Data do exame não reconhecida — preencha manualmente.");
+      }
+    }
+
+    setScannedResult(null);
+    toast.success(`${filled} de 9 campos preenchidos!`, { duration: 3000 });
+  };
+
+  const cancelScanResult = () => {
+    setScannedResult(null);
   };
 
   // Generate full diagnosis with IA
@@ -498,7 +493,8 @@ function CorpoPage() {
       }
     } catch (e) {
       console.error(e);
-      toast.error("Erro ao analisar registro de bioimpedância.");
+      const msg = e instanceof Error ? e.message : "Erro ao analisar registro de bioimpedância.";
+      toast.error(msg, { duration: 6000 });
     } finally {
       setIsAnalyzingBioLog(false);
     }
@@ -896,128 +892,225 @@ function CorpoPage() {
                     Galeria
                   </Button>
                 </div>
-                <div className="grid gap-3 py-2 sm:grid-cols-2">
-                  <div className="space-y-1.5 sm:col-span-2">
-                    <label className="text-xs font-semibold text-muted-foreground">Data da medição</label>
-                    <Input
-                      type="date"
-                      value={bioDate}
-                      onChange={(e) => setBioDate(e.target.value)}
-                      className="rounded-xl border-border/80 focus-visible:ring-primary/20"
-                    />
+
+                {scannedResult ? (
+                  <div className="space-y-4 py-2">
+                    <div className="bg-primary/5 rounded-2xl p-4 border border-primary/15 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Camera className="h-4 w-4 text-primary" />
+                        <span className="text-xs font-extrabold uppercase tracking-wider text-foreground">
+                          Valores Detectados pela IA
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                        {scannedResult.weight_kg !== null && (
+                          <div className="flex justify-between border-b border-border/40 pb-1">
+                            <span className="text-muted-foreground">Peso</span>
+                            <span className="font-bold font-mono">{scannedResult.weight_kg} kg</span>
+                          </div>
+                        )}
+                        {scannedResult.body_fat_pct !== null && (
+                          <div className="flex justify-between border-b border-border/40 pb-1">
+                            <span className="text-muted-foreground">% Gordura</span>
+                            <span className="font-bold font-mono">{scannedResult.body_fat_pct}%</span>
+                          </div>
+                        )}
+                        {scannedResult.muscle_mass_kg !== null && (
+                          <div className="flex justify-between border-b border-border/40 pb-1">
+                            <span className="text-muted-foreground">Músculo</span>
+                            <span className="font-bold font-mono">{scannedResult.muscle_mass_kg} kg</span>
+                          </div>
+                        )}
+                        {scannedResult.bone_mass_kg !== null && (
+                          <div className="flex justify-between border-b border-border/40 pb-1">
+                            <span className="text-muted-foreground">Massa Óssea</span>
+                            <span className="font-bold font-mono">{scannedResult.bone_mass_kg} kg</span>
+                          </div>
+                        )}
+                        {scannedResult.body_water_pct !== null && (
+                          <div className="flex justify-between border-b border-border/40 pb-1">
+                            <span className="text-muted-foreground">% Água</span>
+                            <span className="font-bold font-mono">{scannedResult.body_water_pct}%</span>
+                          </div>
+                        )}
+                        {scannedResult.visceral_fat !== null && (
+                          <div className="flex justify-between border-b border-border/40 pb-1">
+                            <span className="text-muted-foreground">G. Visceral</span>
+                            <span className="font-bold font-mono">{scannedResult.visceral_fat}</span>
+                          </div>
+                        )}
+                        {scannedResult.bmr_machine !== null && (
+                          <div className="flex justify-between border-b border-border/40 pb-1">
+                            <span className="text-muted-foreground">TMB</span>
+                            <span className="font-bold font-mono">{scannedResult.bmr_machine} kcal</span>
+                          </div>
+                        )}
+                        {scannedResult.metabolic_age !== null && (
+                          <div className="flex justify-between border-b border-border/40 pb-1">
+                            <span className="text-muted-foreground">Idade Metabólica</span>
+                            <span className="font-bold font-mono">{scannedResult.metabolic_age} anos</span>
+                          </div>
+                        )}
+                        {scannedResult.log_date !== null && (
+                          <div className="flex justify-between border-b border-border/40 pb-1">
+                            <span className="text-muted-foreground">Data</span>
+                            <span className="font-bold font-mono">{scannedResult.log_date}</span>
+                          </div>
+                        )}
+                      </div>
+                      {(() => {
+                        const w: string[] = [];
+                        const r = scannedResult;
+                        if (r.body_fat_pct !== null && (r.body_fat_pct < 3 || r.body_fat_pct > 60)) w.push("% Gordura");
+                        if (r.muscle_mass_kg !== null && (r.muscle_mass_kg < 15 || r.muscle_mass_kg > 120)) w.push("Massa Muscular");
+                        if (r.visceral_fat !== null && (r.visceral_fat < 1 || r.visceral_fat > 30)) w.push("Gordura Visceral");
+                        if (r.bmr_machine !== null && (r.bmr_machine < 500 || r.bmr_machine > 5000)) w.push("TMB");
+                        if (r.metabolic_age !== null && (r.metabolic_age < 10 || r.metabolic_age > 100)) w.push("Idade Metabólica");
+                        if (r.bone_mass_kg !== null && (r.bone_mass_kg < 1 || r.bone_mass_kg > 6)) w.push("Massa Óssea");
+                        if (r.body_water_pct !== null && (r.body_water_pct < 30 || r.body_water_pct > 80)) w.push("Água Corporal");
+                        return w.length > 0 ? (
+                          <div className="text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-300 p-2 rounded-xl border border-amber-500/20 font-semibold">
+                            Valores suspeitos: {w.join(", ")}. Verifique antes de confirmar.
+                          </div>
+                        ) : null;
+                      })()}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={cancelScanResult} variant="outline" className="rounded-full flex-1 font-semibold">
+                        Cancelar
+                      </Button>
+                      <Button onClick={confirmScanResult} className="rounded-full flex-1 font-semibold gap-1.5">
+                        <Check className="h-4 w-4" />
+                        Confirmar & Preencher
+                      </Button>
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-muted-foreground">Peso (kg)</label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      placeholder="Ex: 75.2"
-                      value={bioWeight}
-                      onChange={(e) => setBioWeight(e.target.value)}
-                      className="rounded-xl border-border/80 focus-visible:ring-primary/20 font-mono"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-muted-foreground">Gordura Corporal (%)</label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      placeholder="Ex: 18.5"
-                      value={bioFat}
-                      onChange={(e) => setBioFat(e.target.value)}
-                      className="rounded-xl border-border/80 focus-visible:ring-primary/20 font-mono"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-muted-foreground">Massa Muscular (kg)</label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      placeholder="Ex: 58.4"
-                      value={bioMuscle}
-                      onChange={(e) => setBioMuscle(e.target.value)}
-                      className="rounded-xl border-border/80 focus-visible:ring-primary/20 font-mono"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-muted-foreground">Massa Óssea (kg)</label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      placeholder="Ex: 3.2"
-                      value={bioBone}
-                      onChange={(e) => setBioBone(e.target.value)}
-                      className="rounded-xl border-border/80 focus-visible:ring-primary/20 font-mono"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-muted-foreground">Água Corporal (%)</label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      placeholder="Ex: 55.8"
-                      value={bioWater}
-                      onChange={(e) => setBioWater(e.target.value)}
-                      className="rounded-xl border-border/80 focus-visible:ring-primary/20 font-mono"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-muted-foreground">Gordura Visceral</label>
-                    <Input
-                      type="number"
-                      step="0.5"
-                      placeholder="Ex: 5.0"
-                      value={bioVisceral}
-                      onChange={(e) => setBioVisceral(e.target.value)}
-                      className="rounded-xl border-border/80 focus-visible:ring-primary/20 font-mono"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-muted-foreground">TMB Máquina (kcal)</label>
-                    <Input
-                      type="number"
-                      placeholder="Ex: 1680"
-                      value={bioBmr}
-                      onChange={(e) => setBioBmr(e.target.value)}
-                      className="rounded-xl border-border/80 focus-visible:ring-primary/20 font-mono"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-muted-foreground">Idade Metabólica</label>
-                    <Input
-                      type="number"
-                      placeholder="Ex: 28"
-                      value={bioAge}
-                      onChange={(e) => setBioAge(e.target.value)}
-                      className="rounded-xl border-border/80 focus-visible:ring-primary/20 font-mono"
-                    />
-                  </div>
-                  <div className="space-y-1.5 sm:col-span-2">
-                    <label className="text-xs font-semibold text-muted-foreground">Anotações / Notas</label>
-                    <Input
-                      placeholder="Ex: Pós feriado, balança de casa, etc..."
-                      value={bioNotes}
-                      onChange={(e) => setBioNotes(e.target.value)}
-                      className="rounded-xl border-border/80 focus-visible:ring-primary/20"
-                    />
-                  </div>
-                </div>
-                <DialogFooter className="mt-4">
-                  <Button
-                    onClick={saveBioimpedance}
-                    disabled={isSavingBio}
-                    className="rounded-full w-full sm:w-auto font-semibold px-6 shadow-sm"
-                  >
-                    {isSavingBio ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-                        Registrando...
-                      </>
-                    ) : (
-                      "Registrar Bio"
-                    )}
-                  </Button>
-                </DialogFooter>
+                ) : (
+                  <>
+                    <div className="grid gap-3 py-2 sm:grid-cols-2">
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <label className="text-xs font-semibold text-muted-foreground">Data da medição</label>
+                        <Input
+                          type="date"
+                          value={bioDate}
+                          onChange={(e) => setBioDate(e.target.value)}
+                          className="rounded-xl border-border/80 focus-visible:ring-primary/20"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-muted-foreground">Peso (kg)</label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          placeholder="Ex: 75.2"
+                          value={bioWeight}
+                          onChange={(e) => setBioWeight(e.target.value)}
+                          className="rounded-xl border-border/80 focus-visible:ring-primary/20 font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-muted-foreground">Gordura Corporal (%)</label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          placeholder="Ex: 18.5"
+                          value={bioFat}
+                          onChange={(e) => setBioFat(e.target.value)}
+                          className="rounded-xl border-border/80 focus-visible:ring-primary/20 font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-muted-foreground">Massa Muscular (kg)</label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          placeholder="Ex: 58.4"
+                          value={bioMuscle}
+                          onChange={(e) => setBioMuscle(e.target.value)}
+                          className="rounded-xl border-border/80 focus-visible:ring-primary/20 font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-muted-foreground">Massa Óssea (kg)</label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          placeholder="Ex: 3.2"
+                          value={bioBone}
+                          onChange={(e) => setBioBone(e.target.value)}
+                          className="rounded-xl border-border/80 focus-visible:ring-primary/20 font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-muted-foreground">Água Corporal (%)</label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          placeholder="Ex: 55.8"
+                          value={bioWater}
+                          onChange={(e) => setBioWater(e.target.value)}
+                          className="rounded-xl border-border/80 focus-visible:ring-primary/20 font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-muted-foreground">Gordura Visceral</label>
+                        <Input
+                          type="number"
+                          step="0.5"
+                          placeholder="Ex: 5.0"
+                          value={bioVisceral}
+                          onChange={(e) => setBioVisceral(e.target.value)}
+                          className="rounded-xl border-border/80 focus-visible:ring-primary/20 font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-muted-foreground">TMB Máquina (kcal)</label>
+                        <Input
+                          type="number"
+                          placeholder="Ex: 1680"
+                          value={bioBmr}
+                          onChange={(e) => setBioBmr(e.target.value)}
+                          className="rounded-xl border-border/80 focus-visible:ring-primary/20 font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-muted-foreground">Idade Metabólica</label>
+                        <Input
+                          type="number"
+                          placeholder="Ex: 28"
+                          value={bioAge}
+                          onChange={(e) => setBioAge(e.target.value)}
+                          className="rounded-xl border-border/80 focus-visible:ring-primary/20 font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <label className="text-xs font-semibold text-muted-foreground">Anotações / Notas</label>
+                        <Input
+                          placeholder="Ex: Pós feriado, balança de casa, etc..."
+                          value={bioNotes}
+                          onChange={(e) => setBioNotes(e.target.value)}
+                          className="rounded-xl border-border/80 focus-visible:ring-primary/20"
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter className="mt-4">
+                      <Button
+                        onClick={saveBioimpedance}
+                        disabled={isSavingBio}
+                        className="rounded-full w-full sm:w-auto font-semibold px-6 shadow-sm"
+                      >
+                        {isSavingBio ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                            Registrando...
+                          </>
+                        ) : (
+                          "Registrar Bio"
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </>
+                )}
               </DialogContent>
             </Dialog>
           </div>

@@ -328,13 +328,14 @@ export const analyzeBioimpedanceLog = createServerFn({ method: "POST" })
     if (!apiKey) throw new Error("Configure uma chave de IA nas configuracoes.");
 
     // Fetch this bioimpedance log
-    const { data: bio } = await supabase
+    const { data: bio, error: bioErr } = await supabase
       .from("bioimpedance_logs")
       .select("*")
       .eq("id", logId)
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
 
+    if (bioErr) throw new Error(`Erro ao buscar registro: ${bioErr.message}`);
     if (!bio) throw new Error("Registro de bioimpedância não encontrado.");
 
     // Fetch user profile for context
@@ -342,7 +343,7 @@ export const analyzeBioimpedanceLog = createServerFn({ method: "POST" })
       .from("profiles")
       .select("sex, height_cm, birth_date")
       .eq("id", userId)
-      .single();
+      .maybeSingle();
 
     const age = profile?.birth_date ? calculateAge(profile.birth_date) : null;
     const sex = profile?.sex === "male" ? "Masculino" : profile?.sex === "female" ? "Feminino" : "Não informado";
@@ -409,11 +410,11 @@ export const analyzeBioimpedancePhoto = createServerFn({ method: "POST" })
       apiKey,
       model: "qwen/qwen2.5-vl-72b-instruct",
       baseUrl: settings.omniroute_base_url,
-      maxTokens: 500,
+      maxTokens: 800,
       messages: [
         {
           role: "system",
-          content: `Você é um especialista em leitura de exames de bioimpedância padrão farmácia brasileira. Extraia os valores numéricos visíveis na foto do laudo/exame.
+          content: `Você é um especialista em leitura de exames de bioimpedância de farmácia brasileira (DrogaRaia, Drogasil, Drogaria São Paulo, Pague Menos, etc.). Extraia APENAS os valores que estão VISÍVEIS na foto.
 
 Mapeamento de campos do laudo para o JSON:
 - weight_kg: "Peso", "Massa Corporal", "Body Mass" (kg)
@@ -426,17 +427,19 @@ Mapeamento de campos do laudo para o JSON:
 - metabolic_age: "Idade Metabólica", "Idade Corporal", "Metabolic Age", "Body Age" (anos)
 - log_date: "Data da realização do exame", "Data", "Date" (YYYY-MM-DD)
 
-IMPORTANTE:
+IMPORTANTE — REGRA ABSOLUTA:
+- Retorne null para QUALQUER campo que não esteja VISÍVEL na imagem. NÃO invente valores.
+- Muitos laudos brasileiros NÃO mostram Massa Óssea nem Água Corporal. Se não estiver na imagem, retorne null.
 - Confira se o número está na unidade correta antes de atribuir (kg, %, kcal, anos).
 - Não confunda "Gordura Corporal (%)" com "Gordura Visceral" — são campos diferentes.
 - "Músculo Esquelético" e "Massa Muscular" são o mesmo campo (muscle_mass_kg).
+- Leia os números com atenção: não troque 97.3 por 19.8, nem 36.0 por 30.0. Verifique duas vezes.
 
 REGRAS PARA A DATA (log_date):
-- A data do exame está SEMPRE no canto superior direito ou central do laudo, no formato DD/MM/AAAA.
-- Converta para YYYY-MM-DD no JSON (ex: 15/06/2026 → 2026-06-15).
-- Se houver múltiplas datas, escolha a que estiver rotulada como "Data do Exame", "Data da Realização" ou "Data da Medição".
-- NÃO use: data de nascimento, data de impressão, data de validade ou data de pagamento.
-- Se a data não estiver visível ou legível, retorne null — NÃO invente uma data.
+- A data do exame está no formato DD/MM/AAAA. Converta para YYYY-MM-DD (ex: 15/06/2026 → 2026-06-15).
+- Procure por "Data do Exame", "Data da Realização" ou "Data da Medição".
+- NÃO use: data de nascimento, data de impressão, data de validade.
+- Se a data não estiver visível ou legível, retorne null — NÃO invente.
 
 Retorne APENAS um JSON válido (sem markdown, sem explicação) no formato:
 {"weight_kg": number|null, "body_fat_pct": number|null, "muscle_mass_kg": number|null, "bone_mass_kg": number|null, "body_water_pct": number|null, "visceral_fat": number|null, "bmr_machine": number|null, "metabolic_age": number|null, "log_date": string|null}`,
@@ -444,7 +447,7 @@ Retorne APENAS um JSON válido (sem markdown, sem explicação) no formato:
         {
           role: "user",
           content: [
-            { type: "text", text: "Extraia todos os valores numéricos deste laudo de bioimpedância. Retorne apenas o JSON." },
+            { type: "text", text: "Extraia APENAS os valores VISÍVEIS neste laudo de bioimpedância. Retorne null para campos que não aparecem na imagem. Retorne apenas o JSON." },
             { type: "image_url", image_url: { url: data.imageBase64 } },
           ],
         },
