@@ -2,6 +2,12 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [24/06/2026] - Antigravity (Correção de ID do Modelo OpenRouter: qwen-2.5-72b-instruct)
+- **Escopo**:
+  - **Correção do model ID**: Em `src/server-fns/ai-settings.functions.ts:18`, o `TEXT_MODELS["openrouter"]` estava com `"qwen/qwen2.5-72b-instruct"` (sem traço), que não é um modelo válido no OpenRouter. Corrigido para `"qwen/qwen-2.5-72b-instruct"`.
+  - **Erro resolvido**: IA de diagnóstico de bioimpedância retornava erro 400 `"not a valid model ID"` ao tentar usar o modelo errado.
+- **Status**: Concluído, type-check validado.
+
 ## [24/06/2026] - Antigravity (Correção do Botão Excluir Bioimpedância sem Clique)
 - **Escopo**:
   - **Correção de z-index**: O botão 🗑️ (Trash2) em `src/routes/app.corpo.tsx` estava sem clique porque ficava atrás do `div` decorativo `blur-xl` no canto do Card. Adicionado `z-10` e `pointer-events-auto` ao `<Button>` para garantir que ele fique acima no empilhamento e receba eventos de clique.
