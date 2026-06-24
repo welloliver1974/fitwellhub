@@ -15,7 +15,7 @@ type AiSettingsRow = Database["public"]["Tables"]["ai_settings"]["Row"];
 
 const TEXT_MODELS: Record<AiProvider, string> = {
   groq: "llama-3.3-70b-versatile",
-  openrouter: "qwen/qwen2.5-72b-instruct",
+  openrouter: "qwen/qwen-2.5-72b-instruct",
   omniroute: "llama-3.3-70b-versatile",
 };
 
