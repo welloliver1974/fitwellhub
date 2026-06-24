@@ -138,12 +138,12 @@ function CorpoPage() {
       // Load raw Profile to populate inputs
       const { data: profile } = await supabase
         .from("profiles")
-        .select("display_name, sex, height_cm, birth_date")
+        .select("full_name, sex, height_cm, birth_date")
         .eq("id", user.id)
         .single();
 
       if (profile) {
-        setDisplayName(profile.display_name || "");
+        setDisplayName(profile.full_name || "");
         setSex((profile.sex as "male" | "female") || "");
         setHeightCm(profile.height_cm ? String(profile.height_cm) : "");
         setBirthDate(profile.birth_date || "");
@@ -240,11 +240,10 @@ function CorpoPage() {
       const { error } = await supabase
         .from("profiles")
         .update({
-          display_name: displayName.trim(),
+          full_name: displayName.trim(),
           sex: sex,
           height_cm: heightNum,
           birth_date: birthDate,
-          updated_at: new Date().toISOString(),
         })
         .eq("id", user.id);
 
