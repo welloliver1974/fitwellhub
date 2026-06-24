@@ -1228,12 +1228,7 @@ function CorpoPage() {
                       return (
                         <Card
                           key={log.id}
-                          className="p-4 bg-card border-border/60 hover:border-primary/40 hover:bg-secondary/10 transition-all rounded-2xl flex flex-col justify-between group relative overflow-hidden cursor-pointer"
-                          onClick={(e) => {
-                            const target = e.target as HTMLElement;
-                            if (target.closest("[data-delete-btn]")) return;
-                            runBioLogAiAnalysis(log);
-                          }}
+                          className="p-4 bg-card border-border/60 transition-all rounded-2xl flex flex-col justify-between group relative overflow-hidden"
                         >
                           <div className="absolute top-0 right-0 h-16 w-16 bg-primary/[0.02] rounded-full blur-xl" />
                           <div className="flex items-center justify-between border-b border-muted/50 pb-2 mb-3">
@@ -1243,18 +1238,26 @@ function CorpoPage() {
                                 {formattedDate}
                               </span>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              data-delete-btn="true"
-                              className="rounded-full hover:bg-destructive/15 hover:text-destructive text-muted-foreground/80 h-7 w-7 transition-colors"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteBioLog(log.id);
-                              }}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="rounded-full hover:bg-primary/10 hover:text-primary text-muted-foreground/80 h-7 w-7 transition-colors"
+                                title="Analisar com IA"
+                                onClick={() => runBioLogAiAnalysis(log)}
+                              >
+                                <Sparkles className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="rounded-full hover:bg-destructive/15 hover:text-destructive text-muted-foreground/80 h-7 w-7 transition-colors"
+                                title="Excluir"
+                                onClick={() => deleteBioLog(log.id)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
                           </div>
 
                           <div className="grid grid-cols-2 gap-2 text-xs">
