@@ -990,3 +990,23 @@ O modelo NVIDIA era fixo no codigo (Nemotron-70B). O usuario nao podia escolher 
 - ✅ Usuario pode digitar qualquer modelo NVIDIA
 - ✅ Padrao continua sendo Nemotron-70B
 - ✅ Zero migrations no banco
+
+---
+
+## Sessao: 15/07/2026 — Busca de modelos NVIDIA via API
+
+### 🎯 Funcionalidade trabalhada
+`src/server-fns/ai-settings.functions.ts` → funcao `fetchNvidiaModels`
+`src/routes/app.ia.tsx` → select de modelos com busca dinamica
+
+### 🔍 Problema
+Usuario precisava saber o nome exato do modelo NVIDIA e digitar manualmente.
+
+### 🛠️ Solucao implementada
+1. Criada funcao `fetchNvidiaModels(apiKey)` que chama `GET /v1/models` da NVIDIA e filtra modelos `nvidia/*`.
+2. Na UI, o input de modelo foi substituido por um select + botao de busca.
+3. Usuario cola a chave, clica no botao de refresh, e os modelos disponiveis aparecem no select.
+
+### ✅ Estado final
+- ✅ Usuario ve todos os modelos disponiveis na conta NVIDIA
+- ✅ Nao precisa mais digitar nome do modelo manualmente
