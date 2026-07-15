@@ -100,7 +100,7 @@ function AppLayout() {
       </main>
 
       <nav className="fixed bottom-0 inset-x-0 z-10 border-t bg-card/95 backdrop-blur-md">
-        <div className="max-w-3xl mx-auto px-2 py-2 flex items-center justify-between overflow-x-hidden">
+        <div className="max-w-3xl mx-auto px-1 py-2 flex items-center justify-between overflow-x-auto">
           {tabs.map(({ to, icon: Icon, label }) => {
             const active = to === "/app" ? path === "/app" : path.startsWith(to);
             return (
@@ -108,12 +108,12 @@ function AppLayout() {
                 key={to}
                 to={to}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl transition-colors min-w-0",
+                  "flex flex-col items-center gap-0.5 px-1.5 sm:px-2 py-2 rounded-xl transition-colors min-w-0 shrink-0",
                   active ? "text-primary" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 <Icon className="h-5 w-5 shrink-0" />
-                <span className="text-[9px] font-medium truncate w-full text-center leading-tight">{label}</span>
+                <span className="hidden sm:block text-[9px] font-medium truncate w-full text-center leading-tight">{label}</span>
               </Link>
             );
           })}

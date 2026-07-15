@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
+import { getLocalDate } from "@/lib/utils";
 
 const DAYS = 84; // 12 weeks
 
@@ -13,10 +14,9 @@ export function Heatmap() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const end = new Date();
       const start = new Date();
-      start.setDate(end.getDate() - DAYS + 1);
-      const startStr = start.toISOString().slice(0, 10);
+      start.setDate(start.getDate() - DAYS + 1);
+      const startStr = getLocalDate(start);
 
       const [{ data: g }, { data: meals }] = await Promise.all([
         supabase.from("goals").select("calories").eq("user_id", user.id).maybeSingle(),
@@ -49,7 +49,7 @@ export function Heatmap() {
       for (let i = 0; i < DAYS; i++) {
         const d = new Date(start);
         d.setDate(start.getDate() + i);
-        const ds = d.toISOString().slice(0, 10);
+        const ds = getLocalDate(d);
         out.push({ date: ds, value: totals[ds] ?? 0, goal });
       }
       setCells(out);
@@ -68,6 +68,8 @@ export function Heatmap() {
 
   const colors = ["bg-muted/40", "bg-primary/20", "bg-primary/40", "bg-primary/70", "bg-primary"];
 
+  const hasData = cells.some((c) => c.value > 0);
+
   // Group into 12 columns x 7 rows
   const cols: Cell[][] = [];
   for (let i = 0; i < cells.length; i += 7) cols.push(cells.slice(i, i + 7));
@@ -82,19 +84,25 @@ export function Heatmap() {
           ))}
         </div>
       </div>
-      <div className="flex gap-1 overflow-x-auto">
-        {cols.map((col, i) => (
-          <div key={i} className="flex flex-col gap-1">
-            {col.map((c) => (
-              <div
-                key={c.date}
-                title={`${c.date}: ${Math.round(c.value)} kcal`}
-                className={`h-3 w-3 rounded-sm ${colors[intensity(c)]}`}
-              />
-            ))}
-          </div>
-        ))}
-      </div>
+      {hasData ? (
+        <div className="flex gap-1 overflow-x-auto">
+          {cols.map((col, i) => (
+            <div key={i} className="flex flex-col gap-1">
+              {col.map((c) => (
+                <div
+                  key={c.date}
+                  title={`${c.date}: ${Math.round(c.value)} kcal`}
+                  className={`h-3 w-3 rounded-sm ${colors[intensity(c)]}`}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground text-center py-6">
+          Nenhum registro de refeições nos últimos 84 dias.
+        </p>
+      )}
     </div>
   );
 }
