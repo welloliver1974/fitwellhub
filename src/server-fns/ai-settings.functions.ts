@@ -8,6 +8,7 @@ export type AiSettings = {
   openrouter_api_key: string | null;
   omniroute_api_key: string | null;
   omniroute_base_url: string | null;
+  nvidia_model: string | null;
   updated_at: string | null;
 };
 
@@ -35,6 +36,7 @@ export function normalizeAiSettings(row?: Partial<AiSettingsRow> | null): AiSett
     openrouter_api_key: row?.openrouter_api_key ?? null,
     omniroute_api_key: row?.omniroute_api_key ?? null,
     omniroute_base_url: row?.omniroute_base_url ?? null,
+    nvidia_model: provider === "nvidia" ? (row?.omniroute_base_url?.trim() || null) : null,
     updated_at: row?.updated_at ?? null,
   };
 }
@@ -56,7 +58,8 @@ export function resolveAiProvider(settings?: Partial<AiSettings> | null): AiProv
   return "groq";
 }
 
-export function getTextModel(provider: AiProvider): string {
+export function getTextModel(provider: AiProvider, settings?: Partial<AiSettings> | null): string {
+  if (provider === "nvidia" && settings?.nvidia_model) return settings.nvidia_model;
   return TEXT_MODELS[provider];
 }
 

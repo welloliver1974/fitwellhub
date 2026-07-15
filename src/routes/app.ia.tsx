@@ -29,6 +29,7 @@ function AiSettingsPage() {
   const [openrouterKey, setOpenrouterKey] = useState("");
   const [omniKey, setOmniKey] = useState("");
   const [omniBaseUrl, setOmniBaseUrl] = useState("");
+  const [nvidiaModel, setNvidiaModel] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -51,6 +52,7 @@ function AiSettingsPage() {
         setOpenrouterKey(data.openrouter_api_key ?? "");
         setOmniKey(data.omniroute_api_key ?? "");
         setOmniBaseUrl(data.omniroute_base_url ?? "");
+        setNvidiaModel(data.omniroute_base_url ?? "");
       }
       setLoading(false);
     })();
@@ -59,6 +61,7 @@ function AiSettingsPage() {
   const save = async () => {
     if (!user) return;
     setSaving(true);
+    const baseUrl = provider === "nvidia" ? nvidiaModel.trim() : omniBaseUrl.trim();
     const { error } = await supabase.from("ai_settings").upsert(
       {
         user_id: user.id,
@@ -66,7 +69,7 @@ function AiSettingsPage() {
         groq_api_key: groqKey.trim() || null,
         openrouter_api_key: openrouterKey.trim() || null,
         omniroute_api_key: omniKey.trim() || null,
-        omniroute_base_url: omniBaseUrl.trim() || null,
+        omniroute_base_url: baseUrl || null,
       },
       { onConflict: "user_id" },
     );
@@ -138,6 +141,24 @@ function AiSettingsPage() {
             />
           </div>
         </div>
+
+        {provider === "nvidia" && (
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <KeyRound className="h-4 w-4" /> Modelo NVIDIA
+            </Label>
+            <Input
+              value={nvidiaModel}
+              onChange={(e) => setNvidiaModel(e.target.value)}
+              placeholder="nvidia/llama-3.1-nemotron-70b-instruct"
+              autoComplete="off"
+            />
+            <p className="text-xs text-muted-foreground">
+              Padrao: Nemotron-70B. Veja os modelos disponiveis em{" "}
+              <a href="https://build.nvidia.com/explore/discover" target="_blank" rel="noopener noreferrer" className="underline">build.nvidia.com</a>
+            </p>
+          </div>
+        )}
 
         {provider === "omniroute" && (
           <div className="grid gap-4 md:grid-cols-2">

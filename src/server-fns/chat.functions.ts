@@ -311,7 +311,7 @@ export const sendChat = createServerFn({ method: "POST" })
       ? provider === "openrouter"
         ? "qwen/qwen2.5-vl-72b-instruct"
         : "meta-llama/llama-4-scout-17b-16e-instruct"
-      : getTextModel(provider);
+      : getTextModel(provider, settings);
 
     const userContent: any[] = [{ type: "text", text: data.message || "Analise estas imagens." }];
     (data.images ?? []).forEach(img => {

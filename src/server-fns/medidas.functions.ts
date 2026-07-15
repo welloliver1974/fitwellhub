@@ -109,7 +109,7 @@ Por favor, faça uma análise da minha evolução física.`;
     const json = await callAiChatCompletion({
       provider,
       apiKey,
-      model: getTextModel(provider),
+      model: getTextModel(provider, settings),
       messages,
       temperature: 0.7,
       maxTokens: 1024,
@@ -268,7 +268,7 @@ Por favor, forneça um diagnóstico sobre a minha evolução física com base ne
     const json = await callAiChatCompletion({
       provider,
       apiKey,
-      model: getTextModel(provider),
+      model: getTextModel(provider, settings),
       messages,
       temperature: 0.7,
       maxTokens: 1024,

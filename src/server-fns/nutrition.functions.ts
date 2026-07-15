@@ -65,7 +65,7 @@ export const lookupNutrition = createServerFn({ method: "POST" })
     const res = await callAiChatCompletion({
       provider,
       apiKey,
-      model: getTextModel(provider),
+      model: getTextModel(provider, settings),
       baseUrl: settings.omniroute_base_url,
       messages: [
         {
@@ -367,7 +367,7 @@ export const coachAdvice = createServerFn({ method: "POST" })
     const res = await callAiChatCompletion({
       provider,
       apiKey,
-      model: getTextModel(provider),
+      model: getTextModel(provider, settings),
       baseUrl: settings.omniroute_base_url,
       messages: [
         {

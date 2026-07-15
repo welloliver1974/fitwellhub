@@ -295,7 +295,7 @@ Por favor, faça um diagnóstico completo do meu estado físico atual e me dê a
     const json = await callAiChatCompletion({
       provider,
       apiKey,
-      model: getTextModel(provider),
+      model: getTextModel(provider, settings),
       messages,
       temperature: 0.7,
       maxTokens: 1500,
@@ -379,7 +379,7 @@ Por favor, faça uma análise direta dessa bioimpedância.`;
     const json = await callAiChatCompletion({
       provider,
       apiKey,
-      model: getTextModel(provider),
+      model: getTextModel(provider, settings),
       messages,
       temperature: 0.7,
       maxTokens: 500,
