@@ -20,7 +20,7 @@ export const Route = createFileRoute("/app/ia")({
   component: AiSettingsPage,
 });
 
-type AiProvider = "groq" | "openrouter" | "omniroute";
+type AiProvider = "groq" | "openrouter" | "omniroute" | "nvidia";
 
 function AiSettingsPage() {
   const { user } = useAuth();
@@ -45,7 +45,7 @@ function AiSettingsPage() {
         toast.error(error.message);
       } else if (data) {
         setProvider(
-          data.provider === "openrouter" || data.provider === "omniroute" ? data.provider : "groq",
+          data.provider === "openrouter" || data.provider === "omniroute" || data.provider === "nvidia" ? data.provider : "groq",
         );
         setGroqKey(data.groq_api_key ?? "");
         setOpenrouterKey(data.openrouter_api_key ?? "");
@@ -107,6 +107,7 @@ function AiSettingsPage() {
               <SelectItem value="groq">Groq</SelectItem>
               <SelectItem value="openrouter">OpenRouter</SelectItem>
               <SelectItem value="omniroute">OmniRoute</SelectItem>
+              <SelectItem value="nvidia">NVIDIA</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -172,7 +173,8 @@ function AiSettingsPage() {
             <p>
               O provedor padrao sera usado no Coach, chat e analises de texto. O OpenRouter
               continua sendo usado para analise de foto quando houver chave salva. O OmniRoute
-              permite usar um endpoint proprio compativel com OpenAI.
+              permite usar um endpoint proprio compativel com OpenAI. O NVIDIA usa o modelo
+              Nemotron-70B diretamente pela API da NVIDIA.
             </p>
           </div>
         </div>

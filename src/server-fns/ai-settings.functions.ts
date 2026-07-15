@@ -1,6 +1,6 @@
 import type { Database } from "@/integrations/supabase/types";
 
-export type AiProvider = "groq" | "openrouter" | "omniroute";
+export type AiProvider = "groq" | "openrouter" | "omniroute" | "nvidia";
 
 export type AiSettings = {
   provider: AiProvider;
@@ -17,6 +17,7 @@ const TEXT_MODELS: Record<AiProvider, string> = {
   groq: "llama-3.3-70b-versatile",
   openrouter: "qwen/qwen-2.5-72b-instruct",
   omniroute: "llama-3.3-70b-versatile",
+  nvidia: "nvidia/llama-3.1-nemotron-70b-instruct",
 };
 
 export function normalizeAiSettings(row?: Partial<AiSettingsRow> | null): AiSettings {
@@ -25,7 +26,9 @@ export function normalizeAiSettings(row?: Partial<AiSettingsRow> | null): AiSett
       ? "openrouter"
       : row?.provider === "omniroute"
         ? "omniroute"
-        : "groq";
+        : row?.provider === "nvidia"
+          ? "nvidia"
+          : "groq";
   return {
     provider,
     groq_api_key: row?.groq_api_key ?? null,
@@ -49,6 +52,7 @@ export async function fetchAiSettings(supabase: any, userId: string): Promise<Ai
 export function resolveAiProvider(settings?: Partial<AiSettings> | null): AiProvider {
   if (settings?.provider === "openrouter") return "openrouter";
   if (settings?.provider === "omniroute") return "omniroute";
+  if (settings?.provider === "nvidia") return "nvidia";
   return "groq";
 }
 
@@ -62,11 +66,14 @@ export function resolveAiApiKey(settings: Partial<AiSettings> | null | undefined
       ? settings?.groq_api_key?.trim()
       : provider === "openrouter"
         ? settings?.openrouter_api_key?.trim()
-        : settings?.omniroute_api_key?.trim();
+        : provider === "nvidia"
+          ? settings?.openrouter_api_key?.trim()
+          : settings?.omniroute_api_key?.trim();
   if (stored) return stored;
 
   if (provider === "groq") return process.env.GROQ_API_KEY ?? null;
   if (provider === "openrouter") return process.env.OPENROUTER_API_KEY ?? null;
+  if (provider === "nvidia") return process.env.NVIDIA_API_KEY ?? process.env.OPENROUTER_API_KEY ?? null;
   return process.env.OMNIROUTE_API_KEY ?? process.env.OPENROUTER_API_KEY ?? process.env.GROQ_API_KEY ?? null;
 }
 
@@ -87,7 +94,9 @@ export async function callAiChatCompletion(options: {
       ? "https://api.groq.com/openai/v1/chat/completions"
       : options.provider === "openrouter"
         ? "https://openrouter.ai/api/v1/chat/completions"
-        : "https://api.groq.com/openai/v1/chat/completions");
+        : options.provider === "nvidia"
+          ? "https://integrate.api.nvidia.com/v1/chat/completions"
+          : "https://api.groq.com/openai/v1/chat/completions");
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${options.apiKey}`,
