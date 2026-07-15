@@ -8,6 +8,7 @@ import {
   resolveAiApiKey,
   resolveAiProvider,
 } from "@/server-fns/ai-settings.functions";
+import { getLocalDate } from "@/lib/utils";
 
 const inputSchema = z.object({
   message: z.string().trim().max(2000).optional().default(""),
@@ -172,29 +173,6 @@ export async function saveChatMessage(
 }
 
 /**
- * Calls the Groq Chat Completions API with the given configuration.
- */
-async function callGroqAPI(
-  apiKey: string,
-  model: string,
-  messages: any[],
-  tools: any[]
-): Promise<any> {
-  const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: { 
-      Authorization: `Bearer ${apiKey}`, 
-      "Content-Type": "application/json" 
-    },
-    body: JSON.stringify({ model, messages, tools, tool_choice: "auto" }),
-  });
-  if (!r.ok) {
-    throw new Error(await r.text());
-  }
-  return r.json();
-}
-
-/**
  * Executes the record_meal tool: inserts a new meal and its constituent items.
  */
 export async function executeRecordMeal(
@@ -319,8 +297,8 @@ export const sendChat = createServerFn({ method: "POST" })
     const apiKey = resolveAiApiKey(settings, provider);
     if (!apiKey) throw new Error("Configure uma chave de IA nas configuracoes.");
 
-    const today = new Date().toISOString().slice(0, 10);
-    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    const today = getLocalDate();
+    const weekAgo = getLocalDate(new Date(Date.now() - 7 * 86400000));
 
     // 1. Fetch relevant user context and chat messages history
     const { ctxText, recentHistory } = await fetchUserContext(supabase, userId, today, weekAgo);

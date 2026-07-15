@@ -1,4 +1,5 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import { Component, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { AuthProvider } from "@/lib/auth-context";
@@ -100,9 +101,38 @@ function RootComponent() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <Outlet />
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
         <Toaster richColors position="top-center" />
       </AuthProvider>
     </ThemeProvider>
   );
+}
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 text-center">
+          <h1 className="text-6xl font-bold text-foreground">Oops!</h1>
+          <p className="mt-4 text-muted-foreground">Algo deu errado ao carregar esta página.</p>
+          <Link
+            to="/app"
+            className="mt-6 inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            onClick={() => this.setState({ hasError: false })}
+          >
+            Voltar ao início
+          </Link>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }

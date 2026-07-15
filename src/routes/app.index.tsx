@@ -60,7 +60,7 @@ function TodayPage() {
     const dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
     const { data: completedToday } = await supabase
       .from("workout_sessions")
-      .select("workout_id, name")
+      .select("id, workout_id, name")
       .eq("user_id", userId)
       .gte("completed_at", dayStart)
       .lte("completed_at", dayEnd)
@@ -68,10 +68,14 @@ function TodayPage() {
       .limit(1);
 
     if (completedToday && completedToday[0]) {
-      return { 
-        id: completedToday[0].workout_id || "", 
-        name: completedToday[0].name 
-      };
+      // workout_id é nullable — se existir, linka para o template original
+      if (completedToday[0].workout_id) {
+        return {
+          id: completedToday[0].workout_id,
+          name: completedToday[0].name,
+        };
+      }
+      // se não tiver template vinculado, vai pro fallback
     }
 
     // 2. Fallback: sugere o último treino criado como template
