@@ -238,3 +238,10 @@ Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hu
   - **Remocao de arquivos temporarios**: dev.log e vite-dev.log deletados da raiz do projeto.
   - **.env.example atualizado**: Adicionadas OMNIROUTE_API_KEY e OMNIROUTE_BASE_URL.
 - **Status**: Concluido, build de producao validado com sucesso.
+
+## [15/07/2026] - Antigravity (Datas UTC no Relatorio PDF e Historico de Exercicios)
+- **Escopo**:
+  - **Relatorio PDF**: Em `app.relatorio.tsx`, a funcao `loadCompletedLogs` usava `completed_at.slice(0,10)` (UTC) para formatar data dos treinos. Substituido por `getLocalDate()`.
+  - **Historico de Exercicios**: Em `app.exercicios.$name.tsx`, mesma correcao no agrupamento por data.
+  - **Varredura final**: Zero ocorrencias de `.slice(0, 10)` em todo o diretorio `src/`.
+- **Status**: Concluido, build de producao validado com sucesso.

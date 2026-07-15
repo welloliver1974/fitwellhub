@@ -926,3 +926,20 @@ Substituido por `getLocalDate(new Date(session.completed_at as string))`.
 
 ### ✅ Estado final
 - ✅ Datas corretas no relatorio PDF para qualquer fuso horario
+
+---
+
+## Sessao: 15/07/2026 — Data UTC no Historico de Exercicios
+
+### 🎯 Funcionalidade trabalhada
+`src/routes/app.exercicios.$name.tsx` → pagina de historico individual de exercicio
+
+### 🔍 Problema
+A linha `const date = (sess.completed_at as string).slice(0, 10)` extraia a data UTC do campo `completed_at` (timestamptz). Isso fazia o grafico de evolucao do exercicio agrupar dados no dia errado para usuarios em UTC-3 apos as 21h.
+
+### 🛠️ Solucao implementada
+Substituido por `getLocalDate(new Date(sess.completed_at as string))`. Adicionado import de `getLocalDate`.
+
+### ✅ Estado final
+- ✅ Grafico de historico de exercicio com datas corretas
+- ✅ Zero ocorrencias de `.slice(0, 10)` em todo o src/
