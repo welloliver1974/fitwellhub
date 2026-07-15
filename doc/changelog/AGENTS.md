@@ -245,3 +245,10 @@ Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hu
   - **Historico de Exercicios**: Em `app.exercicios.$name.tsx`, mesma correcao no agrupamento por data.
   - **Varredura final**: Zero ocorrencias de `.slice(0, 10)` em todo o diretorio `src/`.
 - **Status**: Concluido, build de producao validado com sucesso.
+
+## [15/07/2026] - Antigravity (Provedor NVIDIA)
+- **Escopo**:
+  - **Novo provedor NVIDIA**: Adicionado `nvidia` como provider em `ai-settings.functions.ts`, com endpoint `https://integrate.api.nvidia.com/v1/chat/completions` e modelo `nvidia/llama-3.1-nemotron-70b-instruct`.
+  - **Tela de IA atualizada**: `app.ia.tsx` agora inclui NVIDIA no select de provedores. A chave é salva no campo `openrouter_api_key` do banco (API compativel com formato OpenAI).
+  - **Sem migration**: Nenhuma alteracao no schema do banco.
+- **Status**: Concluido, build de producao validado com sucesso.

@@ -943,3 +943,28 @@ Substituido por `getLocalDate(new Date(sess.completed_at as string))`. Adicionad
 ### ✅ Estado final
 - ✅ Grafico de historico de exercicio com datas corretas
 - ✅ Zero ocorrencias de `.slice(0, 10)` em todo o src/
+
+---
+
+## Sessao: 15/07/2026 — Novo Provedor: NVIDIA
+
+### 🎯 Funcionalidade trabalhada
+- `src/server-fns/ai-settings.functions.ts` → suporte a NVIDIA como provider
+- `src/routes/app.ia.tsx` → UI para selecionar NVIDIA
+
+### 🔍 Motivacao
+O usuario precisava de uma alternativa ao OpenRouter, que tem mais restricoes de uso que a API direta da NVIDIA.
+
+### 🛠️ Solucao implementada
+Adicionado NVIDIA como provider de texto. Usa o endpoint `integrate.api.nvidia.com` com modelo `nemotron-70b`. A chave API e salva no campo `openrouter_api_key` (ambos usam formato OpenAI). Nenhuma migration necessaria.
+
+### Como usar
+1. Ir em `/app/ia`
+2. Selecionar "NVIDIA" no select de provedor
+3. Colar a chave da API da NVIDIA
+4. Salvar
+
+### ✅ Estado final
+- ✅ NVIDIA funcional como provedor de texto
+- ✅ Modelo padrao: Nemotron-70B
+- ✅ Zero alteracoes no banco
