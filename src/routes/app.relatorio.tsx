@@ -242,6 +242,7 @@ function RelatorioPage() {
       doc.save(`fitwellhub-relatorio-${today}.pdf`);
       toast.success("PDF gerado");
     } catch (e) {
+      console.error(e);
       toast.error(e instanceof Error ? e.message : "Erro");
     } finally {
       setLoading(false);

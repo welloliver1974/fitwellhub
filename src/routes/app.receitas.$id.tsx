@@ -122,6 +122,7 @@ function RecipeDetail() {
       setOpen(false);
       load();
     } catch (e) {
+      console.error(e);
       toast.error(e instanceof Error ? e.message : "Erro");
     } finally {
       setBusy(false);

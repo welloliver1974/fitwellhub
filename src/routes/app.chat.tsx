@@ -121,7 +121,7 @@ function ChatPage() {
       });
       load();
     } catch (e) {
-      console.error("Error in sendChat:", e);
+      console.error(e);
       toast.error(e instanceof Error ? e.message : "Erro");
     } finally {
       setSending(false);

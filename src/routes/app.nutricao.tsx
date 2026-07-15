@@ -348,6 +348,7 @@ function NutricaoPage() {
       setOpen(false);
       await load();
     } catch (e) {
+      console.error(e);
       toast.error(e instanceof Error ? e.message : "Erro ao buscar alimento");
     } finally {
       setLoading(false);
@@ -371,6 +372,7 @@ function NutricaoPage() {
       toast.success(`${it.name} adicionado em ${mealType}`);
       load();
     } catch (e) {
+      console.error(e);
       toast.error(e instanceof Error ? e.message : "Erro");
     }
   };
@@ -474,6 +476,7 @@ function NutricaoPage() {
       });
       setPhotoItems(res.items.map((i) => ({ ...i, selected: true })));
     } catch (e) {
+      console.error(e);
       toast.error(e instanceof Error ? e.message : "Erro ao analisar foto");
     } finally {
       setPhotoLoading(false);
@@ -503,6 +506,7 @@ function NutricaoPage() {
       setPhotoItems([]);
       load();
     } catch (e) {
+      console.error(e);
       toast.error(e instanceof Error ? e.message : "Erro");
     }
   };

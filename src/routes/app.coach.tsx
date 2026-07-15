@@ -164,6 +164,15 @@ function CoachPage() {
         ...lines,
       ].join("\n");
 
+      const totalMeals = meals?.length ?? 0;
+      const totalWorkouts = workouts?.length ?? 0;
+      const totalWeights = weights?.length ?? 0;
+      const totalWater = water?.length ?? 0;
+
+      if (totalMeals === 0 && totalWorkouts === 0 && totalWeights === 0 && totalWater === 0) {
+        toast.warning("Poucos dados esta semana. A analise pode ser limitada — registre refeicoes e treinos para melhores insights.", { duration: 5000 });
+      }
+
       const res = await coachAdvice({
         headers: session?.access_token
           ? { Authorization: `Bearer ${session.access_token}` }
@@ -178,10 +187,10 @@ function CoachPage() {
             fat_g: Number(goals?.fat_g ?? 0),
           },
           stats: {
-            mealCount: meals?.length ?? 0,
-            workoutCount: workouts?.length ?? 0,
-            weightCount: weights?.length ?? 0,
-            waterCount: water?.length ?? 0,
+            mealCount: totalMeals,
+            workoutCount: totalWorkouts,
+            weightCount: totalWeights,
+            waterCount: totalWater,
           },
         },
       });
@@ -189,6 +198,7 @@ function CoachPage() {
       setSnapshot(res.snapshot ?? null);
       setPlan(res.plan ?? null);
     } catch (e) {
+      console.error(e);
       toast.error(e instanceof Error ? e.message : "Erro");
     } finally {
       setLoading(false);
