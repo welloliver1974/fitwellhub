@@ -159,11 +159,13 @@ Nao afetam o bundle (tree-shaking remove), mas poluem o codigo fonte.
 ### 🔐 Chaves de API criptografadas no Supabase
 As chaves (Groq, OpenRouter, NVIDIA, OmniRoute) ficam em texto plano na tabela `ai_settings`. Idealmente deveriam ser criptografadas, mas isso exige migration e logica de cifra.
 
-### 📱 PWA - Melhorias futuras
-O service worker ja foi implementado, mas ainda pode evoluir:
+### 📱 PWA - Service Worker ja implementado ✅
+O service worker com cache-first para assets e fallback offline ja esta funcionando desde 15/07/2026.
+
+Proximos refinamentos possiveis (nao prioritarios):
 - Estrategia de cache mais refinada para paginas especificas
 - Badge de notificacoes no icone do app
-- Sincronizacao em background
+- Sincronizacao em background (background sync)
 
 ### ⚠️ Limite de requisicoes NVIDIA
 A chave gratuita da NVIDIA tem limite de ~48 requisicoes. Para uso em producao, recomenda-se upgrade para conta paga ou uso via OpenRouter (que nao tem esse limite para modelos NVIDIA).
