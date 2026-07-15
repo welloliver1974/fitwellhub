@@ -1,3 +1,5 @@
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 
 export type AiProvider = "groq" | "openrouter" | "omniroute" | "nvidia";
@@ -58,15 +60,20 @@ export function resolveAiProvider(settings?: Partial<AiSettings> | null): AiProv
   return "groq";
 }
 
-export async function fetchNvidiaModels(apiKey: string): Promise<string[]> {
-  const res = await fetch("https://integrate.api.nvidia.com/v1/models", {
-    headers: { Authorization: `Bearer ${apiKey}` },
-    signal: AbortSignal.timeout(8000),
+const nvidiaKeySchema = z.object({ apiKey: z.string().min(1) });
+
+export const fetchNvidiaModels = createServerFn({ method: "POST" })
+  .validator((d: unknown) => nvidiaKeySchema.parse(d))
+  .handler(async ({ data }) => {
+    const { apiKey } = data;
+    const res = await fetch("https://integrate.api.nvidia.com/v1/models", {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) throw new Error(`Erro ao buscar modelos: ${res.status}`);
+    const json = await res.json();
+    return (json.data ?? []).map((m: any) => m.id).filter((id: string) => id.startsWith("nvidia/"));
   });
-  if (!res.ok) throw new Error(`Erro ao buscar modelos: ${res.status}`);
-  const json = await res.json();
-  return (json.data ?? []).map((m: any) => m.id).filter((id: string) => id.startsWith("nvidia/"));
-}
 
 export function getTextModel(provider: AiProvider, settings?: Partial<AiSettings> | null): string {
   if (provider === "nvidia" && settings?.nvidia_model) return settings.nvidia_model;

@@ -169,7 +169,7 @@ function AiSettingsPage() {
                   if (!openrouterKey.trim()) return toast.error("Cole a chave da NVIDIA primeiro.");
                   setLoadingModels(true);
                   try {
-                    const models = await fetchNvidiaModels(openrouterKey.trim());
+                    const models = await fetchNvidiaModels({ data: { apiKey: openrouterKey.trim() } });
                     setNvidiaModels(models);
                     if (!nvidiaModel && models.length) setNvidiaModel(models[0]);
                     toast.success(`${models.length} modelos carregados`);
