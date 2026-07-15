@@ -72,7 +72,7 @@ export const fetchNvidiaModels = createServerFn({ method: "POST" })
     });
     if (!res.ok) throw new Error(`Erro ao buscar modelos: ${res.status}`);
     const json = await res.json();
-    return (json.data ?? []).map((m: any) => m.id).filter((id: string) => id.startsWith("nvidia/"));
+    return (json.data ?? []).map((m: any) => m.id);
   });
 
 export function getTextModel(provider: AiProvider, settings?: Partial<AiSettings> | null): string {
