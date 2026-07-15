@@ -32,7 +32,7 @@ async function loadCompletedLogs(userId: string): Promise<CompletedLog[]> {
   if (error || !data || !data.length) return [];
 
   return data.map((session) => {
-    const date = (session.completed_at as string).slice(0, 10);
+    const date = getLocalDate(new Date(session.completed_at as string));
     const setCount = Array.isArray(session.workout_session_sets)
       ? session.workout_session_sets.length
       : 0;

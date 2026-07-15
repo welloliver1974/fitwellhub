@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
+import { getLocalDate } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, TrendingUp } from "lucide-react";
 import {
@@ -52,7 +53,7 @@ function ExerciseHistory() {
       for (const row of data) {
         const sess = row.workout_sessions as any;
         if (!sess || !sess.completed_at) continue;
-        const date = (sess.completed_at as string).slice(0, 10);
+        const date = getLocalDate(new Date(sess.completed_at as string));
         const arr = grouped.get(date) ?? [];
         arr.push({ reps: row.reps, weight: Number(row.weight_kg) });
         grouped.set(date, arr);

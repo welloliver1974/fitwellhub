@@ -910,3 +910,19 @@ Substituidas todas por `getLocalDate(new Date(...))`. Adicionado import nos 3 ar
 ### ✅ Estado final
 - ✅ Raiz do projeto mais limpa
 - ✅ .env.example reflete todas as variais suportadas
+
+---
+
+## Sessao: 15/07/2026 — Data UTC no Relatorio PDF (completed_at)
+
+### 🎯 Funcionalidade trabalhada
+`src/routes/app.relatorio.tsx` → funcao `loadCompletedLogs`
+
+### 🔍 Problema
+A linha `const date = (session.completed_at as string).slice(0, 10)` extraia a data UTC do campo `completed_at` (timestamptz). Para usuarios em UTC-3, treinos feitos apos as 21h apareciam com a data do dia seguinte no relatorio.
+
+### 🛠️ Solucao implementada
+Substituido por `getLocalDate(new Date(session.completed_at as string))`.
+
+### ✅ Estado final
+- ✅ Datas corretas no relatorio PDF para qualquer fuso horario
