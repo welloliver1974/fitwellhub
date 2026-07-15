@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
@@ -198,10 +198,19 @@ function CoachPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-3xl font-display font-bold">Coach IA</h1>
-        <p className="text-sm text-muted-foreground">
-          Análise personalizada da sua semana com base em metas, refeições, treinos, peso e água.
-        </p>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-display font-bold">Coach IA</h1>
+            <p className="text-sm text-muted-foreground">
+              Análise personalizada da sua semana com base em metas, refeições, treinos, peso e água.
+            </p>
+          </div>
+          <Link to="/app/chat">
+            <Button variant="outline" size="sm" className="text-xs gap-1.5 shrink-0">
+              Chat
+            </Button>
+          </Link>
+        </div>
       </div>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         {[

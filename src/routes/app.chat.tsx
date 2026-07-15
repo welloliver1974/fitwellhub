@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
@@ -148,6 +148,11 @@ function ChatPage() {
             <Trash2 className="h-4 w-4" />
           </Button>
         )}
+        <Link to="/app/coach">
+          <Button variant="outline" size="sm" className="text-xs gap-1.5">
+            Análise Semanal
+          </Button>
+        </Link>
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-3 pr-1">
