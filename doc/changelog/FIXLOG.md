@@ -968,3 +968,25 @@ Adicionado NVIDIA como provider de texto. Usa o endpoint `integrate.api.nvidia.c
 - ✅ NVIDIA funcional como provedor de texto
 - ✅ Modelo padrao: Nemotron-70B
 - ✅ Zero alteracoes no banco
+
+---
+
+## Sessao: 15/07/2026 — Modelo NVIDIA customizavel
+
+### 🎯 Funcionalidade trabalhada
+`src/routes/app.ia.tsx` — campo de modelo NVIDIA
+`src/server-fns/ai-settings.functions.ts` — suporte a modelo personalizado
+
+### 🔍 Problema
+O modelo NVIDIA era fixo no codigo (Nemotron-70B). O usuario nao podia escolher outro modelo disponivel na API da NVIDIA.
+
+### 🛠️ Solucao implementada
+1. Adicionado campo de texto "Modelo NVIDIA" na UI quando o provedor NVIDIA esta selecionado.
+2. O modelo e salvo no campo `omniroute_base_url` do banco (reutilizando coluna existente — sem migration).
+3. `getTextModel()` agora aceita `settings` opcional: se provider for NVIDIA e `nvidia_model` estiver preenchido, usa o modelo personalizado.
+4. Todos os callers atualizados para passar `settings`.
+
+### ✅ Estado final
+- ✅ Usuario pode digitar qualquer modelo NVIDIA
+- ✅ Padrao continua sendo Nemotron-70B
+- ✅ Zero migrations no banco

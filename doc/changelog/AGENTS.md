@@ -252,3 +252,10 @@ Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hu
   - **Tela de IA atualizada**: `app.ia.tsx` agora inclui NVIDIA no select de provedores. A chave é salva no campo `openrouter_api_key` do banco (API compativel com formato OpenAI).
   - **Sem migration**: Nenhuma alteracao no schema do banco.
 - **Status**: Concluido, build de producao validado com sucesso.
+
+## [15/07/2026] - Antigravity (Modelo NVIDIA customizavel)
+- **Escopo**:
+  - **Campo de modelo**: Adicionado input "Modelo NVIDIA" na tela de IA quando NVIDIA e selecionado. O nome do modelo e salvo no campo `omniroute_base_url` do banco (sem migration).
+  - **getTextModel()**: Agora aceita `settings` como parametro opcional. Quando provider e NVIDIA e `nvidia_model` existe, usa o modelo personalizado em vez do padrao.
+  - **Atualizacao em cascata**: Todos os callers de `getTextModel` em nutrition, corpo, medidas e chat agora passam `settings`.
+- **Status**: Concluido, build de producao validado com sucesso.
