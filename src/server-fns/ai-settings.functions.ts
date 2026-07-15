@@ -63,7 +63,7 @@ export function resolveAiProvider(settings?: Partial<AiSettings> | null): AiProv
 const nvidiaKeySchema = z.object({ apiKey: z.string().min(1) });
 
 export const fetchNvidiaModels = createServerFn({ method: "POST" })
-  .validator((d: unknown) => nvidiaKeySchema.parse(d))
+  .inputValidator((d: unknown) => nvidiaKeySchema.parse(d))
   .handler(async ({ data }) => {
     const { apiKey } = data;
     const res = await fetch("https://integrate.api.nvidia.com/v1/models", {
