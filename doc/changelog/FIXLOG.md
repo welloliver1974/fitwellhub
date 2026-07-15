@@ -779,3 +779,134 @@ Adicionado componente `ErrorBoundary` (class component com `getDerivedStateFromE
 - ✅ Código mais limpo e sem dead code
 - ✅ Bundle ligeiramente menor sem as dependências ZXing
 - ✅ Repositório sem arquivos de teste obsoletos
+
+---
+
+## Sessao: 15/07/2026 — date-fns removida, Nav Mobile e Heatmap
+
+### 🎯 Funcionalidades trabalhadas
+- `package.json` → remocao de dependencia morta
+- `src/routes/app.tsx` → nav inferior adaptavel
+- `src/components/Heatmap.tsx` → datas UTC e estado vazio
+
+### 🔍 Problemas e Solucoes
+
+**1. date-fns nao utilizada:**
+- **Problema:** A lib `date-fns` estava no `package.json` mas nunca era importada em lugar nenhum.
+- **Solucao:** Removida do `package.json` e `npm install` executado.
+
+**2. Nav inferior apertada em celular:**
+- **Problema:** 7 abas no menu inferior com texto em telas muito pequenas ficavam cortadas.
+- **Solucao:** Texto oculto em telas `< sm` com `hidden sm:block`. Container alterado para `overflow-x-auto`.
+
+**3. Heatmap com datas UTC e sem estado vazio:**
+- **Problema:** O Heatmap usava `toISOString().slice(0,10)` para buscar refeicoes, mesmo bug de datas. Quando nao havia registros, mostrava apenas quadrados cinzas sem explicacao.
+- **Solucao:** Substituido por `getLocalDate()`. Adicionado estado vazio com mensagem explicativa.
+
+### ✅ Estado final
+- ✅ Dependencia date-fns removida
+- ✅ Nav adaptavel em qualquer tamanho de tela
+- ✅ Heatmap com datas locais e estado vazio
+
+---
+
+## Sessao: 15/07/2026 — Prevencao de Flash de Tema, Aviso Coach e Error Handling
+
+### 🎯 Funcionalidades trabalhadas
+- `src/routes/__root.tsx` → script inline de tema
+- `src/routes/app.coach.tsx` → aviso de dados insuficientes
+- 6 arquivos de rota → console.error nos catches
+
+### 🔍 Problemas e Solucoes
+
+**1. Flash branco ao recarregar em modo escuro:**
+- **Problema:** O tema era carregado via `useEffect` no React, causando um flash de tema claro antes do JavaScript aplicar a classe `dark` no `<html>`.
+- **Solucao:** Script syncrono inline no `<head>` que le `localStorage` e aplica a classe imediatamente, antes de qualquer CSS renderizar.
+
+**2. Coach sem aviso de dados insuficientes:**
+- **Problema:** O usuario podia clicar em "Gerar analise da semana" sem ter nenhum registro, e a IA respondia algo generico sem contexto.
+- **Solucao:** Antes de chamar a IA, verifica se ha refeicoes, treinos, peso ou agua. Se tudo estiver vazio, exibe toast de aviso.
+
+**3. Catch blocks sem log:**
+- **Problema:** Blocos `catch` exibiam toast para o usuario mas nao registravam o erro no console, dificultando debug em producao.
+- **Solucao:** Adicionado `console.error(e)` em 6 arquivos (app.nutricao, app.coach, app.receitas.$id, app.relatorio).
+
+### ✅ Estado final
+- ✅ Zero flash de tema ao recarregar
+- ✅ Coach avisa quando faltam dados
+- ✅ Todos os erros registrados no console
+
+---
+
+## Sessao: 15/07/2026 — PWA / Service Worker
+
+### 🎯 Funcionalidade trabalhada
+`public/sw.js` → criacao do service worker
+`src/routes/__root.tsx` → registro no cliente
+
+### 🔍 Problema
+O app tinha meta tags PWA, manifest.webmanifest e icones, mas nao tinha service worker. Isso significa que:
+1. O navegador nunca oferecia "Adicionar a tela inicial"
+2. O app nao funcionava offline
+3. O cache de assets nao era gerenciado
+
+### 🛠️ Solucao implementada
+
+**1. Criacao do service worker (`public/sw.js`):**
+- Cache-first para assets estaticos (JS, CSS, imagens, fontes)
+- Network-first para navegacao (paginas sempre frescas quando online, fallback offline)
+- Network-only para chamadas de API
+- Cache atualizado no evento `activate` (versao `fitwellhub-v1`)
+- Fallback para home quando offline
+
+**2. Registro no cliente:**
+- Script inline no `__root.tsx` apos `<Scripts />`
+
+### ✅ Estado final
+- ✅ App instalavel como PWA
+- ✅ Cache de assets para carregamento mais rapido
+- ✅ Fallback offline para navegacao
+- ✅ Compativel com SSR + Cloudflare Workers
+
+---
+
+## Sessao: 15/07/2026 — Eliminacao Total de Datas UTC
+
+### 🎯 Funcionalidade trabalhada
+Varios arquivos → correcao de datas UTC para local
+
+### 🔍 Problema
+A correcao de datas UTC de 24/06/2026 tinha sido aplicada em 12 arquivos de rota, mas 6 ocorrencias em server functions e hooks ainda usavam `toISOString().slice(0,10)`:
+1. `chat.functions.ts:123` — formatacao de data de treino no contexto da IA
+2. `corpo.functions.ts:79` — 28d atras para calcular fator de atividade
+3. `corpo.functions.ts:137` — 30d atras para buscar treinos
+4. `corpo.functions.ts:146` — 7d atras para buscar nutricao
+5. `medidas.functions.ts:38` — 30d atras para analise de medidas
+6. `use-reminders.tsx:33` — todayKey para lembretes
+
+### 🛠️ Solucao implementada
+Substituidas todas por `getLocalDate(new Date(...))`. Adicionado import nos 3 arquivos que nao tinham.
+
+### ✅ Estado final
+- ✅ Zero ocorrencias de `toISOString().slice(0,10)` em todo o src/
+- ✅ Todas as datas do app usam fuso local consistentemente
+
+---
+
+## Sessao: 15/07/2026 — Limpeza de Logs e .env.example
+
+### 🎯 Funcionalidades trabalhadas
+- `dev.log` e `vite-dev.log` → arquivos temporarios
+- `.env.example` → documentacao de variaveis
+
+### 🔍 Problema
+1. Arquivos `dev.log` (vazio) e `vite-dev.log` (logs de build) estavam poluindo a raiz do projeto.
+2. `.env.example` nao documentava as variaveis `OMNIROUTE_API_KEY` e `OMNIROUTE_BASE_URL`, apesar do codigo ja suportar OmniRoute.
+
+### 🛠️ Solucao implementada
+1. Arquivos de log deletados.
+2. `.env.example` atualizado com as variaveis do OmniRoute.
+
+### ✅ Estado final
+- ✅ Raiz do projeto mais limpa
+- ✅ .env.example reflete todas as variais suportadas

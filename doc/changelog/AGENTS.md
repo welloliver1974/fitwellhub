@@ -201,3 +201,40 @@ Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hu
   - **Datas UTC no Chat**: Em `chat.functions.ts`, `today` e `weekAgo` usavam `toISOString().slice(0,10)` (UTC) em vez de `getLocalDate()`. Isso fazia o chat buscar dados do dia errado para usuários em fusos negativos (ex: Brasil) após as 21h. Corrigido.
   - **Error Boundary**: Adicionado `ErrorBoundary` em `__root.tsx` para capturar erros de renderização e exibir fallback amigável com "Voltar ao início", evitando tela branca.
 - **Status**: Concluído, build de produção validado com sucesso.
+
+## [15/07/2026] - Antigravity (date-fns, Nav Mobile e Heatmap)
+- **Escopo**:
+  - **date-fns removida**: Dependencia nao utilizada em nenhum lugar do codigo. Removida do package.json.
+  - **Nav inferior adaptavel**: Texto das abas oculto em telas pequenas (< sm) com hidden sm:block.
+  - **Heatmap corrigido**: Datas alteradas de UTC para local (getLocalDate()). Adicionado estado vazio.
+- **Status**: Concluido, build de producao validado com sucesso.
+
+## [15/07/2026] - Antigravity (Prevencao de Flash, Aviso Coach e Error Handling)
+- **Escopo**:
+  - **Flash de tema escuro**: Script inline no head que le localStorage e aplica classe dark/light antes do React hidratar.
+  - **Aviso no Coach**: Toast de aviso quando usuario clica em "Gerar analise" sem nenhum registro na semana.
+  - **console.error nos catches**: Adicionado log em todos os blocos catch que so tinham toast.error (6 arquivos).
+- **Status**: Concluido, build de producao validado com sucesso.
+
+## [15/07/2026] - Antigravity (PWA / Service Worker)
+- **Escopo**:
+  - **Criacao do Service Worker**: public/sw.js com cache-first para assets estaticos e network-first para navegacao com fallback offline.
+  - **Registro no cliente**: Script inline no __root.tsx registra o service worker.
+  - **Compatibilidade**: Mantem funcionamento com SSR do TanStack Start e Cloudflare Workers.
+- **Status**: Concluido, build de producao validado com sucesso.
+
+## [15/07/2026] - Antigravity (Eliminacao Total de Datas UTC)
+- **Escopo**:
+  - **6 ocorrencias corrigidas**: Varredura completa encontrou 6 usos de toISOString().slice(0,10) que deveriam usar getLocalDate():
+    - chat.functions.ts:123 - formatacao de data de treino no contexto da IA
+    - corpo.functions.ts:79, 137, 146 - 28d/30d/7d atras para queries de perfil
+    - medidas.functions.ts:38 - 30d atras para analise de medidas
+    - use-reminders.tsx:33 - todayKey para lembretes
+  - **Import adicionado**: getLocalDate importado nos 3 arquivos que nao tinham.
+- **Status**: Concluido, build de producao validado com sucesso.
+
+## [15/07/2026] - Antigravity (Limpeza de Logs e .env.example)
+- **Escopo**:
+  - **Remocao de arquivos temporarios**: dev.log e vite-dev.log deletados da raiz do projeto.
+  - **.env.example atualizado**: Adicionadas OMNIROUTE_API_KEY e OMNIROUTE_BASE_URL.
+- **Status**: Concluido, build de producao validado com sucesso.
