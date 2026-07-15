@@ -130,13 +130,13 @@ function AiSettingsPage() {
           </div>
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
-              <KeyRound className="h-4 w-4" /> OpenRouter API Key
+              <KeyRound className="h-4 w-4" /> {provider === "nvidia" ? "NVIDIA API Key" : "OpenRouter API Key"}
             </Label>
             <Input
               type="password"
               value={openrouterKey}
               onChange={(e) => setOpenrouterKey(e.target.value)}
-              placeholder="Cole sua chave do OpenRouter"
+              placeholder={provider === "nvidia" ? "Cole sua chave da NVIDIA" : "Cole sua chave do OpenRouter"}
               autoComplete="off"
             />
           </div>
