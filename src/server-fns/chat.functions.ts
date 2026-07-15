@@ -120,7 +120,7 @@ export async function fetchUserContext(
   if (workoutsData && workoutsData.length > 0) {
     const lines = [];
     for (const w of workoutsData) {
-      const dateStr = w.completed_at ? new Date(w.completed_at).toISOString().slice(0, 10) : today;
+      const dateStr = w.completed_at ? getLocalDate(new Date(w.completed_at)) : today;
       const sets = w.workout_session_sets ?? [];
       const exercisesMap = new Map<string, Array<{ reps: number; weight_kg: number }>>();
       for (const s of sets) {

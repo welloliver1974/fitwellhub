@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { getLocalDate } from "@/lib/utils";
 import {
   callAiChatCompletion,
   fetchAiSettings,
@@ -76,7 +77,7 @@ export const calculateTdee = createServerFn({ method: "POST" })
     }
 
     // 4. Activity Factor based on workout sessions in last 28 days
-    const twentyEightDaysAgo = new Date(Date.now() - 28 * 86400000).toISOString().slice(0, 10);
+    const twentyEightDaysAgo = getLocalDate(new Date(Date.now() - 28 * 86400000));
     const { data: workouts } = await supabase
       .from("workout_sessions")
       .select("id")
@@ -134,7 +135,7 @@ export const analyzeFullBodyStatus = createServerFn({ method: "POST" })
     const latestBio = bioimpedance && bioimpedance.length > 0 ? bioimpedance[0] : null;
 
     // 3. Fetch recent Workouts (last 30 days)
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const thirtyDaysAgo = getLocalDate(new Date(Date.now() - 30 * 86400000));
     const { data: workoutsData } = await supabase
       .from("workout_sessions")
       .select("id, name, completed_at")
@@ -143,7 +144,7 @@ export const analyzeFullBodyStatus = createServerFn({ method: "POST" })
       .order("completed_at", { ascending: true });
 
     // 4. Fetch recent Nutrition (last 7 days)
-    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    const sevenDaysAgo = getLocalDate(new Date(Date.now() - 7 * 86400000));
     const { data: meals } = await supabase
       .from("meals")
       .select(`

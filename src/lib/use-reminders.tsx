@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
+import { getLocalDate } from "@/lib/utils";
 
 // Polls every 30s and fires a Notification when time matches.
 // Stores last-fired timestamp per reminder in localStorage to avoid duplicates.
@@ -29,7 +30,7 @@ export function useReminders() {
       const mm = now.getMinutes().toString().padStart(2, "0");
       const cur = `${hh}:${mm}`;
       const day = now.getDay();
-      const todayKey = now.toISOString().slice(0, 10);
+      const todayKey = getLocalDate(now);
 
       for (const r of reminders) {
         if (!(r.days_of_week as number[]).includes(day)) continue;

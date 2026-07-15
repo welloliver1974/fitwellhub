@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { getLocalDate } from "@/lib/utils";
 import {
   callAiChatCompletion,
   fetchAiSettings,
@@ -34,7 +35,7 @@ export const analyzeMeasurements = createServerFn({ method: "POST" })
       .order("log_date", { ascending: true });
 
     // 2. Fetch completed workout sessions from the last 30 days
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const thirtyDaysAgo = getLocalDate(new Date(Date.now() - 30 * 86400000));
     const { data: workoutsData } = await supabase
       .from("workout_sessions")
       .select(`
