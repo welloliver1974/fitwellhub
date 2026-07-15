@@ -132,3 +132,38 @@ O FitWell Hub já está muito acima da média em funcionalidade, mas a próxima 
 - mais útil como apoio prático para decisão 🔄
 
 Isso tende a melhorar bastante a experiência do usuário sem exigir uma mudança radical na base do app.
+
+## Proximos Passos (Ideias para o futuro)
+
+### 🧪 Testes automatizados
+O projeto nao tem nenhum framework de teste. Toda refatoracao e feita no escuro — so o build do TypeScript valida que nao quebrou tipo.
+
+Sugestao:
+- Adicionar Vitest (ja vem com Vite)
+- Testes unitarios para `ai-settings.functions.ts` (logica pura)
+- Testes de integracao para as server functions principais
+
+### 📦 Bundle splitting
+O build produz bundles grandes:
+- `supabase` (~702 kB)
+- `recharts` (~815 kB)
+
+Esses pacotes poderiam ser carregados sob demanda (lazy loading) para melhorar o carregamento inicial, especialmente em celular.
+
+### 🗑️ Componentes UI nao utilizados
+31 componentes shadcn/ui em `src/components/ui/` nao sao importados em lugar nenhum:
+accordion, alert, alert-dialog, aspect-ratio, avatar, badge, breadcrumb, calendar, carousel, chart, checkbox, collapsible, context-menu, drawer, dropdown-menu, form, hover-card, input-otp, menubar, navigation-menu, pagination, popover, radio-group, resizable, scroll-area, sidebar, slider, table, textarea, toggle, toggle-group
+
+Nao afetam o bundle (tree-shaking remove), mas poluem o codigo fonte.
+
+### 🔐 Chaves de API criptografadas no Supabase
+As chaves (Groq, OpenRouter, NVIDIA, OmniRoute) ficam em texto plano na tabela `ai_settings`. Idealmente deveriam ser criptografadas, mas isso exige migration e logica de cifra.
+
+### 📱 PWA - Melhorias futuras
+O service worker ja foi implementado, mas ainda pode evoluir:
+- Estrategia de cache mais refinada para paginas especificas
+- Badge de notificacoes no icone do app
+- Sincronizacao em background
+
+### ⚠️ Limite de requisicoes NVIDIA
+A chave gratuita da NVIDIA tem limite de ~48 requisicoes. Para uso em producao, recomenda-se upgrade para conta paga ou uso via OpenRouter (que nao tem esse limite para modelos NVIDIA).
