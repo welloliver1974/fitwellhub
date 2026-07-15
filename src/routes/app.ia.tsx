@@ -13,7 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Sparkles, KeyRound, ShieldCheck } from "lucide-react";
+import { Loader2, Sparkles, KeyRound, ShieldCheck, RefreshCw } from "lucide-react";
+import { fetchNvidiaModels } from "@/server-fns/ai-settings.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/ia")({
@@ -30,6 +31,8 @@ function AiSettingsPage() {
   const [omniKey, setOmniKey] = useState("");
   const [omniBaseUrl, setOmniBaseUrl] = useState("");
   const [nvidiaModel, setNvidiaModel] = useState("");
+  const [nvidiaModels, setNvidiaModels] = useState<string[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -147,16 +150,45 @@ function AiSettingsPage() {
             <Label className="flex items-center gap-2">
               <KeyRound className="h-4 w-4" /> Modelo NVIDIA
             </Label>
-            <Input
-              value={nvidiaModel}
-              onChange={(e) => setNvidiaModel(e.target.value)}
-              placeholder="nvidia/llama-3.1-nemotron-70b-instruct"
-              autoComplete="off"
-            />
-            <p className="text-xs text-muted-foreground">
-              Padrao: Nemotron-70B. Veja os modelos disponiveis em{" "}
-              <a href="https://build.nvidia.com/explore/discover" target="_blank" rel="noopener noreferrer" className="underline">build.nvidia.com</a>
-            </p>
+            <div className="flex gap-2">
+              <Select value={nvidiaModel} onValueChange={setNvidiaModel}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="Selecione um modelo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {nvidiaModels.map((m) => (
+                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="icon"
+                disabled={!openrouterKey.trim() || loadingModels}
+                onClick={async () => {
+                  if (!openrouterKey.trim()) return toast.error("Cole a chave da NVIDIA primeiro.");
+                  setLoadingModels(true);
+                  try {
+                    const models = await fetchNvidiaModels(openrouterKey.trim());
+                    setNvidiaModels(models);
+                    if (!nvidiaModel && models.length) setNvidiaModel(models[0]);
+                    toast.success(`${models.length} modelos carregados`);
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "Erro ao buscar modelos");
+                  } finally {
+                    setLoadingModels(false);
+                  }
+                }}
+                title="Buscar modelos disponiveis"
+              >
+                {loadingModels ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              </Button>
+            </div>
+            {nvidiaModels.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                Cole a chave da NVIDIA e clique em &#x21bb; para buscar os modelos disponiveis.
+              </p>
+            )}
           </div>
         )}
 

@@ -58,6 +58,16 @@ export function resolveAiProvider(settings?: Partial<AiSettings> | null): AiProv
   return "groq";
 }
 
+export async function fetchNvidiaModels(apiKey: string): Promise<string[]> {
+  const res = await fetch("https://integrate.api.nvidia.com/v1/models", {
+    headers: { Authorization: `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!res.ok) throw new Error(`Erro ao buscar modelos: ${res.status}`);
+  const json = await res.json();
+  return (json.data ?? []).map((m: any) => m.id).filter((id: string) => id.startsWith("nvidia/"));
+}
+
 export function getTextModel(provider: AiProvider, settings?: Partial<AiSettings> | null): string {
   if (provider === "nvidia" && settings?.nvidia_model) return settings.nvidia_model;
   return TEXT_MODELS[provider];
