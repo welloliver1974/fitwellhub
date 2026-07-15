@@ -109,14 +109,15 @@ export async function callAiChatCompletion(options: {
   baseUrl?: string | null;
 }) {
   const endpoint =
-    options.baseUrl?.trim() ||
-    (options.provider === "groq"
-      ? "https://api.groq.com/openai/v1/chat/completions"
-      : options.provider === "openrouter"
-        ? "https://openrouter.ai/api/v1/chat/completions"
-        : options.provider === "nvidia"
-          ? "https://integrate.api.nvidia.com/v1/chat/completions"
-          : "https://api.groq.com/openai/v1/chat/completions");
+    options.provider === "omniroute" && options.baseUrl?.trim()
+      ? options.baseUrl.trim()
+      : options.provider === "groq"
+        ? "https://api.groq.com/openai/v1/chat/completions"
+        : options.provider === "openrouter"
+          ? "https://openrouter.ai/api/v1/chat/completions"
+          : options.provider === "nvidia"
+            ? "https://integrate.api.nvidia.com/v1/chat/completions"
+            : "https://api.groq.com/openai/v1/chat/completions";
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${options.apiKey}`,
