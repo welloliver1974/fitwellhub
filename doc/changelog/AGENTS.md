@@ -259,3 +259,12 @@ Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hu
   - **getTextModel()**: Agora aceita `settings` como parametro opcional. Quando provider e NVIDIA e `nvidia_model` existe, usa o modelo personalizado em vez do padrao.
   - **Atualizacao em cascata**: Todos os callers de `getTextModel` em nutrition, corpo, medidas e chat agora passam `settings`.
 - **Status**: Concluido, build de producao validado com sucesso.
+
+## [15/07/2026] - Antigravity (Busca de modelos NVIDIA e correcoes)
+- **Escopo**:
+  - **Busca de modelos**: Criada server function `fetchNvidiaModels` que chama `GET /v1/models` da NVIDIA e retorna todos os modelos disponiveis.
+  - **Select com busca**: Substituido input text por select + botao refresh. Usuario cola a chave, clica em buscar e ve todos os modelos.
+  - **Correcao CORS**: Convertida funcao para `createServerFn` para evitar bloqueio CORS do navegador.
+  - **Correcao baseUrl**: `callAiChatCompletion` usava `baseUrl` para NVIDIA, mas ele continha o nome do modelo (salvo em `omniroute_base_url`). Corrigido: `baseUrl` so usado para OmniRoute.
+  - **Migration**: Criada `20260715000000_ai_settings_nvidia_provider.sql` para adicionar `nvidia` ao CHECK constraint do provider.
+- **Status**: Concluido, build de producao validado com sucesso.

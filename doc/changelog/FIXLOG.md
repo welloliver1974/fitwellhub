@@ -1010,3 +1010,40 @@ Usuario precisava saber o nome exato do modelo NVIDIA e digitar manualmente.
 ### ✅ Estado final
 - ✅ Usuario ve todos os modelos disponiveis na conta NVIDIA
 - ✅ Nao precisa mais digitar nome do modelo manualmente
+
+---
+
+## Sessao: 15/07/2026 — Busca de modelos NVIDIA e correcao de bugs
+
+### 🎯 Funcionalidades trabalhadas
+- `src/server-fns/ai-settings.functions.ts` → fetchNvidiaModels + correcao baseUrl
+- `src/routes/app.ia.tsx` → select de modelos com busca
+- `supabase/migrations/20260715000000_ai_settings_nvidia_provider.sql` → migration
+
+### 🔍 Problemas e Solucoes
+
+**1. Lista de modelos filtrada demais:**
+- **Problema:** Filtro `id.startsWith("nvidia/")"` mostrava poucos modelos.
+- **Solucao:** Removido filtro, agora mostra todos os modelos da API.
+
+**2. CORS ao buscar modelos:**
+- **Problema:** Browser bloqueava requisicao direta a API da NVIDIA.
+- **Solucao:** Convertido para `createServerFn` (POST) que roteia pelo servidor.
+
+**3. "Invalid URL" ao usar modelo NVIDIA:**
+- **Problema:** `callAiChatCompletion` usava `options.baseUrl` (que continha o nome do modelo) como URL do endpoint.
+- **Solucao:** `baseUrl` so usado quando provider e OmniRoute. Para NVIDIA a URL e fixa.
+
+**4. CHECK constraint no banco:**
+- **Problema:** Coluna `provider` so permitia 'groq', 'openrouter', 'omniroute'.
+- **Solucao:** Migration que adiciona 'nvidia' ao constraint.
+
+**5. Limite de requisicoes NVIDIA (ResourceExhausted):**
+- **Problema:** Chave gratuita da NVIDIA tem limite de 48 requisicoes.
+- **Nota:** Nao e bug do app. Usuario pode aguardar reset, usar modelos menores ou fazer upgrade da conta.
+
+### ✅ Estado final
+- ✅ Modelos NVIDIA buscados via API (sem digitar manualmente)
+- ✅ Sem erros CORS
+- ✅ Sem erro "Invalid URL"
+- ✅ Migration para suportar provider nvidia no banco
