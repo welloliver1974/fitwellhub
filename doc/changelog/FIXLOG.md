@@ -696,3 +696,86 @@ export function getLocalDate(date?: Date): string {
 - ✅ Dashboard, nutrição, medidas, peso, bioimpedância, treinos — datas consistentes
 - ✅ Botão deletar funciona corretamente (load pós-delete usa data local)
 - ✅ Build de produção validado com sucesso
+
+---
+
+## Sessão: 15/07/2026 — Bug workout_id no Dashboard (nullable quebra link)
+
+### 🎯 Funcionalidade trabalhada
+`src/routes/app.index.tsx` → função `findTodayWorkout`
+
+### 🔍 Problema
+O campo `workout_id` na tabela `workout_sessions` é nullable (`string | null`). Quando null, o código retornava `workout_id || ""`, gerando um link quebrado para `/app/treinos/$id` com id vazio.
+
+### 🛠️ Solução implementada
+1. Select agora inclui `id` (session id) junto com `workout_id`.
+2. Se `workout_id` existir, usa ele (linka para o template original).
+3. Se `workout_id` for null, cai no fallback existente (último template criado).
+
+### ✅ Estado final
+- ✅ Link do treino no dashboard nunca mais quebra
+- ✅ Fallback preservado para treinos sem template vinculado
+
+---
+
+## Sessão: 15/07/2026 — Datas UTC Reintroduzidas no Chat
+
+### 🎯 Funcionalidade trabalhada
+`src/server-fns/chat.functions.ts` → função `sendChat`
+
+### 🔍 Problema
+No handler do `sendChat`, as variáveis `today` e `weekAgo` usavam `new Date().toISOString().slice(0,10)`, que retorna data em UTC. Isso fazia o chat buscar refeições, peso e treinos do dia errado para usuários em UTC-3 (Brasil) após as 21h.
+
+**Causa raiz:** A correção de UTC de 24/06 tinha sido aplicada em 12 arquivos de rota, mas o `chat.functions.ts` não estava na lista de correção — e ainda usava `toISOString()`.
+
+### 🛠️ Solução implementada
+Substituído `new Date().toISOString().slice(0,10)` por `getLocalDate()`, mesma função utilitária usada no restante do app.
+
+### ✅ Estado final
+- ✅ Chat agora usa data local para filtrar contexto do usuário
+- ✅ Consistente com as demais telas do app
+
+---
+
+## Sessão: 15/07/2026 — Error Boundary
+
+### 🎯 Funcionalidade trabalhada
+`src/routes/__root.tsx` → componente raiz
+
+### 🔍 Problema
+Qualquer erro de renderização em uma rota resultava em tela branca sem feedback para o usuário.
+
+### 🛠️ Solução implementada
+Adicionado componente `ErrorBoundary` (class component com `getDerivedStateFromError`) envolvendo o `<Outlet />`. Em caso de erro, exibe:
+- Título "Oops!"
+- Mensagem "Algo deu errado ao carregar esta página."
+- Botão "Voltar ao início" que reseta o estado de erro
+
+### ✅ Estado final
+- ✅ Erros de rota capturados graciosamente
+- ✅ Usuário consegue navegar de volta sem recarregar a página
+
+---
+
+## Sessão: 15/07/2026 — Dead Code: callGroqAPI e @zxing
+
+### 🎯 Funcionalidades trabalhadas
+- `src/server-fns/chat.functions.ts` → função `callGroqAPI`
+- `package.json` → dependências `@zxing/browser` e `@zxing/library`
+- Scripts temporários: `test-gemini.mjs`, `get-models.mjs`, `get-all-models.mjs`
+
+### 🔍 Problema
+1. A função `callGroqAPI` foi declarada mas nunca chamada — o chat usa `callAiChatCompletion` do `ai-settings.functions.ts`.
+2. As dependências do ZXing foram substituídas pela API nativa `BarcodeDetector` em junho, mas continuavam no `package.json`.
+3. Scripts de teste do Gemini/Groq não eram mais necessários.
+
+### 🛠️ Solução implementada
+1. Removida a declaração de `callGroqAPI` (19 linhas).
+2. Removidas `@zxing/browser` e `@zxing/library` do `package.json`.
+3. Removidos `test-gemini.mjs`, `get-models.mjs`, `get-all-models.mjs`.
+4. `npm install` executado para atualizar node_modules.
+
+### ✅ Estado final
+- ✅ Código mais limpo e sem dead code
+- ✅ Bundle ligeiramente menor sem as dependências ZXing
+- ✅ Repositório sem arquivos de teste obsoletos

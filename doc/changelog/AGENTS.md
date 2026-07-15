@@ -185,3 +185,19 @@ Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hu
   - **Fallback IA no lookup por código**: Em `src/routes/app.nutricao.tsx`, quando o Open Food Facts não encontra o produto pelo código de barras direto, cai no `lookupNutrition` (busca por texto + IA Groq). Se tudo falhar, abre o diálogo em modo manual para o usuário preencher.
   - **Reset de estado**: Toda nova leitura de código de barras agora reseta todos os estados (`query`, `manual`, `mCal`, etc.) antes de preencher, evitando que dados de uma leitura anterior "vazem" para a atual.
 - **Status**: Concluído, testado, commits sucessivos enviados ao GitHub.
+
+## [15/07/2026] - Antigravity (Organização de Docs, Correções e Error Boundary)
+- **Escopo**:
+  - **Organização da documentação**: Criação de `doc/` com subpastas (changelog, roadmap, plans) e `doc/INDEX.md`. Movidos AGENTS.md, FIXLOG.md, melhorias.md, etc. para a estrutura organizada.
+  - **README.md atualizado**: Adicionadas features faltantes (Corpo/Bioimpedância, Tela de IA, Receitas, Chat, Peso, Metas), server functions completas, secrets de produção.
+  - **melhorias.md atualizado**: Status real das implementações (concluídas, parciais, pendentes).
+  - **Dead code removido**: `@zxing/browser` e `@zxing/library` do package.json, scripts temporários (test-gemini, get-models), função `callGroqAPI` em chat.functions.ts.
+  - **Navegação Coach/Chat**: Adicionados botões de navegação entre `/app/chat` e `/app/coach`.
+- **Status**: Concluído, build de produção validado com sucesso.
+
+## [15/07/2026] - Antigravity (Correção de Bugs: Dashboard, UTC, Error Boundary)
+- **Escopo**:
+  - **Bug workout_id no Dashboard**: Em `app.index.tsx`, o campo `workout_id` é nullable na tabela `workout_sessions`. Quando null, o link do treino no dashboard quebrava (id vazio). Corrigido: agora verifica se `workout_id` existe antes de usar; se não, cai no fallback do último template.
+  - **Datas UTC no Chat**: Em `chat.functions.ts`, `today` e `weekAgo` usavam `toISOString().slice(0,10)` (UTC) em vez de `getLocalDate()`. Isso fazia o chat buscar dados do dia errado para usuários em fusos negativos (ex: Brasil) após as 21h. Corrigido.
+  - **Error Boundary**: Adicionado `ErrorBoundary` em `__root.tsx` para capturar erros de renderização e exibir fallback amigável com "Voltar ao início", evitando tela branca.
+- **Status**: Concluído, build de produção validado com sucesso.
