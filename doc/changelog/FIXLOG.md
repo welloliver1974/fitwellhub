@@ -1047,3 +1047,31 @@ Usuario precisava saber o nome exato do modelo NVIDIA e digitar manualmente.
 - ✅ Sem erros CORS
 - ✅ Sem erro "Invalid URL"
 - ✅ Migration para suportar provider nvidia no banco
+
+---
+
+## Sessão: 23/07/2026 — Ajustes: Descanso 60s e Beep mais alto
+
+### 🎯 Funcionalidade trabalhada
+- `src/routes/app.treinos.$id.tsx` — timer de descanso (linha 83)
+- `src/routes/app.treinos.$id.foco.tsx` — timer de descanso (linha 34)
+- `src/lib/utils.ts` — função `playBeep`
+
+### ⏱ Mudança: Descanso de 90s → 60s
+**Arquivos alterados:**
+- `app.treinos.$id.tsx`: `restPreset` de `90` → `60`
+- `app.treinos.$id.foco.tsx`: `restPreset` de `90` → `60`
+
+### 🔊 Mudança: Beep do descanso mais alto
+**Arquivo:** `src/lib/utils.ts` — função `playBeep`
+
+**O que mudou:**
+1. **Gain aumentado:** `0.5` → `1.0` (dobro da amplitude)
+2. **Beep mais longo:** `beepLen` de `0.25s` → `0.4s` (cada bip dura mais, mais fácil de ouvir com música)
+
+Mantido `osc.type = "square"` (onda quadrada — já é a mais penetrante) e as 3 frequências alternadas (880Hz → 660Hz → 880Hz).
+
+### ✅ Estado final
+- ✅ Timer de descanso inicia em **60s** (1 minuto) em vez de 90s
+- ✅ Beep com o **dobro da amplitude** e **60% mais longo**
+- ✅ Zero dependências externas

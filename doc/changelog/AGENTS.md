@@ -268,3 +268,9 @@ Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hu
   - **Correcao baseUrl**: `callAiChatCompletion` usava `baseUrl` para NVIDIA, mas ele continha o nome do modelo (salvo em `omniroute_base_url`). Corrigido: `baseUrl` so usado para OmniRoute.
   - **Migration**: Criada `20260715000000_ai_settings_nvidia_provider.sql` para adicionar `nvidia` ao CHECK constraint do provider.
 - **Status**: Concluido, build de producao validado com sucesso.
+
+## [23/07/2026] - Claude Code (Descanso 60s e Beep mais alto)
+- **Escopo**:
+  - **Descanso 90s → 60s**: Alterado `restPreset` de `90` para `60` em `app.treinos.$id.tsx` e `app.treinos.$id.foco.tsx`.
+  - **Beep mais alto**: Em `src/lib/utils.ts`, `playBeep` teve gain aumentado de `0.5` para `1.0` e `beepLen` de `0.25s` para `0.4s`.
+- **Status**: Concluido, commitado e enviado ao GitHub.

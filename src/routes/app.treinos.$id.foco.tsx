@@ -31,7 +31,7 @@ function FocusMode() {
   const [idx, setIdx] = useState(0);
   const [restSec, setRestSec] = useState(0);
   const [restRunning, setRestRunning] = useState(false);
-  const [restPreset, setRestPreset] = useState(90);
+  const [restPreset, setRestPreset] = useState(60);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Estados da sessão de treino ativa (mesmo rascunho da tela normal)
