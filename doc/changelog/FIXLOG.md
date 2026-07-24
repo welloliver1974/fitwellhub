@@ -1099,3 +1099,26 @@ Substituído o grid visual por um card com:
 - ✅ Zero gráficos — tudo em texto e números
 - ✅ Mesma informação, muito mais legível
 - ✅ Zero novas queries ao banco (reusa os dados já buscados)
+
+---
+
+## Sessão: 24/07/2026 — Som do Descanso Ascendente (corta música no fone)
+
+### 🎯 Funcionalidade trabalhada
+`src/lib/utils.ts` → função `playBeep`
+
+### 🔊 Problema
+O som do fim do descanso tinha 3 bipes com padrão 880Hz → 660Hz → 880Hz (nota do meio mais grave — anti-climático). Mesmo com gain alto (1.0), o som não "cortava" a música no fone de forma eficaz.
+
+### 🛠️ Solução implementada
+
+**O que mudou:**
+1. **Frequências ascendentes**: `[800, 1200, 1600]` — escala que SOBE, sinalizando psicologicamente "hora de voltar!"
+2. **1600Hz agudo**: Frequência alta que poucos instrumentos/vocais ocupam, corta a música no fone
+3. **Square wave mantida**: Rica em harmônicos, máxima presença
+4. **Beep mais rápido**: `beepLen` de `0.4s` → `0.3s`, gap de `0.2s` → `0.1s` — padrão rítmico mais distinto, mais fácil do cérebro reconhecer com áudio concorrente
+
+### ✅ Estado final
+- ✅ 3 bipes ascendentes (800→1200→1600Hz) — som que sobe, chama atenção
+- ✅ Corta música ambiente mesmo com fone
+- ✅ Zero dependências externas

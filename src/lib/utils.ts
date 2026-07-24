@@ -13,9 +13,10 @@ export function getLocalDate(date?: Date): string {
 export function playBeep(_duration = 2000) {
   try {
     const ctx = new AudioContext();
-    const freqs = [880, 660, 880];
-    const beepLen = 0.4;
-    const gap = 0.2;
+    // Ascendente: corta musica no fone (800→1200→1600Hz, square com harmonicos)
+    const freqs = [800, 1200, 1600];
+    const beepLen = 0.3;
+    const gap = 0.1;
     freqs.forEach((freq, i) => {
       const start = ctx.currentTime + i * (beepLen + gap);
       const osc = ctx.createOscillator();
