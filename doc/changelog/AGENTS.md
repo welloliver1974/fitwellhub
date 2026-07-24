@@ -269,6 +269,13 @@ Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hu
   - **Migration**: Criada `20260715000000_ai_settings_nvidia_provider.sql` para adicionar `nvidia` ao CHECK constraint do provider.
 - **Status**: Concluido, build de producao validado com sucesso.
 
+## [23/07/2026] - Claude Code (Heatmap substituído por card de adesão em texto)
+- **Escopo**:
+  - **Heatmap removido**: Substituído o grid visual de quadrados coloridos (GitHub-style contribution chart) por um card combinando uma barra de progresso de adesão + 4 mini-cards com stats em texto (sequência, média kcal, dias na meta, meta calórica).
+  - **Arquivo**: `src/components/Heatmap.tsx` — reescrito completamente.
+  - **Sem novas queries**: Reusa os mesmos dados que o heatmap já buscava.
+- **Status**: Concluido, commitado e enviado ao GitHub.
+
 ## [23/07/2026] - Claude Code (Descanso 60s e Beep mais alto)
 - **Escopo**:
   - **Descanso 90s → 60s**: Alterado `restPreset` de `90` para `60` em `app.treinos.$id.tsx` e `app.treinos.$id.foco.tsx`.

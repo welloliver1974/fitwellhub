@@ -2,10 +2,30 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { getLocalDate } from "@/lib/utils";
+import { Progress } from "@/components/ui/progress";
 
 const DAYS = 84; // 12 weeks
 
 type Cell = { date: string; value: number; goal: number };
+
+function calcStreak(sorted: Cell[]): { current: number; best: number } {
+  let current = 0;
+  let best = 0;
+  let running = 0;
+  const today = getLocalDate();
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    if (sorted[i].value > 0) {
+      running++;
+      if (sorted[i].date === today || current > 0) current++;
+    } else {
+      if (running > best) best = running;
+      running = 0;
+    }
+  }
+  if (running > best) best = running;
+  if (current === 0 && sorted.length > 0 && sorted[sorted.length - 1].value > 0) current = running;
+  return { current, best };
+}
 
 export function Heatmap() {
   const { user } = useAuth();
@@ -56,53 +76,59 @@ export function Heatmap() {
     })();
   }, [user]);
 
-  const intensity = (c: Cell) => {
-    if (!c.value) return 0;
-    const r = c.value / c.goal;
-    if (r < 0.4) return 1;
-    if (r < 0.7) return 2;
-    if (r < 0.95) return 3;
-    if (r <= 1.1) return 4;
-    return 3; // over
-  };
+  if (cells.length === 0) return null;
 
-  const colors = ["bg-muted/40", "bg-primary/20", "bg-primary/40", "bg-primary/70", "bg-primary"];
-
-  const hasData = cells.some((c) => c.value > 0);
-
-  // Group into 12 columns x 7 rows
-  const cols: Cell[][] = [];
-  for (let i = 0; i < cells.length; i += 7) cols.push(cells.slice(i, i + 7));
+  const daysWithMeals = cells.filter((c) => c.value > 0).length;
+  const adhesionPct = Math.round((daysWithMeals / DAYS) * 100);
+  const totalCalories = cells.reduce((s, c) => s + c.value, 0);
+  const avgCalories = daysWithMeals > 0 ? Math.round(totalCalories / daysWithMeals) : 0;
+  const daysOnGoal = cells.filter((c) => c.value > 0 && c.value >= c.goal * 0.9).length;
+  const streak = calcStreak(cells);
 
   return (
-    <div className="rounded-2xl border bg-card p-5">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-xs uppercase tracking-wide text-muted-foreground">Adesão · 12 semanas</p>
-        <div className="flex items-center gap-1">
-          {colors.map((c, i) => (
-            <div key={i} className={`h-2.5 w-2.5 rounded-sm ${c}`} />
-          ))}
+    <div className="rounded-2xl border bg-card p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+          Adesão · 12 semanas
+        </p>
+      </div>
+
+      {/* Barra de adesão */}
+      <div>
+        <div className="flex items-baseline justify-between mb-1.5">
+          <span className="text-sm font-medium">{adhesionPct}%</span>
+          <span className="text-xs text-muted-foreground">
+            {daysWithMeals} de {DAYS} dias
+          </span>
+        </div>
+        <Progress value={adhesionPct} className="h-2" />
+      </div>
+
+      {/* Stats em grid */}
+      <div className="grid grid-cols-2 gap-3 text-sm">
+        <div className="rounded-xl bg-secondary/50 p-3">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">🔥 Sequência</p>
+          <p className="text-lg font-display font-bold mt-0.5">{streak.current} dias</p>
+          <p className="text-[10px] text-muted-foreground">Melhor: {streak.best} dias</p>
+        </div>
+        <div className="rounded-xl bg-secondary/50 p-3">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">📊 Média</p>
+          <p className="text-lg font-display font-bold mt-0.5">{avgCalories.toLocaleString()}</p>
+          <p className="text-[10px] text-muted-foreground">kcal/dia</p>
+        </div>
+        <div className="rounded-xl bg-secondary/50 p-3">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">🎯 Dias na meta</p>
+          <p className="text-lg font-display font-bold mt-0.5">{daysOnGoal}</p>
+          <p className="text-[10px] text-muted-foreground">
+            de {daysWithMeals} dias com registro
+          </p>
+        </div>
+        <div className="rounded-xl bg-secondary/50 p-3">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">⚡ Meta</p>
+          <p className="text-lg font-display font-bold mt-0.5">{cells[0]?.goal.toLocaleString()}</p>
+          <p className="text-[10px] text-muted-foreground">kcal/dia</p>
         </div>
       </div>
-      {hasData ? (
-        <div className="flex gap-1 overflow-x-auto">
-          {cols.map((col, i) => (
-            <div key={i} className="flex flex-col gap-1">
-              {col.map((c) => (
-                <div
-                  key={c.date}
-                  title={`${c.date}: ${Math.round(c.value)} kcal`}
-                  className={`h-3 w-3 rounded-sm ${colors[intensity(c)]}`}
-                />
-              ))}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-sm text-muted-foreground text-center py-6">
-          Nenhum registro de refeições nos últimos 84 dias.
-        </p>
-      )}
     </div>
   );
 }

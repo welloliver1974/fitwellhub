@@ -1075,3 +1075,27 @@ Mantido `osc.type = "square"` (onda quadrada — já é a mais penetrante) e as 
 - ✅ Timer de descanso inicia em **60s** (1 minuto) em vez de 90s
 - ✅ Beep com o **dobro da amplitude** e **60% mais longo**
 - ✅ Zero dependências externas
+
+---
+
+## Sessão: 23/07/2026 — Heatmap substituído por card de adesão em texto
+
+### 🎯 Funcionalidade trabalhada
+`src/components/Heatmap.tsx` → substituição completa do componente
+
+### 🔍 Problema
+O heatmap (quadriculado estilo GitHub com 12 semanas de quadrados coloridos) não era intuitivo para o usuário, que preferia não ter gráficos.
+
+### 🛠️ Solução implementada
+Substituído o grid visual por um card com:
+1. **Barra de progresso** com % de adesão (dias com refeição registrada / 84 dias)
+2. **4 cards em grid** com stats em texto:
+   - 🔥 Sequência atual e melhor sequência de dias seguidos
+   - 📊 Média de calorias por dia
+   - 🎯 Dias dentro da meta calórica (≥90% da meta)
+   - ⚡ Meta calórica definida
+
+### ✅ Estado final
+- ✅ Zero gráficos — tudo em texto e números
+- ✅ Mesma informação, muito mais legível
+- ✅ Zero novas queries ao banco (reusa os dados já buscados)
