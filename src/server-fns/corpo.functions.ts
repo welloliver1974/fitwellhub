@@ -138,7 +138,16 @@ export const analyzeFullBodyStatus = createServerFn({ method: "POST" })
     const thirtyDaysAgo = getLocalDate(new Date(Date.now() - 30 * 86400000));
     const { data: workoutsData } = await supabase
       .from("workout_sessions")
-      .select("id, name, completed_at")
+      .select(`
+        id,
+        name,
+        completed_at,
+        workout_session_sets (
+          exercise_name,
+          reps,
+          weight_kg
+        )
+      `)
       .eq("user_id", userId)
       .gte("completed_at", thirtyDaysAgo + "T00:00:00")
       .order("completed_at", { ascending: true });
@@ -227,9 +236,35 @@ export const analyzeFullBodyStatus = createServerFn({ method: "POST" })
     // Format workouts
     let workoutsText = "Nenhum treino concluído nos últimos 30 dias.";
     if (workoutsData && workoutsData.length > 0) {
-      const count = workoutsData.length;
-      const names = [...new Set(workoutsData.map(w => w.name))].join(", ");
-      workoutsText = `Total de treinos no período: ${count}. Tipos de treino frequentes: ${names}.`;
+      const wCount = workoutsData.length;
+      const workoutNames = [...new Set(workoutsData.map(w => w.name))].join(", ");
+
+      // Group exercises across all sessions to show volume detail
+      const exerciseMap = new Map<string, { sets: number; totalReps: number; maxWeight: number }>();
+      for (const w of workoutsData) {
+        const sets = (w as any).workout_session_sets;
+        if (sets) {
+          for (const s of sets) {
+            const name = s.exercise_name || "exercício";
+            if (!exerciseMap.has(name)) exerciseMap.set(name, { sets: 0, totalReps: 0, maxWeight: 0 });
+            const entry = exerciseMap.get(name)!;
+            entry.sets++;
+            entry.totalReps += Number(s.reps ?? 0);
+            if (Number(s.weight_kg ?? 0) > entry.maxWeight) entry.maxWeight = Number(s.weight_kg);
+          }
+        }
+      }
+
+      let exercisesDetail = "";
+      if (exerciseMap.size > 0) {
+        const exerciseLines: string[] = [];
+        for (const [ex, stats] of exerciseMap) {
+          exerciseLines.push(`${ex}: ${stats.sets}s ${stats.maxWeight > 0 ? `${stats.maxWeight}kg` : `reps`}`);
+        }
+        exercisesDetail = `Exercícios: ${exerciseLines.join(" | ")}.`;
+      }
+
+      workoutsText = `${wCount} treinos em 30 dias. Tipos: ${workoutNames}. ${exercisesDetail}`;
     }
 
     // Format Bioimpedance text
@@ -246,8 +281,16 @@ export const analyzeFullBodyStatus = createServerFn({ method: "POST" })
 `;
     }
 
+    let bmrComparison = "";
+    if (tdeeData.bmr && latestBio?.bmr_machine) {
+      const diff = latestBio.bmr_machine - tdeeData.bmr;
+      const pct = ((diff / tdeeData.bmr) * 100).toFixed(1);
+      const direction = diff > 0 ? "acima" : diff < 0 ? "abaixo" : "igual";
+      bmrComparison = ` | TMB Bioimpedância: ${latestBio.bmr_machine} kcal (${Math.abs(diff)} kcal ${direction} do previsto — ${pct}%)`;
+    }
+
     const tdeeText = tdeeData.bmr
-      ? `TMB: ${tdeeData.bmr} kcal | TDEE estimado: ${tdeeData.tdee} kcal (fator de atividade: ${tdeeData.activityFactor}, baseado em média de ${tdeeData.sessionsPerWeek.toFixed(1)} treinos por semana)`
+      ? `TMB (Mifflin-St Jeor): ${tdeeData.bmr} kcal${bmrComparison} | TDEE estimado: ${tdeeData.tdee} kcal (fator de atividade: ${tdeeData.activityFactor}, baseado em média de ${tdeeData.sessionsPerWeek.toFixed(1)} treinos por semana)`
       : "Dados insuficientes para cálculo de TMB/TDEE (preencha sexo, altura e peso).";
 
     const nutritionText = avgCalories > 0
@@ -258,9 +301,9 @@ export const analyzeFullBodyStatus = createServerFn({ method: "POST" })
 Sua missão é gerar um diagnóstico evolutivo completo cruzando todos os dados corporais, nutricionais e de treinos do usuário.
 
 Sua análise deve conter:
-1. **Composição Corporal & Bioimpedância**: Análise do peso, % de gordura e massa muscular, indicando se os valores estão saudáveis ou sugerindo o foco correto (emagrecimento, hipertrofia ou recomposição).
-2. **Balanço Energético & Nutrição**: Correlacione o TDEE estimado com a média de ingestão calórica e macros dos últimos 7 dias. O usuário está em déficit, superávit ou manutenção?
-3. **Evolução & Treinos**: Correlacione o volume e frequência de treinos nos últimos 30 dias com as mudanças de medidas em cm e dados de bioimpedância.
+1. **Composição Corporal & Bioimpedância**: Análise do peso, % de gordura e massa muscular, indicando se os valores estão saudáveis ou sugerindo o foco correto (emagrecimento, hipertrofia ou recomposição). Se houver TMB da bioimpedância, compare com a TMB calculada — uma diferença significativa pode indicar metabolismo adaptativo.
+2. **Balanço Energético & Nutrição**: Correlacione o TDEE estimado com a média de ingestão calórica e macros dos últimos 7 dias. O usuário está em déficit, superávit ou manutenção? A proteína é adequada para o objetivo?
+3. **Evolução & Treinos**: Analise os exercícios executados (nome, séries e carga máxima) e correlacione com as mudanças de medidas em cm e dados de bioimpedância. Exemplo: "aumento de carga no supino acompanhou o ganho de 1cm no peito". Verifique simetria entre membros direito/esquerdo quando houver dados.
 4. **Próximos Passos**: Recomendações práticas e acionáveis de ajuste de calorias/macros e estratégia de treino para maximizar os resultados.
 
 Escreva em português (Brasil) em formato Markdown muito elegante, limpo e profissional. Seja direto e motivador. Evite textos excessivamente longos (limite de 4-5 parágrafos ou seções curtas).`;

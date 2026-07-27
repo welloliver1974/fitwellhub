@@ -82,10 +82,10 @@ function MedidasPage() {
   const navigate = useNavigate();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [open, setOpen] = useState(false);
-  const [selectedLabel, setSelectedLabel] = useState(MEASURE_LABELS[0]);
   const [customLabel, setCustomLabel] = useState("");
-  const [value, setValue] = useState("");
-  const [date, setDate] = useState(getLocalDate());
+  const [customValue, setCustomValue] = useState("");
+  const [sessionDate, setSessionDate] = useState(getLocalDate());
+  const [sessionValues, setSessionValues] = useState<Record<string, string>>({});
   const [activeGroup, setActiveGroup] = useState<string | null>(null);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [aiSnapshot, setAiSnapshot] = useState<{
@@ -237,25 +237,43 @@ function MedidasPage() {
     }
   }, [entries, activeGroup]);
 
-  const save = async () => {
-    const label = selectedLabel === "Outro" ? customLabel.trim() : selectedLabel;
-    const v = Number(value.replace(",", "."));
-    if (!user || !label || !v || v <= 0) {
-      toast.error("Preencha todos os campos corretamente.");
+  const saveSession = async () => {
+    if (!user) return;
+
+    const toInsert: Array<{
+      user_id: string;
+      log_date: string;
+      label: string;
+      value_cm: number;
+    }> = [];
+
+    // Collect from grid
+    for (const [label, val] of Object.entries(sessionValues)) {
+      const v = Number(val.replace(",", "."));
+      if (val.trim() && v > 0) {
+        toInsert.push({ user_id: user.id, log_date: sessionDate, label, value_cm: v });
+      }
+    }
+
+    // Collect custom "Outro"
+    const customLabelTrimmed = customLabel.trim();
+    const customVal = Number(customValue.replace(",", "."));
+    if (customLabelTrimmed && customVal > 0) {
+      toInsert.push({ user_id: user.id, log_date: sessionDate, label: customLabelTrimmed, value_cm: customVal });
+    }
+
+    if (toInsert.length === 0) {
+      toast.error("Preencha pelo menos uma medida.");
       return;
     }
-    const { error } = await supabase.from("body_measurements").insert({
-      user_id: user.id,
-      log_date: date,
-      label,
-      value_cm: v,
-    });
+
+    const { error } = await supabase.from("body_measurements").insert(toInsert);
     if (error) return toast.error(error.message);
-    toast.success("Medida registrada!");
-    setValue("");
-    setCustomLabel("");
+
+    const firstLabel = toInsert[0].label;
+    toast.success(`${toInsert.length} ${toInsert.length === 1 ? "medida registrada" : "medidas registradas"}!`);
     setOpen(false);
-    setActiveGroup(label);
+    if (firstLabel) setActiveGroup(firstLabel);
     load();
   };
 
@@ -276,6 +294,15 @@ function MedidasPage() {
   }, [entries]);
 
   const groupLabels = [...groups.keys()];
+
+  // Last recorded value per label for quick reference in multi-entry form
+  const lastValues = useMemo(() => {
+    const map = new Map<string, { value: number; date: string }>();
+    for (const e of entries) {
+      map.set(e.label, { value: e.value_cm, date: e.log_date });
+    }
+    return map;
+  }, [entries]);
 
   // Latest value per group with detailed evolution analysis
   const summaryCards = useMemo(() => {
@@ -345,70 +372,113 @@ function MedidasPage() {
           </div>
         </div>
 
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(v) => {
+          setOpen(v);
+          if (!v) {
+            setSessionValues({});
+            setCustomLabel("");
+            setCustomValue("");
+          }
+        }}>
           <DialogTrigger asChild>
             <Button size="sm" className="rounded-full bg-primary hover:bg-primary/95 text-primary-foreground font-semibold px-4 shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]">
               <Plus className="h-4 w-4 mr-1.5 stroke-[2.5]" />
-              Registrar
+              Registrar Medidas
             </Button>
           </DialogTrigger>
-          <DialogContent className="rounded-3xl">
+          <DialogContent className="rounded-3xl max-w-xl">
             <DialogHeader>
-              <DialogTitle className="font-display font-bold">Nova Medida Corporal</DialogTitle>
+              <DialogTitle className="font-display font-bold">Sessão de Medidas</DialogTitle>
+              <p className="text-xs text-muted-foreground">Preencha os locais que mediu hoje. Todos serão salvos de uma vez.</p>
             </DialogHeader>
+
             <div className="space-y-4 py-2">
+              {/* Date — applies to all */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-muted-foreground">Data da medição</label>
                 <Input
                   type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
+                  value={sessionDate}
+                  onChange={(e) => setSessionDate(e.target.value)}
                   className="rounded-xl border-border/80 focus-visible:ring-primary/20"
                 />
               </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">Local do corpo</label>
-                <Select value={selectedLabel} onValueChange={setSelectedLabel}>
-                  <SelectTrigger className="rounded-xl border-border/80">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl">
-                    {MEASURE_LABELS.map((l) => (
-                      <SelectItem key={l} value={l}>
-                        {l}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {selectedLabel === "Outro" && (
-                <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <label className="text-xs font-semibold text-muted-foreground">Nome da medida personalizada</label>
-                  <Input
-                    placeholder="Ex: Pescoço, Antebraço..."
-                    value={customLabel}
-                    onChange={(e) => setCustomLabel(e.target.value)}
-                    className="rounded-xl border-border/80 focus-visible:ring-primary/20"
-                    autoFocus
-                  />
+
+              {/* Grid of all body parts with inline inputs */}
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground mb-2 block">Locais medidos</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[50vh] overflow-y-auto pr-1 -mr-1">
+                  {MEASURE_LABELS.filter(l => l !== "Outro").map(label => {
+                    const last = lastValues.get(label);
+                    return (
+                      <div key={label} className="space-y-1">
+                        <label className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider">
+                          {label}
+                        </label>
+                        <div className="relative">
+                          <Input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            placeholder={last ? `últ: ${last.value.toFixed(1)}` : "cm"}
+                            value={sessionValues[label] ?? ""}
+                            onChange={(e) => setSessionValues(prev => ({ ...prev, [label]: e.target.value }))}
+                            className="rounded-xl border-border/80 focus-visible:ring-primary/20 font-mono text-sm h-9 pr-7"
+                          />
+                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-muted-foreground/50 pointer-events-none">
+                            cm
+                          </span>
+                        </div>
+                        {last && (
+                          <p className="text-[8px] text-muted-foreground/40 font-mono truncate">
+                            {last.date.slice(5)}: {last.value.toFixed(1)}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">Valor (em cm)</label>
-                <Input
-                  type="number"
-                  step="0.1"
-                  placeholder="Ex: 80.5"
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                  className="rounded-xl border-border/80 focus-visible:ring-primary/20 font-mono"
-                  autoFocus={selectedLabel !== "Outro"}
-                />
+              </div>
+
+              {/* Custom "Outro" section */}
+              <div className="border-t border-border/50 pt-3">
+                <div className="grid grid-cols-[1fr_100px] gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider">Outro local</label>
+                    <Input
+                      placeholder="Ex: Pescoço"
+                      value={customLabel}
+                      onChange={(e) => setCustomLabel(e.target.value)}
+                      className="rounded-xl border-border/80 focus-visible:ring-primary/20 h-9 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider">Valor</label>
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        placeholder="cm"
+                        value={customValue}
+                        onChange={(e) => setCustomValue(e.target.value)}
+                        className="rounded-xl border-border/80 focus-visible:ring-primary/20 font-mono h-9 text-sm pr-7"
+                      />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-muted-foreground/50 pointer-events-none">
+                        cm
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
+
             <DialogFooter>
-              <Button onClick={save} className="rounded-full w-full sm:w-auto font-semibold px-6 shadow-sm">
-                Salvar Medida
+              <Button
+                onClick={saveSession}
+                className="rounded-full w-full sm:w-auto font-semibold px-6 shadow-sm"
+              >
+                Salvar Medidas
               </Button>
             </DialogFooter>
           </DialogContent>
