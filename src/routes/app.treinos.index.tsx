@@ -14,7 +14,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, ChevronRight, Dumbbell, Trash2, Copy, Layers } from "lucide-react";
+import { Plus, ChevronRight, Dumbbell, Trash2, Copy, Layers, PencilLine } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/treinos/")({
@@ -27,6 +27,8 @@ function WorkoutsPage() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [name, setName] = useState("");
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
 
   const load = async () => {
     const { data } = await supabase
@@ -140,6 +142,30 @@ function WorkoutsPage() {
     load();
   };
 
+  const startEditing = (w: Workout, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setEditingId(w.id);
+    setEditName(w.name);
+  };
+
+  const saveEdit = async (id: string) => {
+    if (!editName.trim()) return;
+    const { error } = await supabase
+      .from("workouts")
+      .update({ name: editName.trim() })
+      .eq("id", id);
+    if (error) return toast.error(error.message);
+    setEditingId(null);
+    toast.success("Nome atualizado");
+    load();
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditName("");
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -191,8 +217,35 @@ function WorkoutsPage() {
           {workouts.map((w) => (
             <Link key={w.id} to="/app/treinos/$id" params={{ id: w.id }} className="block">
               <Card className="p-4 flex items-center justify-between hover:bg-secondary/50 transition-colors">
-                <div>
-                  <p className="font-medium">{w.name}</p>
+                <div className="flex-1 min-w-0">
+                  {editingId === w.id ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { e.preventDefault(); saveEdit(w.id); }
+                          if (e.key === "Escape") cancelEdit();
+                        }}
+                        onBlur={() => saveEdit(w.id)}
+                        className="h-8 text-sm font-medium"
+                        autoFocus
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-medium truncate">{w.name}</p>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0"
+                        onClick={(e) => startEditing(w, e)}
+                      >
+                        <PencilLine className="h-3 w-3 text-muted-foreground" />
+                      </Button>
+                    </div>
+                  )}
                   <p className="text-xs text-muted-foreground">
                     {new Date(w.workout_date + "T00:00").toLocaleDateString("pt-BR")}
                   </p>

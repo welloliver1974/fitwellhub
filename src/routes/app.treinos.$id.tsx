@@ -35,6 +35,7 @@ import {
   Loader2,
   Check,
   RefreshCw,
+  PencilLine,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -89,6 +90,8 @@ function WorkoutDetail() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [startedAt, setStartedAt] = useState<string | null>(null);
   const [isFinishing, setIsFinishing] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState("");
 
   // Auxiliar para salvar rascunho no localStorage
   const saveDraft = (
@@ -412,6 +415,29 @@ function WorkoutDetail() {
     load();
   };
 
+  const startEditingName = () => {
+    if (!workout) return;
+    setEditNameValue(workout.name);
+    setEditingName(true);
+  };
+
+  const saveNameEdit = async () => {
+    if (!workout || !editNameValue.trim()) return;
+    const { error } = await supabase
+      .from("workouts")
+      .update({ name: editNameValue.trim() })
+      .eq("id", id);
+    if (error) return toast.error(error.message);
+    setEditingName(false);
+    toast.success("Nome atualizado");
+    load();
+  };
+
+  const cancelNameEdit = () => {
+    setEditingName(false);
+    setEditNameValue("");
+  };
+
   if (!workout) return <p className="text-muted-foreground">Carregando…</p>;
 
   const suggestion = (name: string) => {
@@ -447,9 +473,28 @@ function WorkoutDetail() {
       </div>
 
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-display font-bold">{workout.name}</h1>
-          <p className="text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
+          {editingName ? (
+            <Input
+              value={editNameValue}
+              onChange={(e) => setEditNameValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveNameEdit();
+                if (e.key === "Escape") cancelNameEdit();
+              }}
+              onBlur={saveNameEdit}
+              className="text-3xl font-display font-bold h-auto py-1 px-2 w-64"
+              autoFocus
+            />
+          ) : (
+            <>
+              <h1 className="text-3xl font-display font-bold">{workout.name}</h1>
+              <Button variant="ghost" size="icon" onClick={startEditingName} className="h-7 w-7">
+                <PencilLine className="h-3.5 w-3.5 text-muted-foreground" />
+              </Button>
+            </>
+          )}
+          <p className="text-sm text-muted-foreground ml-1">
             {new Date(workout.workout_date + "T00:00").toLocaleDateString("pt-BR")}
           </p>
         </div>

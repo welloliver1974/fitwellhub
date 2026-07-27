@@ -237,34 +237,65 @@ export const analyzeFullBodyStatus = createServerFn({ method: "POST" })
     let workoutsText = "Nenhum treino concluído nos últimos 30 dias.";
     if (workoutsData && workoutsData.length > 0) {
       const wCount = workoutsData.length;
-      const workoutNames = [...new Set(workoutsData.map(w => w.name))].join(", ");
 
-      // Group exercises across all sessions to show volume detail
-      const exerciseMap = new Map<string, { sets: number; totalReps: number; maxWeight: number }>();
+      // Count session types
+      const typeCount = new Map<string, number>();
       for (const w of workoutsData) {
+        const t = w.name || "Treino";
+        typeCount.set(t, (typeCount.get(t) || 0) + 1);
+      }
+      const typeFreq = Array.from(typeCount.entries())
+        .map(([name, count]) => `${name} (${count}×)`)
+        .join(", ");
+
+      // Track exercises with progression (first→last weight)
+      const exerciseMap = new Map<string, { sets: number; maxWeight: number; maxDate: string; firstWeight: number; lastWeight: number }>();
+      const allDates = new Set<string>();
+
+      for (const w of workoutsData) {
+        const sessionDate = w.completed_at?.substring(0, 10);
+        if (sessionDate) allDates.add(sessionDate);
         const sets = (w as any).workout_session_sets;
         if (sets) {
           for (const s of sets) {
             const name = s.exercise_name || "exercício";
-            if (!exerciseMap.has(name)) exerciseMap.set(name, { sets: 0, totalReps: 0, maxWeight: 0 });
+            if (!exerciseMap.has(name)) {
+              exerciseMap.set(name, { sets: 0, maxWeight: 0, maxDate: "", firstWeight: -1, lastWeight: 0 });
+            }
             const entry = exerciseMap.get(name)!;
             entry.sets++;
-            entry.totalReps += Number(s.reps ?? 0);
-            if (Number(s.weight_kg ?? 0) > entry.maxWeight) entry.maxWeight = Number(s.weight_kg);
+            const wgt = Number(s.weight_kg ?? 0);
+            if (wgt > entry.maxWeight) {
+              entry.maxWeight = wgt;
+              entry.maxDate = sessionDate || "";
+            }
+            if (entry.firstWeight < 0) entry.firstWeight = wgt;
+            entry.lastWeight = wgt;
           }
         }
       }
 
+      const datesSorted = Array.from(allDates).sort();
+
+      // Build progression text
       let exercisesDetail = "";
       if (exerciseMap.size > 0) {
-        const exerciseLines: string[] = [];
-        for (const [ex, stats] of exerciseMap) {
-          exerciseLines.push(`${ex}: ${stats.sets}s ${stats.maxWeight > 0 ? `${stats.maxWeight}kg` : `reps`}`);
+        const lines: string[] = [];
+        for (const [ex, e] of exerciseMap) {
+          const prog = e.maxWeight > 0 && e.firstWeight > 0 && e.maxWeight !== e.firstWeight
+            ? `${e.firstWeight}kg→${e.maxWeight}kg`
+            : e.maxWeight > 0 ? `${e.maxWeight}kg` : "—";
+          const dateInfo = e.maxDate ? ` (máx em ${e.maxDate.substring(5)})` : "";
+          lines.push(`  - ${ex}: ${prog}${dateInfo} | ${e.sets} série${e.sets > 1 ? "s" : ""}`);
         }
-        exercisesDetail = `Exercícios: ${exerciseLines.join(" | ")}.`;
+        exercisesDetail = `\n\nEvolução por exercício:\n${lines.join("\n")}`;
       }
 
-      workoutsText = `${wCount} treinos em 30 dias. Tipos: ${workoutNames}. ${exercisesDetail}`;
+      const datesText = datesSorted.length > 0
+        ? `\n\nDatas dos treinos: ${datesSorted.map(d => d.substring(5)).join(", ")}`
+        : "";
+
+      workoutsText = `${wCount} treinos em 30 dias. ${typeFreq}.${exercisesDetail}${datesText}`;
     }
 
     // Format Bioimpedance text
