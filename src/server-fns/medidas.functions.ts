@@ -1,4 +1,4 @@
-import { createServerFn } from "@tanstack/react-start";
+﻿import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { getLocalDate } from "@/lib/utils";
@@ -86,20 +86,24 @@ export const analyzeMeasurements = createServerFn({ method: "POST" })
       workoutsText = `Total de treinos nos últimos 30 dias: ${wCount}.\nTipos de treino frequentes: ${workoutNames}.`;
     }
 
-    const systemPrompt = `Você é um Personal Trainer e Coach de Nutrição altamente especializado e encorajador.
-Sua tarefa é cruzar os dados de Medidas Corporais do usuário com a rotina de Treinos dele (dos últimos 30 dias).
-Gere uma análise rápida, direta e motivadora. 
-Destaque pontos positivos (ex: "sua cintura diminuiu, mostrando perda de gordura" ou "seus braços aumentaram, ótimo trabalho de hipertrofia!").
-Se não houver muitos dados de treino, foque apenas nas medidas. Use formato Markdown, com listas ou negrito onde fizer sentido. Seja conciso (máximo de 3 parágrafos curtos).`;
+    const systemPrompt = `Você é um analista de evolução física especializado em antropometria. Você transforma dados brutos de medidas corporais em um diagnóstico direto e preciso.
 
-    const userPrompt = `Aqui estão meus dados:
-### Medidas Corporais (Evolução):
+Sua análise:
+1. **Direção geral**: o corpo está perdendo medidas (emagrecimento), ganhando (hipertrofia) ou estabilizado?
+2. **Destaques**: mencione nominalmente os 2-3 locais com maior variação positiva ou negativa
+3. **Correlação com treinos**: se houver dados de treino, cruze os exercícios mais frequentes com as medidas correspondentes
+4. **Termômetro**: uma frase-veredito final do tipo "Seu corpo está respondendo bem à estratégia atual"
+
+Markdown limpo. Tom de profissional de avaliação física — não de coach de internet. Máximo de 4 parágrafos.`;
+
+    const userPrompt = `Paciente — Evolução de Medidas:
+
 ${measurementsText}
 
-### Meus Treinos (Últimos 30 dias):
+Registro de Treinos (últimos 30 dias):
 ${workoutsText}
 
-Por favor, faça uma análise da minha evolução física.`;
+Analise a evolução física.`;
 
     const messages = [
       { role: "system", content: systemPrompt },
@@ -111,7 +115,7 @@ Por favor, faça uma análise da minha evolução física.`;
       apiKey,
       model: getTextModel(provider, settings),
       messages,
-      temperature: 0.7,
+      temperature: 0.4,
       maxTokens: 1024,
       baseUrl: settings.omniroute_base_url,
     });
@@ -239,17 +243,18 @@ export const compareMeasurementsWithAi = createServerFn({ method: "POST" })
       weightDiffText = ` (Variação de peso: ${wDiff >= 0 ? "+" : ""}${wDiff.toFixed(1)} kg)`;
     }
 
-    const systemPrompt = `Você é um Personal Trainer e Coach de Nutrição altamente especializado e focado em recomposição corporal.
-Sua tarefa é analisar a evolução de todas as medidas corporais e pesos de um usuário entre duas datas específicas.
+    const systemPrompt = `Você é um analista de evolução corporal especializado em comparação temporal de medidas antropométricas. Seu foco é detectar a direção real da mudança entre duas datas — sem achismo.
 
-Orientações de análise:
-1. Avalie a variação do peso corporal em relação às mudanças das medidas de gordura (Cintura, Quadril, Pochete) e massa muscular (Braços, Ombros, Peito, Coxas, Panturrilhas).
-2. Explique se a evolução representa queima de gordura, ganho de massa muscular ou recomposição corporal.
-3. Compare a simetria corporal (ex: diferença de evolução entre braço esquerdo e direito, ou coxa esquerda e direita) caso esses dados estejam disponíveis nas duas datas.
-4. Mantenha a resposta motivadora, objetiva e formatada em Markdown de forma muito elegante e limpa. Use negritos para destacar números e termos importantes.
-5. Seja conciso (máximo de 3 a 4 parágrafos curtos).`;
+Estrutura obrigatória:
 
-    const userPrompt = `Por favor, analise a evolução dos meus dados físicos entre as duas datas fornecidas:
+1. **Balanço Geral**: o peso mudou? E as medidas? O paciente está em emagrecimento, recomposição ou hipertrofia no período analisado?
+2. **Análise por Região**: divida entre medidas de gordura (cintura, quadril, pochete) e medidas musculares (braços, coxas, peito, ombros). A direção é consistente ou conflitante?
+3. **Simetria**: compare D/E sempre que houver dados — diferenças > 5% merecem destaque
+4. **Veredito**: resposta direta: "O paciente está evoluindo conforme o esperado" ou "Há sinais de estagnação/desvio de estratégia"
+
+Tom de avaliador físico de alto nível — técnico, preciso, sem firulas. Markdown limpo. Máximo de 4 parágrafos.`;
+
+    const userPrompt = `Análise entre duas datas:
 
 ### Período de Comparação:
 - Data Base (A): ${dateA} (Peso: ${weightAText})
@@ -258,7 +263,7 @@ Orientações de análise:
 ### Comparativo de Medidas Corporais:
 ${measurementsText}
 
-Por favor, forneça um diagnóstico sobre a minha evolução física com base nesses dados.`;
+Qual é o diagnóstico evolutivo deste período?`;
 
     const messages = [
       { role: "system", content: systemPrompt },
@@ -270,11 +275,11 @@ Por favor, forneça um diagnóstico sobre a minha evolução física com base ne
       apiKey,
       model: getTextModel(provider, settings),
       messages,
-      temperature: 0.7,
+      temperature: 0.4,
       maxTokens: 1024,
       baseUrl: settings.omniroute_base_url,
-    });
     
+    });
     const analysis = json.choices[0].message.content as string;
     return { analysis };
   });

@@ -22,19 +22,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { 
-  ArrowLeft, 
-  Plus, 
-  Ruler, 
-  Trash2, 
-  Sparkles, 
-  Loader2, 
-  Calendar, 
-  TrendingUp, 
-  TrendingDown, 
-  Clock, 
-  ChevronDown, 
-  ChevronUp 
+import {
+  ArrowLeft,
+  Plus,
+  Ruler,
+  Trash2,
+  PencilLine,
+  Sparkles,
+  Loader2,
+  Calendar,
+  TrendingUp,
+  TrendingDown,
+  Clock,
+  ChevronDown,
+  ChevronUp,
+  Check,
+  X
 } from "lucide-react";
 import { analyzeMeasurements, compareMeasurementsWithAi } from "@/server-fns/medidas.functions";
 import { toast } from "sonner";
@@ -101,6 +104,8 @@ function MedidasPage() {
   const [comparisonAnalysis, setComparisonAnalysis] = useState<string | null>(null);
   const [isComparing, setIsComparing] = useState(false);
   const [comparisonWeights, setComparisonWeights] = useState<{ weightA: number | null; weightB: number | null }>({ weightA: null, weightB: null });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<string>("");
   const [isLoadingWeights, setIsLoadingWeights] = useState(false);
 
   // Extrai todas as datas únicas que possuem alguma medida cadastrada
@@ -280,6 +285,33 @@ function MedidasPage() {
   const remove = async (id: string) => {
     if (!confirm("Excluir este registro?")) return;
     await supabase.from("body_measurements").delete().eq("id", id);
+    load();
+  };
+
+  const startEditing = (id: string, currentValue: number) => {
+    setEditingId(id);
+    setEditValue(String(currentValue));
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditValue("");
+  };
+
+  const saveEdit = async (id: string) => {
+    if (!user) return;
+    const v = Number(editValue.replace(",", "."));
+    if (!v || v <= 0) {
+      toast.error("Valor inválido.");
+      return;
+    }
+    const { error } = await supabase
+      .from("body_measurements")
+      .update({ value_cm: v })
+      .eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Medida atualizada!");
+    cancelEditing();
     load();
   };
 
@@ -793,11 +825,47 @@ function MedidasPage() {
                     <div className="divide-y divide-border/50 max-h-[300px] overflow-y-auto">
                       {[...activeEntries].reverse().map((e) => (
                         <div key={e.id} className="px-5 py-3.5 flex items-center justify-between hover:bg-secondary/5 transition-colors">
-                          <div>
-                            <p className="font-bold text-foreground text-sm">
-                              {e.value_cm.toFixed(1)}{" "}
-                              <span className="text-xs font-normal text-muted-foreground">cm</span>
-                            </p>
+                          <div className="flex-1 min-w-0">
+                            {editingId === e.id ? (
+                              <div className="flex items-center gap-1.5">
+                                <Input
+                                  type="number"
+                                  step="0.1"
+                                  min="0"
+                                  value={editValue}
+                                  onChange={(e2) => setEditValue(e2.target.value)}
+                                  onKeyDown={(e2) => {
+                                    if (e2.key === "Enter") saveEdit(e.id);
+                                    if (e2.key === "Escape") cancelEditing();
+                                  }}
+                                  onBlur={() => saveEdit(e.id)}
+                                  className="h-8 w-24 rounded-xl font-mono text-sm"
+                                  autoFocus
+                                />
+                                <span className="text-xs font-normal text-muted-foreground">cm</span>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="rounded-full h-7 w-7 text-emerald-600 hover:bg-emerald-500/10"
+                                  onMouseDown={(e2) => { e2.preventDefault(); saveEdit(e.id); }}
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="rounded-full h-7 w-7 text-muted-foreground hover:bg-muted"
+                                  onMouseDown={(e2) => { e2.preventDefault(); cancelEditing(); }}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <p className="font-bold text-foreground text-sm">
+                                {e.value_cm.toFixed(1)}{" "}
+                                <span className="text-xs font-normal text-muted-foreground">cm</span>
+                              </p>
+                            )}
                             <p className="text-xs text-muted-foreground mt-0.5">
                               {new Date(e.log_date + "T00:00").toLocaleDateString("pt-BR", {
                                 weekday: "short",
@@ -807,14 +875,24 @@ function MedidasPage() {
                               })}
                             </p>
                           </div>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="rounded-full hover:bg-destructive/10 hover:text-destructive text-muted-foreground/80 h-8 w-8 transition-colors" 
-                            onClick={() => remove(e.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="rounded-full hover:bg-primary/10 hover:text-primary text-muted-foreground/60 h-8 w-8 transition-colors"
+                              onClick={() => startEditing(e.id, e.value_cm)}
+                            >
+                              <PencilLine className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="rounded-full hover:bg-destructive/10 hover:text-destructive text-muted-foreground/60 h-8 w-8 transition-colors"
+                              onClick={() => remove(e.id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -856,27 +934,57 @@ function MedidasPage() {
                         
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {dayEntries.map((e) => (
-                            <div 
-                              key={e.id} 
+                            <div
+                              key={e.id}
                               className="bg-secondary/35 p-3 rounded-xl flex items-center justify-between gap-2 group/item hover:bg-secondary/50 transition-colors"
                             >
-                              <div className="truncate">
+                              <div className="truncate flex-1 min-w-0">
                                 <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider truncate">
                                   {e.label}
                                 </p>
-                                <p className="text-sm font-extrabold tracking-tight text-foreground mt-0.5">
-                                  {e.value_cm.toFixed(1)}{" "}
-                                  <span className="text-[10px] font-semibold text-muted-foreground">cm</span>
-                                </p>
+                                {editingId === e.id ? (
+                                  <div className="flex items-center gap-1 mt-1">
+                                    <Input
+                                      type="number"
+                                      step="0.1"
+                                      min="0"
+                                      value={editValue}
+                                      onChange={(e2) => setEditValue(e2.target.value)}
+                                      onKeyDown={(e2) => {
+                                        if (e2.key === "Enter") saveEdit(e.id);
+                                        if (e2.key === "Escape") cancelEditing();
+                                      }}
+                                      onBlur={() => saveEdit(e.id)}
+                                      className="h-7 w-20 rounded-xl font-mono text-xs"
+                                      autoFocus
+                                    />
+                                    <span className="text-[10px] font-semibold text-muted-foreground">cm</span>
+                                  </div>
+                                ) : (
+                                  <p className="text-sm font-extrabold tracking-tight text-foreground mt-0.5">
+                                    {e.value_cm.toFixed(1)}{" "}
+                                    <span className="text-[10px] font-semibold text-muted-foreground">cm</span>
+                                  </p>
+                                )}
                               </div>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-7 w-7 rounded-full opacity-60 group-hover/item:opacity-100 transition-all hover:bg-destructive/10 hover:text-destructive text-muted-foreground" 
-                                onClick={() => remove(e.id)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
+                              <div className="flex items-center gap-0.5 shrink-0">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 rounded-full opacity-0 group-hover/item:opacity-60 hover:!opacity-100 transition-all hover:bg-primary/10 hover:text-primary text-muted-foreground"
+                                  onClick={() => startEditing(e.id, e.value_cm)}
+                                >
+                                  <PencilLine className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 rounded-full opacity-60 group-hover/item:opacity-100 transition-all hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
+                                  onClick={() => remove(e.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
                             </div>
                           ))}
                         </div>
