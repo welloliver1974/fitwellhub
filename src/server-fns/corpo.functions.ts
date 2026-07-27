@@ -365,7 +365,7 @@ Máximo de 4 recomendações, cada uma com:
 2. **Nunca** comece com "Olá!", "Tudo bem?" ou saudações. Vá direto ao laudo
 3. Se um dado não estiver disponível, não o invente — omita a seção ou marque como "[dado não registrado]"
 4. Seja direto, mas não seco. Tom de especialista que respeita o paciente
-5. **Limite**: entre 500 e 800 palavras. Seja denso, não prolixo
+5. **Limite**: entre 1200 e 1800 palavras. Seja denso, não prolixo
 6. Termine com uma linha destacada de encerramento: "_____" seguido de "*Dr. Corpo — Avaliação Física Inteligente*"`;
 
     const userPrompt = `Abaixo estão meus dados consolidados das últimas avaliações. Emita o laudo completo seguindo a estrutura obrigatória.
@@ -401,7 +401,7 @@ Emita o laudo completo.`;
       model: getTextModel(provider, settings),
       messages,
       temperature: 0.4,
-      maxTokens: 3000,
+      maxTokens: 5000,
       baseUrl: settings.omniroute_base_url,
     });
 
