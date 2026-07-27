@@ -432,7 +432,7 @@ Emita o laudo completo.`;
       model: getTextModel(provider, settings),
       messages,
       temperature: 0.4,
-      maxTokens: 5000,
+      maxTokens: 6000,
       baseUrl: settings.omniroute_base_url,
     });
 
