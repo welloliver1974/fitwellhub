@@ -315,6 +315,14 @@ function MedidasPage() {
     load();
   };
 
+  const openForDate = (dateStr: string) => {
+    setSessionDate(dateStr);
+    setSessionValues({});
+    setCustomLabel("");
+    setCustomValue("");
+    setOpen(true);
+  };
+
   // Group entries by label
   const groups = useMemo(() => {
     const map = new Map<string, Entry[]>();
@@ -410,6 +418,7 @@ function MedidasPage() {
             setSessionValues({});
             setCustomLabel("");
             setCustomValue("");
+            setSessionDate(getLocalDate());
           }
         }}>
           <DialogTrigger asChild>
@@ -421,7 +430,7 @@ function MedidasPage() {
           <DialogContent className="rounded-3xl max-w-xl">
             <DialogHeader>
               <DialogTitle className="font-display font-bold">Sessão de Medidas</DialogTitle>
-              <p className="text-xs text-muted-foreground">Preencha os locais que mediu hoje. Todos serão salvos de uma vez.</p>
+              <p className="text-xs text-muted-foreground">Preencha os locais que mediu. Todos serão salvos de uma vez na data selecionada.</p>
             </DialogHeader>
 
             <div className="space-y-4 py-2">
@@ -927,9 +936,20 @@ function MedidasPage() {
                             <span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
                             <span className="text-xs font-semibold text-muted-foreground">{day} {monthYear}</span>
                           </div>
-                          <span className="text-[10px] font-extrabold bg-muted text-muted-foreground px-2 py-0.5 rounded-full shrink-0">
-                            {dayEntries.length} {dayEntries.length === 1 ? "medida" : "medidas"}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-extrabold bg-muted text-muted-foreground px-2 py-0.5 rounded-full shrink-0">
+                              {dayEntries.length} {dayEntries.length === 1 ? "medida" : "medidas"}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 rounded-full text-muted-foreground/50 hover:text-primary hover:bg-primary/10 transition-all"
+                              onClick={() => openForDate(dateStr)}
+                              title="Adicionar medida neste dia"
+                            >
+                              <Plus className="h-3 w-3 stroke-[3]" />
+                            </Button>
+                          </div>
                         </div>
                         
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
