@@ -2,6 +2,16 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [01/08/2026] - Claude Code (Biblioteca de Alimentos na aba Nutrição)
+- **Escopo**:
+  - **Nova migration**: `supabase/migrations/20260801000000_food_library.sql` cria a tabela `food_library` (id, user_id, name, category, grams, calories, protein_g, carbs_g, fat_g, created_at) com RLS e índice em `user_id`.
+  - **Tipagem Supabase**: Bloco `food_library` (Row/Insert/Update) adicionado em `src/integrations/supabase/types.ts`.
+  - **Pack de alimentos TACO**: `src/lib/food-pack-taco.ts` com `FOOD_PACK` (~50 alimentos brasileiros comuns por 100g) e `FOOD_CATEGORIES` (8 categorias).
+  - **Componente `FoodLibrary`**: `src/components/FoodLibrary.tsx` com busca, criar/editar alimento (botão "Calcular macros com IA" reusando `lookupNutrition`), importar pack em 1 clique, e adicionar à refeição com gramas flexíveis + recálculo dos macros em tempo real.
+  - **Integração**: `src/routes/app.nutricao.tsx` renderiza `<FoodLibrary>` ao final, reutilizando `ensureMeal` e `load` existentes. Favoritos e Recentes não foram alterados.
+  - **Documentação**: `doc/plans/food_library.md` com decisões, schema, fluxo de recálculo e verificação.
+- **Status**: Concluído, type-check e lint validados nos arquivos novos. Migration pendente de aplicação no Supabase (`supabase db push`).
+
 ## [24/06/2026] - Antigravity (Correção de ID do Modelo OpenRouter: qwen-2.5-72b-instruct)
 - **Escopo**:
   - **Correção do model ID**: Em `src/server-fns/ai-settings.functions.ts:18`, o `TEXT_MODELS["openrouter"]` estava com `"qwen/qwen2.5-72b-instruct"` (sem traço), que não é um modelo válido no OpenRouter. Corrigido para `"qwen/qwen-2.5-72b-instruct"`.

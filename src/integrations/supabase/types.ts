@@ -227,6 +227,45 @@ export type Database = {
         };
         Relationships: [];
       };
+      food_library: {
+        Row: {
+          calories: number;
+          carbs_g: number;
+          category: string | null;
+          created_at: string;
+          fat_g: number;
+          grams: number;
+          id: string;
+          name: string;
+          protein_g: number;
+          user_id: string;
+        };
+        Insert: {
+          calories?: number;
+          carbs_g?: number;
+          category?: string | null;
+          created_at?: string;
+          fat_g?: number;
+          grams?: number;
+          id?: string;
+          name: string;
+          protein_g?: number;
+          user_id: string;
+        };
+        Update: {
+          calories?: number;
+          carbs_g?: number;
+          category?: string | null;
+          created_at?: string;
+          fat_g?: number;
+          grams?: number;
+          id?: string;
+          name?: string;
+          protein_g?: number;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       goals: {
         Row: {
           calories: number;

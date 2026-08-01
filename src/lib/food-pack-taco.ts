@@ -1,0 +1,393 @@
+// Pack inicial de alimentos brasileiros comuns para a biblioteca pessoal.
+// Valores APROXIMADOS por 100g, com base na Tabela TACO / composicao brasileira.
+// Sao referencias para agilizar o inicio do usuario — todos editaveis depois.
+// Para alimentos cozidos/preparados sem oleo salvo a porcao base de 100g.
+
+export type FoodPackItem = {
+  name: string;
+  category: string;
+  calories: number; // kcal por 100g
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+};
+
+export const FOOD_CATEGORIES = [
+  "Proteínas",
+  "Grãos & Cereais",
+  "Leguminosas",
+  "Tubérculos",
+  "Frutas",
+  "Laticínios",
+  "Legumes & Verduras",
+  "Outros",
+] as const;
+
+export const FOOD_PACK: FoodPackItem[] = [
+  // Proteínas
+  {
+    name: "Peito de frango grelhado",
+    category: "Proteínas",
+    calories: 165,
+    protein_g: 31,
+    carbs_g: 0,
+    fat_g: 3.6,
+  },
+  {
+    name: "Carne bovina magra (patinho)",
+    category: "Proteínas",
+    calories: 219,
+    protein_g: 36,
+    carbs_g: 0,
+    fat_g: 7,
+  },
+  {
+    name: "Filé de tilápia grelhado",
+    category: "Proteínas",
+    calories: 128,
+    protein_g: 26,
+    carbs_g: 0,
+    fat_g: 2.5,
+  },
+  {
+    name: "Ovo inteiro cozido",
+    category: "Proteínas",
+    calories: 143,
+    protein_g: 13,
+    carbs_g: 1.1,
+    fat_g: 9.5,
+  },
+  {
+    name: "Clara de ovo",
+    category: "Proteínas",
+    calories: 52,
+    protein_g: 11,
+    carbs_g: 0.7,
+    fat_g: 0.2,
+  },
+  {
+    name: "Whey protein (dose 30g)",
+    category: "Proteínas",
+    calories: 120,
+    protein_g: 24,
+    carbs_g: 3,
+    fat_g: 1.5,
+  },
+
+  // Grãos & Cereais
+  {
+    name: "Arroz branco cozido",
+    category: "Grãos & Cereais",
+    calories: 130,
+    protein_g: 2.6,
+    carbs_g: 28,
+    fat_g: 0.2,
+  },
+  {
+    name: "Arroz integral cozido",
+    category: "Grãos & Cereais",
+    calories: 142,
+    protein_g: 3,
+    carbs_g: 30,
+    fat_g: 1.1,
+  },
+  {
+    name: "Aveia em flocos",
+    category: "Grãos & Cereais",
+    calories: 389,
+    protein_g: 16.9,
+    carbs_g: 66,
+    fat_g: 6.9,
+  },
+  {
+    name: "Pão francês",
+    category: "Grãos & Cereais",
+    calories: 295,
+    protein_g: 8,
+    carbs_g: 58,
+    fat_g: 4,
+  },
+  {
+    name: "Pão integral",
+    category: "Grãos & Cereais",
+    calories: 247,
+    protein_g: 13,
+    carbs_g: 47,
+    fat_g: 3.2,
+  },
+  {
+    name: "Macarrão de trigo cozido",
+    category: "Grãos & Cereais",
+    calories: 158,
+    protein_g: 5.8,
+    carbs_g: 31,
+    fat_g: 0.9,
+  },
+  {
+    name: "Granola",
+    category: "Grãos & Cereais",
+    calories: 471,
+    protein_g: 12,
+    carbs_g: 67,
+    fat_g: 18,
+  },
+  {
+    name: "Cuscuz de milho",
+    category: "Grãos & Cereais",
+    calories: 369,
+    protein_g: 9,
+    carbs_g: 78,
+    fat_g: 1.5,
+  },
+
+  // Leguminosas
+  {
+    name: "Feijão carioca cozido",
+    category: "Leguminosas",
+    calories: 76,
+    protein_g: 4.8,
+    carbs_g: 14,
+    fat_g: 0.5,
+  },
+  {
+    name: "Feijão preto cozido",
+    category: "Leguminosas",
+    calories: 66,
+    protein_g: 4.5,
+    carbs_g: 13,
+    fat_g: 0.3,
+  },
+  {
+    name: "Grão-de-bico cozido",
+    category: "Leguminosas",
+    calories: 130,
+    protein_g: 7,
+    carbs_g: 20,
+    fat_g: 2.1,
+  },
+  {
+    name: "Lentilha cozida",
+    category: "Leguminosas",
+    calories: 116,
+    protein_g: 9,
+    carbs_g: 20,
+    fat_g: 0.4,
+  },
+
+  // Tubérculos
+  {
+    name: "Batata doce cozida",
+    category: "Tubérculos",
+    calories: 86,
+    protein_g: 1.6,
+    carbs_g: 20,
+    fat_g: 0.1,
+  },
+  {
+    name: "Batata inglesa cozida",
+    category: "Tubérculos",
+    calories: 87,
+    protein_g: 2,
+    carbs_g: 20,
+    fat_g: 0.1,
+  },
+  {
+    name: "Mandioca cozida",
+    category: "Tubérculos",
+    calories: 152,
+    protein_g: 0.7,
+    carbs_g: 37,
+    fat_g: 0.3,
+  },
+  {
+    name: "Inhame cozido",
+    category: "Tubérculos",
+    calories: 118,
+    protein_g: 1.9,
+    carbs_g: 27,
+    fat_g: 0.1,
+  },
+
+  // Frutas
+  {
+    name: "Banana prata",
+    category: "Frutas",
+    calories: 89,
+    protein_g: 1.1,
+    carbs_g: 23,
+    fat_g: 0.3,
+  },
+  {
+    name: "Maçã com casca",
+    category: "Frutas",
+    calories: 52,
+    protein_g: 0.3,
+    carbs_g: 14,
+    fat_g: 0.2,
+  },
+  {
+    name: "Mamão formosa",
+    category: "Frutas",
+    calories: 50,
+    protein_g: 0.6,
+    carbs_g: 12,
+    fat_g: 0.1,
+  },
+  { name: "Manga", category: "Frutas", calories: 54, protein_g: 0.5, carbs_g: 13, fat_g: 0.3 },
+  { name: "Laranja", category: "Frutas", calories: 47, protein_g: 0.9, carbs_g: 12, fat_g: 0.1 },
+  { name: "Abacate", category: "Frutas", calories: 160, protein_g: 2, carbs_g: 8.5, fat_g: 14.7 },
+  { name: "Melancia", category: "Frutas", calories: 30, protein_g: 0.6, carbs_g: 7.6, fat_g: 0.2 },
+  { name: "Uva", category: "Frutas", calories: 69, protein_g: 0.7, carbs_g: 18, fat_g: 0.2 },
+  {
+    name: "Mamão papaya",
+    category: "Frutas",
+    calories: 43,
+    protein_g: 0.5,
+    carbs_g: 11,
+    fat_g: 0.1,
+  },
+
+  // Laticínios
+  {
+    name: "Leite integral",
+    category: "Laticínios",
+    calories: 61,
+    protein_g: 3.3,
+    carbs_g: 4.8,
+    fat_g: 3.3,
+  },
+  {
+    name: "Leite desnatado",
+    category: "Laticínios",
+    calories: 34,
+    protein_g: 3.4,
+    carbs_g: 5,
+    fat_g: 0.2,
+  },
+  {
+    name: "Iogurte natural integral",
+    category: "Laticínios",
+    calories: 61,
+    protein_g: 3.5,
+    carbs_g: 4.7,
+    fat_g: 3.3,
+  },
+  {
+    name: "Queijo branco",
+    category: "Laticínios",
+    calories: 320,
+    protein_g: 22,
+    carbs_g: 2,
+    fat_g: 25,
+  },
+  {
+    name: "Queijo minas",
+    category: "Laticínios",
+    calories: 264,
+    protein_g: 18,
+    carbs_g: 2.5,
+    fat_g: 20,
+  },
+  {
+    name: "Requeijão",
+    category: "Laticínios",
+    calories: 320,
+    protein_g: 12,
+    carbs_g: 4,
+    fat_g: 28,
+  },
+  {
+    name: "Coalho / queijo de coalho",
+    category: "Laticínios",
+    calories: 280,
+    protein_g: 21,
+    carbs_g: 2,
+    fat_g: 21,
+  },
+
+  // Legumes & Verduras
+  {
+    name: "Cenoura crua",
+    category: "Legumes & Verduras",
+    calories: 41,
+    protein_g: 0.9,
+    carbs_g: 10,
+    fat_g: 0.2,
+  },
+  {
+    name: "Abobrinha cozida",
+    category: "Legumes & Verduras",
+    calories: 15,
+    protein_g: 1.2,
+    carbs_g: 3,
+    fat_g: 0.2,
+  },
+  {
+    name: "Brócolis cozido",
+    category: "Legumes & Verduras",
+    calories: 35,
+    protein_g: 2.4,
+    carbs_g: 7,
+    fat_g: 0.4,
+  },
+  {
+    name: "Alface",
+    category: "Legumes & Verduras",
+    calories: 15,
+    protein_g: 1.4,
+    carbs_g: 2.9,
+    fat_g: 0.2,
+  },
+  {
+    name: "Tomate",
+    category: "Legumes & Verduras",
+    calories: 18,
+    protein_g: 0.9,
+    carbs_g: 3.9,
+    fat_g: 0.2,
+  },
+  {
+    name: "Cenoura cozida",
+    category: "Legumes & Verduras",
+    calories: 35,
+    protein_g: 0.8,
+    carbs_g: 8,
+    fat_g: 0.2,
+  },
+
+  // Outros
+  {
+    name: "Azeite de oliva",
+    category: "Outros",
+    calories: 884,
+    protein_g: 0,
+    carbs_g: 0,
+    fat_g: 100,
+  },
+  { name: "Mel", category: "Outros", calories: 304, protein_g: 0.3, carbs_g: 82, fat_g: 0 },
+  {
+    name: "Amendoim torrado",
+    category: "Outros",
+    calories: 585,
+    protein_g: 29,
+    carbs_g: 11,
+    fat_g: 50,
+  },
+  { name: "Amêndoas", category: "Outros", calories: 579, protein_g: 21, carbs_g: 22, fat_g: 50 },
+  {
+    name: "Castanha-do-pará",
+    category: "Outros",
+    calories: 656,
+    protein_g: 14,
+    carbs_g: 12,
+    fat_g: 67,
+  },
+  {
+    name: "Cacau em pó 100%",
+    category: "Outros",
+    calories: 228,
+    protein_g: 13,
+    carbs_g: 28,
+    fat_g: 14,
+  },
+];

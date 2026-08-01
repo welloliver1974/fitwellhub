@@ -41,6 +41,7 @@ import { lookupNutrition, analyzePhoto } from "@/server-fns/nutrition.functions"
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
+import { FoodLibrary } from "@/components/FoodLibrary";
 
 export const Route = createFileRoute("/app/nutricao")({
   component: NutricaoPage,
@@ -995,6 +996,16 @@ function NutricaoPage() {
           ))}
         </div>
       )}
+
+      <FoodLibrary
+        user={user}
+        session={session}
+        mealTypes={MEAL_TYPES}
+        defaultMealType={MEAL_TYPES[0]}
+        existingMealTypes={meals.map((m) => m.meal_type)}
+        ensureMeal={ensureMeal}
+        onItemAdded={load}
+      />
     </div>
   );
 }

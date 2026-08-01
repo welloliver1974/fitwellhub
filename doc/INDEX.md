@@ -26,3 +26,4 @@
 |---|---|
 | [plans/implementation_plan.md](./plans/implementation_plan.md) | Plano de refatoração do Coach IA |
 | [plans/walkthrough.md](./plans/walkthrough.md) | Resultado da refatoração do Coach IA |
+| [plans/food_library.md](./plans/food_library.md) | Biblioteca de alimentos na aba Nutrição (tabela, pack TACO, recálculo de macros) |
