@@ -1157,3 +1157,27 @@ Pendências 4 e 5 do `doc/roadmap/melhorias.md` existiam só no `/app/coach`, n�
 - ✅ Tool-use do chat (registrar refeição/treino) sem regressão
 - ✅ `npm run build` validado (Client + SSR)
 - ⬜ **Teste manual pendente (usuário):** escanear produto → salvar na biblioteca → conferir em "Meus alimentos"; duplicar scan → aviso; chat com tool-use de almoço/treino
+
+---
+
+## Sessão: 02/08/2026 — Pós-teste no celular: correção de overflow horizontal no diálogo do "+"
+
+### 🔍 O que o teste do usuário revelou
+1. **Scanner OK**: o produto escaneado foi salvo na biblioteca e apareceu em "Meus alimentos". ✅
+2. **Bug de layout**: no celular, ao montar a lista do café da manhã, a página ficou **maior que a tela** (rolagem horizontal forçada para ler).
+3. **Confusão de lógica (UX)**: o usuário não entendeu por que o botão "+" **não mostra a biblioteca** (só Recentes/Favoritos ou digitação manual), enquanto **clicar num alimento da lista** "Meus alimentos" (final da página) abre a escolha de refeição. Existem **duas portas de entrada** para adicionar alimento com padrões diferentes.
+
+### 🐛 Causa raiz do overflow
+O rodapé do diálogo do "+" ganhou **dois botões lado a lado com `flex-1`** ("Salvar na biblioteca" + "Adicionar"/"Calcular com IA e adicionar") quando o botão "Salvar na biblioteca" foi adicionado nesta sessão. O `Button` base tem **`whitespace-nowrap`** (`src/components/ui/button.tsx:8`), então cada botão tem min-content = largura total do texto. Em tela estreita, a soma dos dois + gap + padding do diálogo **excede o viewport** → scroll horizontal.
+
+### 🛠️ Correção aplicada (`src/routes/app.nutricao.tsx:816`)
+- Troca de `flex gap-2` por **`flex flex-wrap gap-2`** no rodapé do diálogo: em tela larga os botões ficam lado a lado; em celular estreito **empilham** (cada um em linha própria, largura total). Sem mais overflow.
+
+### 🧭 Achado de UX — duas portas de adição (NÃO alterado, por decisão do usuário)
+- **Botão "+"** → adiciona **por nome** (`lookupNutrition`: Open Food Facts → IA). **Não mostra a biblioteca** e a busca **não consulta** `food_library`.
+- **"Meus alimentos"** (`FoodLibrary`, final da página) → lista salva com busca; clicar num alimento → "Adicionar à refeição" (refeição + porção). É aqui que o alimento escaneado fica acessível.
+- O usuário entendeu a lógica e escolheu **"só explicar por enquanto"** — lógica mantida. Decisão em aberto: unificar as duas portas num "balcão único" (busca na biblioteca dentro do "+") ou fazer o `lookupNutrition` consultar a biblioteca antes da internet/IA.
+
+### ✅ Estado final
+- ✅ Overflow horizontal corrigido (`flex flex-wrap`) — build validado
+- ⬜ **Re-teste manual (usuário):** abrir o "+" no celular e confirmar que os botões cabem na tela sem arrastar pro lado

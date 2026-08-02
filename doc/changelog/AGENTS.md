@@ -2,6 +2,13 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [02/08/2026] - Claude Code (Pós-teste no celular: correção de overflow no diálogo do "+")
+- **Escopo**:
+  - **Overflow horizontal**: Após teste do usuário no celular (montando o café da manhã), o diálogo do "+" na Nutrição ficava mais largo que a tela. Causa raiz: os dois botões de rodapé ("Salvar na biblioteca" + "Adicionar"/"Calcular com IA e adicionar") com `flex-1` herdavam `whitespace-nowrap` do `Button` (`button.tsx:8`) → min-content maior que o viewport em tela estreita.
+  - **Correção**: Em `src/routes/app.nutricao.tsx:816`, `flex gap-2` → **`flex flex-wrap gap-2`**. Em tela larga ficam lado a lado; em celular empilham (largura total cada). Build validado.
+  - **Achado de UX (não alterado, decisão do usuário)**: Existem duas portas de adição de alimento — o "+" adiciona por nome (Open Food Facts → IA, **não consulta `food_library`**), e "Meus alimentos" (`FoodLibrary`) no final da página adiciona escolhendo da lista salva. O usuário entendeu a lógica e optou por manter por enquanto. Decisão em aberto: unificar (busca na biblioteca dentro do "+") ou fazer o `lookupNutrition` consultar a biblioteca antes da internet/IA.
+- **Status**: Concluído, `npm run build` validado. Re-teste manual do "+" no celular pendente.
+
 ## [02/08/2026] - Claude Code (Scanner salva na biblioteca + Confiança/Próxima ação no chat)
 - **Escopo**:
   - **"Salvar na biblioteca" pós-scan**: Em `src/routes/app.nutricao.tsx`, nova função `saveToLibrary` que insere o alimento preenchido no modal (scanner, busca manual ou IA) em `food_library`, com dedup por nome (case-insensitive via `.ilike`). Botão `outline` "Salvar na biblioteca" (ícone Apple) ao lado do "Adicionar" no diálogo. Categoria default "Outros". Payload espelha o insert do `FoodLibrary`.

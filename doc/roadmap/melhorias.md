@@ -100,6 +100,15 @@ A IA pode ficar mais útil se a tela mostrar melhor o que ela está analisando.
 - Análise semanal exibe cards de "Confiança", "Próxima ação" e "Base usada"
 - Chat carrega histórico de mensagens do banco
 
+### 🆕 Nota (02/08/2026) — Confusão de UX: duas portas de adição de alimento na Nutrição
+Descoberta em teste no celular: existem **duas portas de entrada** para adicionar alimento, com padrões diferentes:
+- **Botão "+"**: adiciona **por nome** (`lookupNutrition`: Open Food Facts → IA). Não mostra a biblioteca e a busca **não consulta** `food_library`.
+- **"Meus alimentos"** (`FoodLibrary`, final da página): lista salva com busca; clicar num alimento → "Adicionar à refeição" (refeição + porção).
+
+O usuário achou confuso ("por que o + não me deixa escolher da lista?") e foi informado da lógica — optou por **manter por enquanto**. Decisão em aberto para futura melhoria:
+- **Opção A (balcão único):** trazer busca + lista da biblioteca para dentro do diálogo do "+"; "Meus alimentos" vira só gestão (criar/editar/importar).
+- **Opção B (mínima):** fazer o `lookupNutrition` consultar `food_library` antes da internet/IA, para o nome digitado no "+" achar alimentos salvos.
+
 ## Melhoria Técnica
 
 ### 1. ✅ Concluída - Reduzir acoplamento entre IA e gravação em banco
