@@ -2,6 +2,15 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [02/08/2026] - Claude Code (Bundle splitting + router prefetch)
+- **Escopo**:
+  - **Medição (importante)**: o roadmap citava `recharts`/`supabase` como vilões, mas o build real mostrou que **recharts e jspdf já eram lazy por rota** (chunk isolado + `await import("jspdf")` em `app.relatorio.tsx`). O problema real: o entry `index` (362 KB) com o shell configurando deps sem separar.
+  - **`manualChunks` granular** (`vite.config.ts`): separa deps estáveis por janela de uso — `react`, `pdf`, `supabase`, `charts`, `radix`, `query`, `router`, `forms`, `ui-utils`, `ui-misc`. Enumerar **deps** (não rotas). Ganhos: entry menor, paraleliza download, melhor cache hit entre deploys.
+  - **Router prefetch** (`src/router.tsx`): `defaultPreload: "intent"` + `staleTime 30s` no `createRouter`. Lazy route baixa no hover/focus → navegação quase instantânea.
+  - **Limpeza** (`src/routes/app.tsx`): removido import supabase top-level morto (usado por `auth-context`/`use-reminders`). Supabase já era chunk próprio e é indispensável via auth — não dá pra tirar do 1º load sem mexer no auth (fora de escopo).
+- **Resultado (cliente)**: entry `index` 362 → 144 KB; recharts (384 KB) e jspdf (574 KB) fora do entry; surgiram chunks `react`(189)/`radix`(94)/`ui-utils`(54) estáveis. 55/55 testes.
+- **Status**: Concluído, `npm run build` + `npm test` 55/55 + `tsc --noEmit` limpo nos tocados. Smoke manual no celular pendente.
+
 ## [02/08/2026] - Claude Code (Testes unitários de ai-settings — lógica pura de providers, 3ª bateria)
 - **Escopo**:
   - **Extração** `src/lib/ai-settings.ts` (puro, zero imports, testável em node): `normalizeAiSettings`, `resolveAiProvider`, `getTextModel`, `resolveAiApiKey`, `resolveAiChatEndpoint` + tipos `AiProvider`/`AiSettings`/`AiSettingsRow` (tipo estrutural agnóstico do Supabase). Preserva detalhes bug-prone: `nvidia` usa `openrouter_api_key`; `nvidia_model` vem de `omniroute_base_url` (trim); fallback de env por provider com prioridade.

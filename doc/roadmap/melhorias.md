@@ -175,12 +175,17 @@ Sugestaes de proximas etapas:
 - Testes de integracao para as server functions principais (mock de supabase) — **pendente** (amadurece o padrão de mock pra renderizar `NutricaoPage`/`ChatPage` inteiras)
 - Testes de componentes/UI para mais componentes isolados (Dropdown/Select, dialogs) — mesmo padrão do `PlanCard`
 
-### 📦 Bundle splitting
-O build produz bundles grandes:
-- `supabase` (~702 kB)
-- `recharts` (~815 kB)
+### 📦 Bundle splitting ✅ Concluído (02/08/2026)
+A medição do build real mostrou que `recharts` e `jspdf` **já eram lazy por rota** (chunk isolado + `await import("jspdf")`). O problema real era o entry `index` (362 KB) com as deps do shell misturadas.
 
-Esses pacotes poderiam ser carregados sob demanda (lazy loading) para melhorar o carregamento inicial, especialmente em celular.
+**Feito:**
+- `manualChunks` granular (`vite.config.ts`): deps estáveis em chunks por janela de uso (`react`, `pdf`, `supabase`, `charts`, `radix`, `query`, `router`, `forms`, `ui-utils`, `ui-misc`) — entry menor, paraleliza download, melhor cache.
+- Router prefetch (`src/router.tsx`): `defaultPreload: "intent"` — lazy route baixa no hover/focus.
+- Removido import morto de supabase em `app.tsx` (supabase client já era chunk próprio, via auth — não dá pra tirar do 1º load sem mexer no auth).
+
+**Resultado (cliente):** entry `index` **362 → 144 KB**; recharts (384 KB) e jspdf (574 KB) fora do entry; 55/55 testes.
+
+**Otimização serverWorker (cold start) e tree-shake dos componentes shadcn não usados seguem pendentes** — baixo valor de UX vs esforço, conforme decidido.
 
 ### 🗑️ Componentes UI nao utilizados
 31 componentes shadcn/ui em `src/components/ui/` nao sao importados em lugar nenhum:

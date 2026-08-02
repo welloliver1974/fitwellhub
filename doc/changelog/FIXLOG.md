@@ -1266,3 +1266,24 @@ O `/coach` gerava o plano (foco, metas de treino/nutrição/acompanhamento, chec
 - ✅ `npm run build` validado (client + server)
 - ✅ `tsc --noEmit` limpo nos arquivos tocados
 - ⬜ **Smoke manual:** IA config (tela `/app/ia`, modelos NVIDIA) e chat com provider — sem mudança de comportamento esperada (refactor é só movimentação)
+
+## Sessão: 02/08/2026 — Bundle splitting + router prefetch (carregamento inicial no celular)
+
+### 📊 Medição antes
+`dist/client/assets`: entry `index` **362 KB** (carregava em todas as rotas), `supabase` 199 KB, `recharts` 373 KB, `pdf` 378 KB, `html2canvas` 196 KB. O roadmap citava recharts/supabase como vilões, mas medição mostrou que **recharts e jspdf já eram lazy por rota** — o problema real era o entry grande com as deps misturadas.
+
+### 🎯 O que foi feito
+- **`manualChunks` granular** (`vite.config.ts`): a função agora separa deps estáveis por janela de uso — `react`, `router`, `query`, `supabase`, `radix`, `forms`, `ui-utils`, `charts`, `pdf`, `ui-misc`. Princípio: enumerar **deps** (não rotas), cada uma cai no primeiro bucket que casa; quem não casa fica no chunk default. Divide o entry e melhora cache hit entre deploys (deps mudam menos que o código do app).
+- **Router prefetch** (`src/router.tsx`): `createRouter` agora tem `defaultPreload: "intent"` + `defaultPreloadStaleTime: 30_000`. A lazy route baixa no hover/focus do link → navegação quase instantânea no clique. Antes o default era `false` (sem prefetch).
+- **Limpeza de import morto** (`src/routes/app.tsx`): `app.tsx` importava supabase top-level mas não usava (o supabase é usado por `auth-context` no shell e por `use-reminders`). Removido. O supabase client já era um chunk separado (199 KB) puxado pelo auth-context — indispensável em toda tela autenticada, então não dá pra tirar do primeiro load sem mexer no auth (fora de escopo).
+
+### 📊 Resultado (cliente)
+- Entry `index`: **362 KB → 144 KB** (primeiro load enxuto).
+- `recharts` (384 KB) e `jspdf` (574 KB) **fora do entry** — só carregam nas rotas que usam.
+- Surgiram chunks `react` (189 KB), `radix` (94 KB), `ui-utils` (54 KB) etc. — estáveis, paralelizam download e melhoram cache.
+- `supabase` segue como chunk próprio (199 KB, necessário via auth).
+
+### ⬜ Por conferir (smoke manual no celular)
+- Primeiro load de `/app` deve parecer mais rápido.
+- Navegar para `/app/medidas` (gráficos) → chart só carrega ao entrar (já era assim).
+- Foco/hover num link (prefetch) → navegação quase instantânea.

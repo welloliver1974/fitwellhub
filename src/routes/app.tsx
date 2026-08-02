@@ -20,8 +20,6 @@ import { useTheme } from "@/lib/theme";
 import { useReminders } from "@/lib/use-reminders";
 import { Link as RLink } from "@tanstack/react-router";
 
-import { supabase } from "@/integrations/supabase/client";
-
 export const Route = createFileRoute("/app")({
   component: AppLayout,
 });

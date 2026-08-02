@@ -24,10 +24,47 @@ export default defineConfig({
       chunkSizeWarningLimit: 2000,
       rollupOptions: {
         output: {
+          // Divide dependências estáveis em chunks nomeados por janela de uso.
+          // Objetivos: (1) aliviar o entry `index` (que carrega em toda rota),
+          // (2) paralelizar downloads e (3) melhorar cache hit entre deploys
+          // (deps mudam menos que o código do app). A primeira regra que casa vence.
           manualChunks(id) {
             if (!id.includes("node_modules")) return;
-            if (id.includes("jspdf")) return "pdf";
+            if (id.includes("jspdf") || id.includes("html2canvas")) return "pdf";
             if (id.includes("@supabase")) return "supabase";
+            if (id.includes("/recharts/") || id.includes("recharts/")) return "charts";
+            if (id.includes("@radix-ui")) return "radix";
+            if (id.includes("@tanstack/react-query")) return "query";
+            if (id.includes("@tanstack/")) return "router";
+            if (
+              id.includes("react-router") ||
+              /node_modules\/(react|react-dom|scheduler)\//.test(id)
+            )
+              return "react";
+            if (
+              id.includes("react-hook-form") ||
+              id.includes("@hookform/resolvers") ||
+              id.includes("zod") ||
+              id.includes("input-otp") ||
+              id.includes("react-day-picker")
+            )
+              return "forms";
+            if (
+              id.includes("lucide-react") ||
+              id.includes("cmdk") ||
+              id.includes("class-variance-authority") ||
+              id.includes("clsx") ||
+              id.includes("tailwind-merge")
+            )
+              return "ui-utils";
+            if (
+              id.includes("embla-carousel") ||
+              id.includes("vaul") ||
+              id.includes("react-resizable-panels") ||
+              id.includes("tw-animate-css") ||
+              id.includes("sonner")
+            )
+              return "ui-misc";
           },
         },
       },

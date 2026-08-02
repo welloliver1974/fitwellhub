@@ -59,7 +59,11 @@ export const getRouter = () => {
     routeTree,
     context: {},
     scrollRestoration: true,
-    defaultPreloadStaleTime: 0,
+    // Prefetch da lazy route no hover/focus do link: o chunk começa a baixar
+    // antes do clique → navegação quase instantânea. 30s de reuso fresco para
+    // não rebaixar a mesma rota em navegação seguida.
+    defaultPreload: "intent",
+    defaultPreloadStaleTime: 30_000,
     defaultErrorComponent: DefaultErrorComponent,
   });
 
