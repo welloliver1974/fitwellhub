@@ -1181,3 +1181,38 @@ O rodapé do diálogo do "+" ganhou **dois botões lado a lado com `flex-1`** ("
 ### ✅ Estado final
 - ✅ Overflow horizontal corrigido (`flex flex-wrap`) — build validado
 - ⬜ **Re-teste manual (usuário):** abrir o "+" no celular e confirmar que os botões cabem na tela sem arrastar pro lado
+
+---
+
+## Sessão: 02/08/2026 — Balcão único no "+" + Plano semanal no chat
+
+### 🎯 Funcionalidades trabalhadas
+- `src/routes/app.nutricao.tsx` → seção "Da sua biblioteca" (busca + lista) dentro do diálogo do "+" — balcão único de adição
+- `src/server-fns/nutrition.functions.ts` → exportados `CoachPlan`, `inferCoachObjective`, `buildCoachPlan` (helpers puros, sem mudança de lógica)
+- `src/server-fns/chat.functions.ts` → `fetchUserContext` retorna `goals`; `sendChat` detecta intenção de plano e retorna `plan` determinístico
+- `src/routes/app.chat.tsx` → card recolhível do plano semanal na última resposta
+
+### 🔍 Contexto 1: Duas portas de adição confundiam o usuário (roadmap, nota UX 02/08)
+O "+" adicionava por nome (Open Food Facts → IA, sem consultar `food_library`) e "Meus alimentos" (final da página) adicionava pela lista salva — padrões diferentes, e o alimento escaneado/salvo **não aparecia no "+"**. O usuário optou pelo **balcão único**.
+
+### 🛠️ Solução 1 — Balcão único no "+" (`app.nutricao.tsx`)
+1. **`loadLibrary()`**: página carrega `food_library` (id, name, grams, macros) em estado `library`; chamada no `load()` e após `saveToLibrary` (lista do diálogo atualiza na hora).
+2. **Seção "Da sua biblioteca"** no diálogo do "+" (entre "Alimento" e "Porção"): campo de busca (`libQuery`) + lista filtrada (`max-h-48`, scroll). **Tap num item preenche o formulário** (nome, gramas, macros, `manual=true`) — o usuário ajusta a porção e toca "Adicionar", reaproveitando o fluxo atual.
+3. **Rescale proporcional (`refGrams`)**: ao mudar a porção com um item da biblioteca preenchido, `mCal/mProt/mCarb/mFat` são escalados por `nova/ref` (mesmo comportamento do `confirmAdd` do FoodLibrary). `refGrams` é limpo ao editar o nome manualmente e no reset pós-`addFood`.
+4. **"Meus alimentos"** embaixo segue como **gestão** (criar/editar/importar) — não foi alterado.
+
+### 🔍 Contexto 2: Plano semanal só no /coach (roadmap item 5)
+O `/coach` gerava o plano (foco, metas de treino/nutrição/acompanhamento, checklist) determinístico via `buildCoachPlan`, mas o chat só tinha confiança + próxima ação. Decisão do usuário: card **determinístico** no chat (sem json_schema, sem mudar prompt/IA) e **só quando a pergunta tiver intenção de plano**.
+
+### 🛠️ Solução 2 — Plano no chat (`nutrition.functions.ts` + `chat.functions.ts` + `app.chat.tsx`)
+1. **Exportados** `CoachPlan`, `inferCoachObjective`, `buildCoachPlan` de `nutrition.functions.ts` (sem tocar na lógica).
+2. **`fetchUserContext`** passa a retornar `goals` (já buscado, zero queries extras).
+3. **`sendChat`**: `const wantsPlan = /\b(plano|planej|planeja|semana|semanal|checklist|foco)\b/i.test(message)`; se sim, `plan = buildCoachPlan(stats, goals, inferCoachObjective(goals))` (objetivo automático, como o modo "auto" do /coach). Retorno `{ reply, confidence, nextAction, plan }` — banco persiste **só o reply**.
+4. **`app.chat.tsx`**: componente `PlanCard` — card **recolhível** (Collapsible) com título, chip do objetivo, foco, "O que fazer hoje", 3 metas, checklist com bullets e próxima ação. Fechado por padrão. Histórico recarregado não tem `plan` → sem card.
+
+### ✅ Estado final
+- ✅ "+" vira balcão único: busca + lista da biblioteca, preenche formulário, rescale de porção
+- ✅ Chat mostra plano semanal sob demanda (só quando pedir), sem poluir respostas comuns
+- ✅ Loop de `tools` (record_meal/record_workout) e prompt de IA intactos
+- ✅ `npm run build` validado; `tsc --noEmit` limpo nos arquivos tocados (erros pré-existentes de `body_measurements`/`BarcodeDetector` seguem fora de escopo)
+- ⬜ **Teste manual (usuário):** "+" → buscar biblioteca → tocar item → mudar porção → macros escalam → Adicionar; chat: "qual meu plano da semana?" → card; "como estou na meta de proteína?" → sem card; `registra meu almoço: ...` → tool-use ok

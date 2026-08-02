@@ -2,6 +2,14 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [02/08/2026] - Claude Code (Balcão único no "+" + Plano semanal no chat)
+- **Escopo**:
+  - **Balcão único de adição** (`src/routes/app.nutricao.tsx`): página carrega `food_library` (`loadLibrary`, chamada no `load()` e pós-`saveToLibrary`); diálogo do "+" ganhou a seção "Da sua biblioteca" com busca (`libQuery`) e lista filtrada clicável — tocar num item preenche o formulário (nome/gramas/macros/`manual=true`). Novo estado `refGrams` faz a **escala proporcional** dos macros ao mudar a porção (igual ao `confirmAdd` do FoodLibrary); limpo ao editar o nome e no reset pós-`addFood`. "Meus alimentos" embaixo continua sendo a área de gestão (FoodLibrary.tsx intacto).
+  - **Plano semanal no chat** (`nutrition.functions.ts` + `chat.functions.ts` + `app.chat.tsx`): exportados `CoachPlan`, `inferCoachObjective`, `buildCoachPlan` (lógica intacta); `fetchUserContext` agora retorna `goals` (já buscado); `sendChat` detecta intenção de plano (`/\b(plano|planej|planeja|semana|semanal|checklist|foco)\b/i`) e retorna `plan = buildCoachPlan(stats, goals, inferCoachObjective(goals))` (objetivo automático); `app.chat.tsx` renderiza `PlanCard` **recolhível** (Collapsible) com foco/metas/checklist/próxima ação. Banco persiste só o `reply`; histórico recarregado não tem card.
+  - **Sem json_schema, sem mudar prompt/IA, loop de tools intacto** — mesma filosofia do fix anterior (heurística determinística em JS).
+  - **Docs**: `doc/changelog/FIXLOG.md` (sessão 02/08), `doc/roadmap/melhorias.md` (item5 concluído; nota UX das duas portas → resolvida com balcão único).
+- **Status**: Concluído, `npm run build` validado + `tsc --noEmit` limpo nos arquivos tocados (erros pré-existentes de `body_measurements`/`BarcodeDetector`/`profiles` ficam fora de escopo). Teste manual no celular pendente.
+
 ## [02/08/2026] - Claude Code (Pós-teste no celular: correção de overflow no diálogo do "+")
 - **Escopo**:
   - **Overflow horizontal**: Após teste do usuário no celular (montando o café da manhã), o diálogo do "+" na Nutrição ficava mais largo que a tela. Causa raiz: os dois botões de rodapé ("Salvar na biblioteca" + "Adicionar"/"Calcular com IA e adicionar") com `flex-1` herdavam `whitespace-nowrap` do `Button` (`button.tsx:8`) → min-content maior que o viewport em tela estreita.

@@ -9,6 +9,11 @@ import {
   resolveAiProvider,
 } from "@/server-fns/ai-settings.functions";
 import { getLocalDate } from "@/lib/utils";
+import {
+  buildCoachPlan,
+  inferCoachObjective,
+  type CoachPlan,
+} from "@/server-fns/nutrition.functions";
 
 const inputSchema = z.object({
   message: z.string().trim().max(2000).optional().default(""),
@@ -25,6 +30,8 @@ interface UserContext {
     weightCount: number;
     waterCount: number;
   };
+  /** Metas diárias, usadas para o plano semanal determinístico (buildCoachPlan). */
+  goals: { calories?: number; protein_g?: number; carbs_g?: number; fat_g?: number } | null;
 }
 
 /**
@@ -174,7 +181,7 @@ ${workoutsText}`;
     waterCount: water?.length ?? 0,
   };
 
-  return { ctxText, recentHistory, stats };
+  return { ctxText, recentHistory, stats, goals };
 }
 
 /**
@@ -347,7 +354,12 @@ export const sendChat = createServerFn({ method: "POST" })
     const weekAgo = getLocalDate(new Date(Date.now() - 7 * 86400000));
 
     // 1. Fetch relevant user context and chat messages history
-    const { ctxText, recentHistory, stats } = await fetchUserContext(supabase, userId, today, weekAgo);
+    const { ctxText, recentHistory, stats, goals } = await fetchUserContext(
+      supabase,
+      userId,
+      today,
+      weekAgo,
+    );
 
     // 2. Optimistic save of user's message
     const dbMessage = data.images?.length ? `[${data.images.length} Imagens] ${data.message}` : data.message;
@@ -507,5 +519,13 @@ Dados do usuário:\n${ctxText}` + (process.env.COACH_ALWAYS_SUGGEST === "true" ?
     // apenas o reply; esses campos vão só no retorno para a UI exibir chips na última mensagem.
     const confidence = confidenceFromStats(stats);
     const nextAction = nextActionFromStats(stats);
-    return { reply, confidence, nextAction };
+    // Plano semanal determinístico (mesmo do /coach) — só quando a pergunta tem intenção de plano,
+    // para não poluir toda resposta. Objetivo automático (inferido das metas), como o modo "auto".
+    const wantsPlan = /\b(plano|planej|planeja|semana|semanal|checklist|foco)\b/i.test(
+      data.message ?? "",
+    );
+    const plan: CoachPlan | undefined = wantsPlan
+      ? buildCoachPlan(stats, goals ?? undefined, inferCoachObjective(goals ?? undefined))
+      : undefined;
+    return { reply, confidence, nextAction, plan };
   });

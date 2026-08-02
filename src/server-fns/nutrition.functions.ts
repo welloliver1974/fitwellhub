@@ -183,7 +183,7 @@ const coachSchema = z.object({
     .optional(),
 });
 
-type CoachPlan = {
+export type CoachPlan = {
   title: string;
   objective: string;
   focus: string;
@@ -198,7 +198,7 @@ type CoachPlan = {
 type CoachGoals = NonNullable<z.infer<typeof coachSchema>["goals"]>;
 type CoachObjective = NonNullable<z.infer<typeof coachSchema>["objective"]>;
 
-function inferCoachObjective(goals?: CoachGoals): CoachObjective {
+export function inferCoachObjective(goals?: CoachGoals): CoachObjective {
   const calories = goals?.calories ?? 0;
   const protein = goals?.protein_g ?? 0;
 
@@ -208,7 +208,7 @@ function inferCoachObjective(goals?: CoachGoals): CoachObjective {
   return "Manutencao";
 }
 
-function buildCoachPlan(
+export function buildCoachPlan(
   stats: NonNullable<z.infer<typeof coachSchema>["stats"]>,
   goals?: CoachGoals,
   preferredObjective?: CoachObjective,

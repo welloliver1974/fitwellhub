@@ -36,6 +36,7 @@ import {
   Loader2,
   Heart,
   Barcode,
+  Library,
 } from "lucide-react";
 import { lookupNutrition, analyzePhoto } from "@/server-fns/nutrition.functions";
 import { Link } from "@tanstack/react-router";
@@ -60,6 +61,16 @@ type Item = {
 };
 
 type FavoriteFood = {
+  id: string;
+  name: string;
+  grams: number;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+};
+
+type LibraryFood = {
   id: string;
   name: string;
   grams: number;
@@ -157,6 +168,13 @@ function NutricaoPage() {
   const [scanOpen, setScanOpen] = useState(false);
   const [scanLoading, setScanLoading] = useState(false);
 
+  // biblioteca (balcão único no diálogo do "+")
+  const [library, setLibrary] = useState<LibraryFood[]>([]);
+  const [libQuery, setLibQuery] = useState("");
+  // porção de referência dos macros preenchidos; quando definida, mudar a porção
+  // reescala os macros proporcionalmente (mesmo comportamento do FoodLibrary).
+  const [refGrams, setRefGrams] = useState<number | null>(null);
+
   const today = getLocalDate();
 
   const onBarcode = async (code: string) => {
@@ -232,6 +250,16 @@ function NutricaoPage() {
     }
   };
 
+  const loadLibrary = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("food_library")
+      .select("id,name,grams,calories,protein_g,carbs_g,fat_g")
+      .eq("user_id", user.id)
+      .order("name");
+    setLibrary((data ?? []) as LibraryFood[]);
+  };
+
   const load = async () => {
     if (!user) return;
     const { data: ms } = await supabase
@@ -287,6 +315,8 @@ function NutricaoPage() {
         fat_g: number;
       }>,
     );
+
+    await loadLibrary();
   };
 
   useEffect(() => {
@@ -346,6 +376,8 @@ function NutricaoPage() {
       setMFat("");
       setBarcodePortionLabel("");
       setBarcodePortionSource("");
+      setRefGrams(null);
+      setLibQuery("");
       setOpen(false);
       await load();
     } catch (e) {
@@ -383,6 +415,7 @@ function NutricaoPage() {
       });
       if (error) throw error;
       toast.success(`"${name}" salvo na biblioteca`);
+      await loadLibrary();
     } catch (e) {
       console.error(e);
       toast.error(e instanceof Error ? e.message : "Erro ao salvar na biblioteca");
@@ -599,6 +632,12 @@ function NutricaoPage() {
     load();
   };
 
+  const filteredLibrary = useMemo(() => {
+    const q = libQuery.trim().toLowerCase();
+    if (!q) return library;
+    return library.filter((f) => f.name.toLowerCase().includes(q));
+  }, [library, libQuery]);
+
   const grouped = useMemo(
     () =>
       MEAL_TYPES.map((type) => {
@@ -743,15 +782,82 @@ function NutricaoPage() {
                   <Input
                     placeholder="Ex: arroz branco cozido…"
                     value={query}
-                    onChange={(e) => setQuery(e.target.value)}
+                    onChange={(e) => {
+                      setQuery(e.target.value);
+                      setRefGrams(null); // macros não correspondem mais à porção de referência
+                    }}
                   />
+                </div>
+                <div>
+                  <Label className="flex items-center gap-1.5">
+                    <Library className="h-3 w-3" /> Da sua biblioteca
+                  </Label>
+                  <Input
+                    className="mt-1.5"
+                    placeholder="Buscar na minha biblioteca…"
+                    value={libQuery}
+                    onChange={(e) => setLibQuery(e.target.value)}
+                  />
+                  {library.length === 0 ? (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Nenhum alimento na biblioteca. Toque em "Salvar na biblioteca" ao adicionar um
+                      alimento novo.
+                    </p>
+                  ) : (
+                    <div className="mt-1.5 max-h-48 overflow-y-auto space-y-1.5 rounded-lg border p-2">
+                      {filteredLibrary.length === 0 ? (
+                        <p className="text-xs text-muted-foreground py-1 text-center">
+                          Nenhum alimento encontrado.
+                        </p>
+                      ) : (
+                        filteredLibrary.map((f) => (
+                          <button
+                            key={f.id}
+                            type="button"
+                            onClick={() => {
+                              setQuery(f.name);
+                              setGrams(f.grams);
+                              setMCal(f.calories);
+                              setMProt(f.protein_g);
+                              setMCarb(f.carbs_g);
+                              setMFat(f.fat_g);
+                              setManual(true);
+                              setRefGrams(f.grams);
+                              setBarcodePortionLabel("");
+                              setBarcodePortionSource("");
+                            }}
+                            className="w-full text-left rounded-md px-2.5 py-1.5 text-xs hover:bg-secondary/70 transition-colors"
+                          >
+                            <span className="font-medium">{f.name}</span>
+                            <span className="text-muted-foreground">
+                              {" "}· {f.grams}g · {Math.round(f.calories)} kcal · P {f.protein_g} · C{" "}
+                              {f.carbs_g} · G {f.fat_g}
+                            </span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label>Porção (g)</Label>
                   <Input
                     type="number"
                     value={grams}
-                    onChange={(e) => setGrams(e.target.value === "" ? "" : Number(e.target.value))}
+                    onChange={(e) => {
+                      const v = e.target.value === "" ? "" : Number(e.target.value);
+                      setGrams(v);
+                      if (refGrams !== null && typeof v === "number" && v > 0) {
+                        const ratio = v / refGrams;
+                        const scale = (n: number | "") =>
+                          n === "" ? "" : Math.round(n * ratio * 10) / 10;
+                        setMCal((p) => (p === "" ? p : Math.round(Number(p) * ratio)));
+                        setMProt((p) => scale(p));
+                        setMCarb((p) => scale(p));
+                        setMFat((p) => scale(p));
+                        setRefGrams(v);
+                      }
+                    }}
                   />
                 </div>
                 <div className="flex items-center justify-between pt-1">

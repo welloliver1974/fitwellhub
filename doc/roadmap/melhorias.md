@@ -15,6 +15,12 @@ Opinião geral: o app já tem uma base forte, com bastante funcionalidade útil 
 - **Ainda pendentes:** 2 (saída estruturada de IA real — ver nota no item), Técnica 3 (testes)
 - **Nota:** o `coachAdvice` calcula `confidence` e `plan` deterministicamente em JS (não usa `response_format`/json_schema). Ver `doc/changelog/FIXLOG.md` sessão 02/08.
 
+## Status atualizado (02/08/2026 — 2ª parte)
+
+- **Concluída agora:** 5 — plano semanal completo (foco, metas, checklist) também sai no `/app/chat`, sob demanda, num card recolhível
+- **Resolvida:** confusão de UX das "duas portas" de adição de alimento → **balcão único** (busca + lista da biblioteca dentro do "+"); ver nota na seção UX
+- **Ainda pendentes:** 2 (saída estruturada de IA real — json_schema), Técnica 3 (testes)
+
 ## Melhoria de IA
 
 ### 1. ✅ Concluída - Dar mais consistência ao Coach IA
@@ -38,7 +44,6 @@ Nem tudo precisa ser texto livre. Para algumas partes, vale muito mais usar uma 
 **Ainda pendente:**
 - Saída estruturada de IA real (json_schema) onde fizer sentido — definir escopo
 - Sugestão nutricional com formato previsível
-- Plano semanal completo (CoachPlan) dentro do chat
 
 ### 3. ✅ Concluída - Fazer a IA explicar melhor as conclusões
 As respostas ficam mais confiáveis quando a IA mostra de onde tirou a ideia.
@@ -59,19 +64,19 @@ Exemplo desejado:
 - "Tenho poucos treinos recentes, então esta sugestão tem confiança média."
 - "Não há histórico suficiente para afirmar progressão com segurança."
 
-### 5. 🔄 Parcial - Transformar o Coach em planejador, não só respondedor
-Em vez de apenas comentar o que já aconteceu, a IA pode ajudar a planejar o próximo passo.
+### 5. ✅ Concluída - Transformar o Coach em planejador, não só respondedor
+Em vez de apenas comentar o que já aconteceu, a IA ajuda a planejar o próximo passo.
 
-**Parcialmente implementado:**
-- A análise semanal (`/app/coach`) gera plano com foco da semana, meta de treino, meta nutricional e checklist
-- (02/08/2026) O chat conversacional agora fecha cada resposta com uma **próxima ação** concreta derivada dos dados
-- **Ainda falta:** levar o plano semanal completo (foco, metas, checklist) para dentro do chat — hoje vive só no `/coach`, com link "Análise Semanal" no header do chat
+**O que foi feito:**
+- A análise semanal (`/app/coach`) gera plano com foco da semana, meta de treino, meta nutricional, acompanhamento e checklist
+- (02/08/2026) O chat conversacional fecha cada resposta com uma **próxima ação** concreta derivada dos dados
+- (02/08/2026) O chat exibe o **plano semanal completo** (foco, metas de treino/nutrição/acompanhamento, checklist, próxima ação) num **card recolhível**, **só quando a pergunta tem intenção de plano** ("plano", "semana", "checklist"...) — via `buildCoachPlan` determinístico em JS (sem json_schema), reutilizando os mesmos helpers do `/coach`
 
-Exemplos desejados para o chat:
+Exemplos desejados para o chat (agora atendidos):
 - foco da semana
 - meta de treino
-- meta de medida
 - meta nutricional
+- checklist + próxima ação
 
 ## Melhoria de UX
 
@@ -100,14 +105,12 @@ A IA pode ficar mais útil se a tela mostrar melhor o que ela está analisando.
 - Análise semanal exibe cards de "Confiança", "Próxima ação" e "Base usada"
 - Chat carrega histórico de mensagens do banco
 
-### 🆕 Nota (02/08/2026) — Confusão de UX: duas portas de adição de alimento na Nutrição
-Descoberta em teste no celular: existem **duas portas de entrada** para adicionar alimento, com padrões diferentes:
-- **Botão "+"**: adiciona **por nome** (`lookupNutrition`: Open Food Facts → IA). Não mostra a biblioteca e a busca **não consulta** `food_library`.
+### ✅ Resolvida (02/08/2026) — Confusão de UX: duas portas de adição de alimento na Nutrição
+Descoberta em teste no celular: existiam **duas portas de entrada** para adicionar alimento, com padrões diferentes:
+- **Botão "+"**: adicionava **por nome** (`lookupNutrition`: Open Food Facts → IA). Não mostrava a biblioteca e a busca **não consultava** `food_library`.
 - **"Meus alimentos"** (`FoodLibrary`, final da página): lista salva com busca; clicar num alimento → "Adicionar à refeição" (refeição + porção).
 
-O usuário achou confuso ("por que o + não me deixa escolher da lista?") e foi informado da lógica — optou por **manter por enquanto**. Decisão em aberto para futura melhoria:
-- **Opção A (balcão único):** trazer busca + lista da biblioteca para dentro do diálogo do "+"; "Meus alimentos" vira só gestão (criar/editar/importar).
-- **Opção B (mínima):** fazer o `lookupNutrition` consultar `food_library` antes da internet/IA, para o nome digitado no "+" achar alimentos salvos.
+O usuário achou confuso ("por que o + não me deixa escolher da lista?"). **Resolvida com a Opção A (balcão único):** o diálogo do "+" agora tem a seção "Da sua biblioteca" com busca + lista clicável que preenche o formulário (com escala proporcional ao mudar a porção). "Meus alimentos" embaixo passou a ser só **gestão** (criar/editar/importar).
 
 ## Melhoria Técnica
 
