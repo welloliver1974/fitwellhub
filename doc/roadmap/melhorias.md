@@ -189,11 +189,8 @@ A medição do build real mostrou que `recharts` e `jspdf` **já eram lazy por r
 
 **Otimização serverWorker (cold start) e tree-shake dos componentes shadcn não usados seguem pendentes** — baixo valor de UX vs esforço, conforme decidido.
 
-### 🗑️ Componentes UI nao utilizados
-31 componentes shadcn/ui em `src/components/ui/` nao sao importados em lugar nenhum:
-accordion, alert, alert-dialog, aspect-ratio, avatar, badge, breadcrumb, calendar, carousel, chart, checkbox, collapsible, context-menu, drawer, dropdown-menu, form, hover-card, input-otp, menubar, navigation-menu, pagination, popover, radio-group, resizable, scroll-area, sidebar, slider, table, textarea, toggle, toggle-group
-
-Nao afetam o bundle (tree-shaking remove), mas poluem o codigo fonte.
+### 🗑️ Componentes UI nao utilizados ✅ Resolvido (02/08/2026)
+Mapeamento real do uso (a lista de 15-07 estava defasada): **46 → 13** componentes. Deletados **33** — 28 com zero refs + 5 liberados em cascata por `sidebar`/`toggle-group` (eles eram o único consumidor de `separator`/`sheet`/`skeleton`/`tooltip`/`toggle`). Sobram os 13 usados: `button, input, card, dialog, label, select, progress, tabs, collapsible, badge, command, sonner, switch`. `tsc` limpo, 69/69 testes, build ok. Reversível via git.
 
 ### 🔐 Chaves de API criptografadas no Supabase
 As chaves (Groq, OpenRouter, NVIDIA, OmniRoute) ficam em texto plano na tabela `ai_settings`. Idealmente deveriam ser criptografadas, mas isso exige migration e logica de cifra.
