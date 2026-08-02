@@ -192,7 +192,10 @@ A medição do build real mostrou que `recharts` e `jspdf` **já eram lazy por r
 ### 🗑️ Componentes UI nao utilizados ✅ Resolvido (02/08/2026)
 Mapeamento real do uso (a lista de 15-07 estava defasada): **46 → 13** componentes. Deletados **33** — 28 com zero refs + 5 liberados em cascata por `sidebar`/`toggle-group` (eles eram o único consumidor de `separator`/`sheet`/`skeleton`/`tooltip`/`toggle`). Sobram os 13 usados: `button, input, card, dialog, label, select, progress, tabs, collapsible, badge, command, sonner, switch`. `tsc` limpo, 69/69 testes, build ok. Reversível via git.
 
-### 🔐 Chaves de API criptografadas no Supabase
+### 🔑 Chaves de API criptografadas no Supabase (decisão: deixar para depois — 02/08/2026)
+**Verificado** (02/08/2026): a RLS da tabela `ai_settings` está **correta** (migration `20260616093000_ai_settings.sql`: `ENABLE ROW LEVEL SECURITY` + policy `own ai_settings all` com `auth.uid() = user_id`). Nada público. As chaves ficam em texto plano no banco, então criptografar é só **defesa em profundidade** (contra acesso direto/dump/backup) — **não é urgência**.
+
+**Decisão:** foco da próxima rodada = **melhorias de IA e UI** (ver seções acima). Criptografar chaves fica p/ depois.
 As chaves (Groq, OpenRouter, NVIDIA, OmniRoute) ficam em texto plano na tabela `ai_settings`. Idealmente deveriam ser criptografadas, mas isso exige migration e logica de cifra.
 
 ### 📱 PWA - Service Worker ja implementado ✅
