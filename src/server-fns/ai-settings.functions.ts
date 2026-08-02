@@ -1,47 +1,27 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
-
-export type AiProvider = "groq" | "openrouter" | "omniroute" | "nvidia";
-
-export type AiSettings = {
-  provider: AiProvider;
-  groq_api_key: string | null;
-  openrouter_api_key: string | null;
-  omniroute_api_key: string | null;
-  omniroute_base_url: string | null;
-  nvidia_model: string | null;
-  updated_at: string | null;
-};
+// Lógica pura (provider/modelo/fallback/endpoint) vive em src/lib/ai-settings.ts.
+import {
+  type AiProvider,
+  type AiSettings,
+  getTextModel,
+  normalizeAiSettings,
+  resolveAiApiKey,
+  resolveAiChatEndpoint,
+  resolveAiProvider,
+} from "@/lib/ai-settings";
+// Re-exporta os tipos/funções para manter os imports existentes das rotas/server-fns.
+export {
+  type AiProvider,
+  type AiSettings,
+  getTextModel,
+  normalizeAiSettings,
+  resolveAiApiKey,
+  resolveAiProvider,
+} from "@/lib/ai-settings";
 
 type AiSettingsRow = Database["public"]["Tables"]["ai_settings"]["Row"];
-
-const TEXT_MODELS: Record<AiProvider, string> = {
-  groq: "llama-3.3-70b-versatile",
-  openrouter: "qwen/qwen-2.5-72b-instruct",
-  omniroute: "llama-3.3-70b-versatile",
-  nvidia: "nvidia/llama-3.1-nemotron-70b-instruct",
-};
-
-export function normalizeAiSettings(row?: Partial<AiSettingsRow> | null): AiSettings {
-  const provider: AiProvider =
-    row?.provider === "openrouter"
-      ? "openrouter"
-      : row?.provider === "omniroute"
-        ? "omniroute"
-        : row?.provider === "nvidia"
-          ? "nvidia"
-          : "groq";
-  return {
-    provider,
-    groq_api_key: row?.groq_api_key ?? null,
-    openrouter_api_key: row?.openrouter_api_key ?? null,
-    omniroute_api_key: row?.omniroute_api_key ?? null,
-    omniroute_base_url: row?.omniroute_base_url ?? null,
-    nvidia_model: provider === "nvidia" ? (row?.omniroute_base_url?.trim() || null) : null,
-    updated_at: row?.updated_at ?? null,
-  };
-}
 
 export async function fetchAiSettings(supabase: any, userId: string): Promise<AiSettings> {
   const { data } = await supabase
@@ -50,14 +30,7 @@ export async function fetchAiSettings(supabase: any, userId: string): Promise<Ai
     .eq("user_id", userId)
     .maybeSingle();
 
-  return normalizeAiSettings(data);
-}
-
-export function resolveAiProvider(settings?: Partial<AiSettings> | null): AiProvider {
-  if (settings?.provider === "openrouter") return "openrouter";
-  if (settings?.provider === "omniroute") return "omniroute";
-  if (settings?.provider === "nvidia") return "nvidia";
-  return "groq";
+  return normalizeAiSettings(data as AiSettingsRow);
 }
 
 const nvidiaKeySchema = z.object({ apiKey: z.string().min(1) });
@@ -75,28 +48,6 @@ export const fetchNvidiaModels = createServerFn({ method: "POST" })
     return (json.data ?? []).map((m: any) => m.id);
   });
 
-export function getTextModel(provider: AiProvider, settings?: Partial<AiSettings> | null): string {
-  if (provider === "nvidia" && settings?.nvidia_model) return settings.nvidia_model;
-  return TEXT_MODELS[provider];
-}
-
-export function resolveAiApiKey(settings: Partial<AiSettings> | null | undefined, provider: AiProvider): string | null {
-  const stored =
-    provider === "groq"
-      ? settings?.groq_api_key?.trim()
-      : provider === "openrouter"
-        ? settings?.openrouter_api_key?.trim()
-        : provider === "nvidia"
-          ? settings?.openrouter_api_key?.trim()
-          : settings?.omniroute_api_key?.trim();
-  if (stored) return stored;
-
-  if (provider === "groq") return process.env.GROQ_API_KEY ?? null;
-  if (provider === "openrouter") return process.env.OPENROUTER_API_KEY ?? null;
-  if (provider === "nvidia") return process.env.NVIDIA_API_KEY ?? process.env.OPENROUTER_API_KEY ?? null;
-  return process.env.OMNIROUTE_API_KEY ?? process.env.OPENROUTER_API_KEY ?? process.env.GROQ_API_KEY ?? null;
-}
-
 export async function callAiChatCompletion(options: {
   provider: AiProvider;
   apiKey: string;
@@ -108,16 +59,7 @@ export async function callAiChatCompletion(options: {
   maxTokens?: number;
   baseUrl?: string | null;
 }) {
-  const endpoint =
-    options.provider === "omniroute" && options.baseUrl?.trim()
-      ? options.baseUrl.trim()
-      : options.provider === "groq"
-        ? "https://api.groq.com/openai/v1/chat/completions"
-        : options.provider === "openrouter"
-          ? "https://openrouter.ai/api/v1/chat/completions"
-          : options.provider === "nvidia"
-            ? "https://integrate.api.nvidia.com/v1/chat/completions"
-            : "https://api.groq.com/openai/v1/chat/completions";
+  const endpoint = resolveAiChatEndpoint(options.provider, options.baseUrl);
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${options.apiKey}`,

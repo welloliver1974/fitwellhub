@@ -130,11 +130,12 @@ Já existe uma boa lógica híbrida no projeto.
 - Camada compartilhada `ai-settings.functions.ts` para configurar provedor (Groq, OpenRouter, OmniRoute)
 - Tela de IA (`/app/ia`) para configurar sem editar `.env`
 
-### 3. ✅ Duas baterias entregues (02/08/2026) - Criar testes de avaliação da IA
-Antes nada era testado. **Vitest** configurado e a lógica pura foi extraída para módulos testáveis (`src/lib/coach-plan.ts`, `src/lib/food-utils.ts`). **38 testes verdes** em duas baterias:
+### 3. ✅ Três baterias entregues (02/08/2026) - Criar testes de avaliação da IA
+Antes nada era testado. **Vitest** configurado e a lógica pura foi extraída para módulos testáveis (`src/lib/coach-plan.ts`, `src/lib/food-utils.ts`, `src/lib/ai-settings.ts`). **55 testes verdes** em três baterias:
 
 - **1ª bateria (node):** 27 testes — `buildCoachPlan`/`inferCoachObjective`/`confidenceFromStats`/`nextActionFromStats`, `parseFoodWeight`/`scaleMacros` (scanner) e `getLocalDate`.
-- **2ª bateria (jsdom + testing-library):** 11 testes — `rescaleMacros` (nova função pura extraída do diálogo do "+": reescala proporcional de macros ao mudar a porção, kcal inteiro vs P/C/G 1 casa) e `PlanCard` (componente extraído para `src/components/`, testado com render/expandir/checklist/próxima ação/recolher).
+- **2ª bateria (jsdom + testing-library):** 11 testes — `rescaleMacros` (nova função pura extraída do diálogo do "+": reescala proporcional de macros ao mudar a porção, kcal = inteiro vs P/C/G 1 casa) e `PlanCard` (componente extraído para `src/components/`, testado com render/expandir/checklist/próxima ação/recolher).
+- **3ª bateria (node, unit de providers):** 17 testes — `ai-settings` extraído para `src/lib/ai-settings.ts` (puro): `normalizeAiSettings`, `resolveAiProvider`, `getTextModel`, `resolveAiApiKey`, `resolveAiChatEndpoint`. Cobre detalhes bug-prone: `nvidia` usa `openrouter_api_key`; `nvidia_model` de `omniroute_base_url`; fallback de env por provider.
 - **Infra:** `src/test/setup.ts` (jest-dom + cleanup). jsdom ativado por **docblock** `// @vitest-environment jsdom` em `*.component.test.tsx` — **Vitest 4 removeu `environmentMatchGlobs`**.
 
 Casos ainda úteis (próximas etapas):
@@ -168,12 +169,11 @@ Isso tende a melhorar bastante a experiência do usuário sem exigir uma mudanç
 ## Proximos Passos (Ideias para o futuro)
 
 ### 🧪 Testes automatizados — ✅ Vitest configurado (02/08/2026)
-Primeira bateria entregue: `npm test` (27 testes verdes) sobre a lógica pura extraída em `src/lib/`. O refactor de testabilidade também removeu o cross-import `chat.functions → nutrition.functions`.
+**55 testes verdes** em três baterias, sobre lógica pura extraída em `src/lib/` (`coach-plan.ts`, `food-utils.ts`, `ai-settings.ts`) + componente `src/components/plan-card.tsx`. A testabilidade também removeu o cross-import `chat.functions → nutrition.functions`.
 
-Sugestoes de proximas etapas:
-- Testes unitarios para `ai-settings.functions.ts` (logica de provider/modelo)
-- Testes de componentes/UI (jsdom + testing-library)
-- Testes de integracao para as server functions principais (mock de supabase)
+Sugestaes de proximas etapas:
+- Testes de integracao para as server functions principais (mock de supabase) — **pendente** (amadurece o padrão de mock pra renderizar `NutricaoPage`/`ChatPage` inteiras)
+- Testes de componentes/UI para mais componentes isolados (Dropdown/Select, dialogs) — mesmo padrão do `PlanCard`
 
 ### 📦 Bundle splitting
 O build produz bundles grandes:

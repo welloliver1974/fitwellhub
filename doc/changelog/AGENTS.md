@@ -2,6 +2,13 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [02/08/2026] - Claude Code (Testes unitários de ai-settings — lógica pura de providers, 3ª bateria)
+- **Escopo**:
+  - **Extração** `src/lib/ai-settings.ts` (puro, zero imports, testável em node): `normalizeAiSettings`, `resolveAiProvider`, `getTextModel`, `resolveAiApiKey`, `resolveAiChatEndpoint` + tipos `AiProvider`/`AiSettings`/`AiSettingsRow` (tipo estrutural agnóstico do Supabase). Preserva detalhes bug-prone: `nvidia` usa `openrouter_api_key`; `nvidia_model` vem de `omniroute_base_url` (trim); fallback de env por provider com prioridade.
+  - **`ai-settings.functions.ts`** importa do módulo puro e **re-exporta** os símbolos (nenhum import de outros arquivos muda); `fetchAiSettings`/`fetchNvidiaModels`/`callAiChatCompletion` seguem no server-fn (supabase/fetch/createServerFn). `callAiChatCompletion` usa `resolveAiChatEndpoint`.
+  - **Bateria**: `src/lib/ai-settings.test.ts` — **17 testes** (provider/fallback, modelo, chave armazenada vs env, endpoint). **55 testes no total**.
+- **Status**: Concluído, `npm test` 55/55 verde + `npm run build` + `tsc --noEmit` limpo nos tocados. Smoke manual da tela `/app/ia` pendente.
+
 ## [02/08/2026] - Claude Code (Testes de UI jsdom + matemática pura de reescala — 2ª bateria)
 - **Escopo**:
   - **Setup jsdom + testing-library**: devDeps `jsdom`, `@testing-library/react` (^16, React 19), `@testing-library/dom`, `@testing-library/jest-dom`, `@testing-library/user-event`. `src/test/setup.ts` com `@testing-library/jest-dom/vitest` + `afterEach(cleanup)` (sem globals). `vite.config.ts` ganhou `setupFiles`. **Importante**: Vitest 4 **removeu** `environmentMatchGlobs` — o jsdom é ativado por **docblock** `// @vitest-environment jsdom` no topo dos testes `*.component.test.tsx` (a lógica pura de `src/lib/*.test.ts` continua em node).

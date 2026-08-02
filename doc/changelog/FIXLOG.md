@@ -1253,3 +1253,16 @@ O `/coach` gerava o plano (foco, metas de treino/nutrição/acompanhamento, chec
 - ✅ `npm run build` validado após os refactors (PlanCard + rescaleMacros)
 - ✅ `tsc --noEmit` limpo nos arquivos tocados (erros pré-existentes de `body_measurements`/`BarcodeDetector`/`profiles`/`vite.config` ficam fora de escopo)
 - ⬜ **Smoke manual:** Chat — pergunta "qual o meu plano da semana?" → card idêntico (recolhe/expandiu igual); `Sparkles` do header continua.
+
+## Sessão: 02/08/2026 — Testes unitários de ai-settings (lógica pura de providers) — 3ª bateria
+
+### 🎯 O que foi feito
+- **Extração para `src/lib/ai-settings.ts`** (puro, zero imports, testável em node): `normalizeAiSettings`, `resolveAiProvider`, `getTextModel`, `resolveAiApiKey`, `resolveAiChatEndpoint` (endpoint determinístico) + tipos `AiProvider`/`AiSettings`/`AiSettingsRow` (agnóstico do tipo do Supabase). **Preserva detalhes reais** que regridem fácil: `nvidia` usa `openrouter_api_key` (não a próxima), `nvidia_model` vem de `omniroute_base_url` (trim), fallback de env por provider com prioridade (omniroute → OPENROUTER → GROQ).
+- **`ai-settings.functions.ts`** agora importa do módulo puro e **re-exporta** os símbolos (nenhum outro arquivo muda o import): `fetchAiSettings`/`fetchNvidiaModels`/`callAiChatCompletion` permanecem no server-fn (usam `supabase`/`fetch`/`createServerFn`). `callAiChatCompletion` passou a usar `resolveAiChatEndpoint`.
+- **Bateria (17 testes novos)**: `src/lib/ai-settings.test.ts` — `normalizeAiSettings` (provider/fallback groq, nvidia_model, chaves), `resolveAiProvider`, `getTextModel` (default vs nvidia custom), `resolveAiApiKey` (armazenada vs env fallback, nvidia via openrouter, prioridade omniroute), `resolveAiChatEndpoint` (por provider + baseUrl custom + fallback groq).
+
+### ✅ Estado final
+- ✅ `npm test` → **55 testes verdes** (5 arquivos: 38 anterior + 17 ai-settings)
+- ✅ `npm run build` validado (client + server)
+- ✅ `tsc --noEmit` limpo nos arquivos tocados
+- ⬜ **Smoke manual:** IA config (tela `/app/ia`, modelos NVIDIA) e chat com provider — sem mudança de comportamento esperada (refactor é só movimentação)
