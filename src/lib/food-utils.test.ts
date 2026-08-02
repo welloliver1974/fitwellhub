@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseFoodWeight, scaleMacros } from "@/lib/food-utils";
+import { parseFoodWeight, rescaleMacros, scaleMacros } from "@/lib/food-utils";
 
 describe("parseFoodWeight", () => {
   it("parseia gramas e unidades", () => {
@@ -70,5 +70,34 @@ describe("scaleMacros", () => {
   it("arredonda macros para 1 casa decimal", () => {
     const macros = scaleMacros({ "proteins_100g": 3, "energy-kcal_100g": 0 }, 150);
     expect(macros.protein_g).toBe(4.5);
+  });
+});
+
+describe("rescaleMacros", () => {
+  const prev = { calories: 200, protein_g: 10, carbs_g: 30, fat_g: 2 };
+
+  it("dobra os macros com ratio 2x (ref 100 -> 200)", () => {
+    const r = rescaleMacros(prev, 100, 200);
+    expect(r).toEqual({ calories: 400, protein_g: 20, carbs_g: 60, fat_g: 4 });
+  });
+
+  it("cai pela metade com ratio 0.5x (ref 200 -> 100)", () => {
+    const r = rescaleMacros({ ...prev, protein_g: 15 }, 200, 100);
+    expect(r).toEqual({ calories: 100, protein_g: 7.5, carbs_g: 15, fat_g: 1 });
+  });
+
+  it("kcal arredonda para inteiro, P/C/G para 1 casa (ratio 1.5x)", () => {
+    const r = rescaleMacros({ calories: 150, protein_g: 7, carbs_g: 21, fat_g: 3 }, 100, 150);
+    expect(r).toEqual({ calories: 225, protein_g: 10.5, carbs_g: 31.5, fat_g: 4.5 });
+  });
+
+  it("campos vazios permanecem vazios", () => {
+    const r = rescaleMacros({ calories: "", protein_g: "", carbs_g: 30, fat_g: "" }, 100, 200);
+    expect(r).toEqual({ calories: "", protein_g: "", carbs_g: 60, fat_g: "" });
+  });
+
+  it("devolve prev inalterado quando newGrams ou refGrams <= 0", () => {
+    expect(rescaleMacros(prev, 100, 0)).toEqual(prev);
+    expect(rescaleMacros(prev, 0, 100)).toEqual(prev);
   });
 });

@@ -130,8 +130,12 @@ Já existe uma boa lógica híbrida no projeto.
 - Camada compartilhada `ai-settings.functions.ts` para configurar provedor (Groq, OpenRouter, OmniRoute)
 - Tela de IA (`/app/ia`) para configurar sem editar `.env`
 
-### 3. ✅ Primeira bateria entregue (02/08/2026) - Criar testes de avaliação da IA
-Antes nada era testado. **Vitest** foi configurado (`environment: node`, script `npm test`) e a lógica pura foi extraída para módulos testáveis (`src/lib/coach-plan.ts`, `src/lib/food-utils.ts`). **27 testes verdes** cobrindo: `buildCoachPlan`/`inferCoachObjective`/`confidenceFromStats`/`nextActionFromStats`, `parseFoodWeight`/`scaleMacros` (scanner) e `getLocalDate`.
+### 3. ✅ Duas baterias entregues (02/08/2026) - Criar testes de avaliação da IA
+Antes nada era testado. **Vitest** configurado e a lógica pura foi extraída para módulos testáveis (`src/lib/coach-plan.ts`, `src/lib/food-utils.ts`). **38 testes verdes** em duas baterias:
+
+- **1ª bateria (node):** 27 testes — `buildCoachPlan`/`inferCoachObjective`/`confidenceFromStats`/`nextActionFromStats`, `parseFoodWeight`/`scaleMacros` (scanner) e `getLocalDate`.
+- **2ª bateria (jsdom + testing-library):** 11 testes — `rescaleMacros` (nova função pura extraída do diálogo do "+": reescala proporcional de macros ao mudar a porção, kcal inteiro vs P/C/G 1 casa) e `PlanCard` (componente extraído para `src/components/`, testado com render/expandir/checklist/próxima ação/recolher).
+- **Infra:** `src/test/setup.ts` (jest-dom + cleanup). jsdom ativado por **docblock** `// @vitest-environment jsdom` em `*.component.test.tsx` — **Vitest 4 removeu `environmentMatchGlobs`**.
 
 Casos ainda úteis (próximas etapas):
 - resposta do coach com histórico curto (já parcialmente coberto por `confidenceFromStats`)
@@ -139,6 +143,7 @@ Casos ainda úteis (próximas etapas):
 - busca nutricional com alimento desconhecido (integração / mock)
 - foto de prato com muitos itens (integração)
 - análise de medidas com poucos registros (integração)
+- **renderizar `NutricaoPage`/`ChatPage` inteiras** (mock de supabase/auth/router) — o fluxo ponta-a-ponta do diálogo do "+" (open → buscar biblioteca → tocar item → mudar porção) fica para os testes de integração
 
 ## O Que Eu Faria Primeiro
 

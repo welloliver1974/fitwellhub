@@ -34,7 +34,12 @@ export default defineConfig({
     },
     test: {
       environment: "node",
+      // jsdom só nos testes de UI (*.component.test.tsx) via docblock
+      // `// @vitest-environment jsdom` no topo do arquivo (Vitest 4 não tem
+      // mais environmentMatchGlobs). A lógica pura de src/lib/*.test.ts segue
+      // em node (mais rápido, sem DOM).
       include: ["src/**/*.test.{ts,tsx}"],
+      setupFiles: ["src/test/setup.ts"],
     },
   },
 });

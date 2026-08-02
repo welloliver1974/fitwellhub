@@ -2,6 +2,14 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [02/08/2026] - Claude Code (Testes de UI jsdom + matemática pura de reescala — 2ª bateria)
+- **Escopo**:
+  - **Setup jsdom + testing-library**: devDeps `jsdom`, `@testing-library/react` (^16, React 19), `@testing-library/dom`, `@testing-library/jest-dom`, `@testing-library/user-event`. `src/test/setup.ts` com `@testing-library/jest-dom/vitest` + `afterEach(cleanup)` (sem globals). `vite.config.ts` ganhou `setupFiles`. **Importante**: Vitest 4 **removeu** `environmentMatchGlobs` — o jsdom é ativado por **docblock** `// @vitest-environment jsdom` no topo dos testes `*.component.test.tsx` (a lógica pura de `src/lib/*.test.ts` continua em node).
+  - **Extração `PlanCard`** (refactor sem comportamento): `app.chat.tsx:53-111` → novo `src/components/plan-card.tsx` (apresentacional puro). `app.chat.tsx` perdeu os imports de `Collapsible`/`ChevronDown` (só o card usava) e manteve `Sparkles`/`CoachPlan`.
+  - **Extração `rescaleMacros`**: a matemática inline do `onChange` da porção em `app.nutricao.tsx` virou função pura em `src/lib/food-utils.ts` (tipo `MacroState` exportado). Preserva o detalhe: kcal → inteiro, P/C/G → 1 casa, `""` permanece `""`, guarda `<=0`.
+  - **Bateria**: +6 testes `rescaleMacros` em `food-utils.test.ts` e +6 testes de UI em `plan-card.component.test.tsx` (render/expandir/checklist/próxima ação/recolher). **38 testes no total**.
+- **Status**: Concluído, `npm test` 38/38 verde + `npm run build` + `tsc --noEmit` limpo nos tocados (erros pré-existentes de `vite.config` tipagem estrita do lovable wrapper ficam fora). Smoke manual do chat pendente.
+
 ## [02/08/2026] - Claude Code (Testes automatizados — Vitest, primeira bateria)
 - **Escopo**:
   - **Setup**: `vitest@^4.1.10` (devDep, compatível com Vite 7); bloco `test: { environment: "node", include: ["src/**/*.test.{ts,tsx}"] }` no `vite.config.ts`; script `"test": "vitest run"`.

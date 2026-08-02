@@ -1237,3 +1237,19 @@ O `/coach` gerava o plano (foco, metas de treino/nutrição/acompanhamento, chec
 - ✅ `npm run build` validado após o refactor
 - ✅ `tsc --noEmit` limpo nos arquivos tocados
 - ⬜ **Smoke manual:** Nutrição (buscar biblioteca, scanner) e Chat (plano da semana) — comportamento idêntico (refactor é só movimentação de código)
+
+## Sessão: 02/08/2026 — Testes de UI (jsdom) + matemática pura de reescala (2ª bateria)
+
+### 🎯 O que foi feito
+- **Setup jsdom + testing-library**: `npm i -D jsdom @testing-library/react @testing-library/dom @testing-library/jest-dom @testing-library/user-event`. Novo `src/test/setup.ts` importando `@testing-library/jest-dom/vitest` + `afterEach(cleanup)` (sem `globals: true`, o auto-cleanup do RTL não dispara). `vite.config.ts`: `setupFiles` adicionado; **sem** `environmentMatchGlobs` (removido no Vitest 4) — o jsdom é ativado por **docblock** `// @vitest-environment jsdom` no topo dos testes `*.component.test.tsx`.
+- **Extração `PlanCard`** (SEM mudança de comportamento): movido de `app.chat.tsx:53-111` para novo `src/components/plan-card.tsx` (componente apresentacional puro, só `plan` prop). `app.chat.tsx` removeu `Collapsible`/`ChevronDown` dos imports (só eram usados no card) e mantém `Sparkles` (header) e `CoachPlan` (`Msg.plan`).
+- **Extração `rescaleMacros`**: a matemática inline do `onChange` da porção (`app.nutricao.tsx`) virou função pura `rescaleMacros(prev, refGrams, newGrams)` em `src/lib/food-utils.ts` (tipo `MacroState` exportado). Preserva o **detalhe real**: kcal arredonda para **inteiro**, P/C/G para **1 casa**; campos `""` permanecem `""`; guarda `refGrams/newGrams <= 0` → devolve `prev`.
+- **Bateria (11 testes novos)**:
+  - `food-utils.test.ts` +6: `rescaleMacros` — ratio 2x/0.5x, assimetria de arredondamento (kcal int vs P/C/G 1 casa), campos vazios, guarda `<=0`.
+  - `plan-card.component.test.tsx` (jsdom) +6: título recolhido esconde conteúdo; chip de objetivo visível; expandir ao toque mostra foco/metas; checklist com N `<li>`; próxima ação; recolher de novo.
+
+### ✅ Estado final
+- ✅ `npm test` → **38 testes verdes** (4 arquivos: 27 primeira bateria + 6 rescale + 6 PlanCard, com 1 bloco a mais)
+- ✅ `npm run build` validado após os refactors (PlanCard + rescaleMacros)
+- ✅ `tsc --noEmit` limpo nos arquivos tocados (erros pré-existentes de `body_measurements`/`BarcodeDetector`/`profiles`/`vite.config` ficam fora de escopo)
+- ⬜ **Smoke manual:** Chat — pergunta "qual o meu plano da semana?" → card idêntico (recolhe/expandiu igual); `Sparkles` do header continua.

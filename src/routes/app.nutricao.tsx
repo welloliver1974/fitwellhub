@@ -39,7 +39,7 @@ import {
   Library,
 } from "lucide-react";
 import { lookupNutrition, analyzePhoto } from "@/server-fns/nutrition.functions";
-import { parseFoodWeight, scaleMacros } from "@/lib/food-utils";
+import { parseFoodWeight, scaleMacros, rescaleMacros } from "@/lib/food-utils";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
@@ -807,13 +807,15 @@ function NutricaoPage() {
                       const v = e.target.value === "" ? "" : Number(e.target.value);
                       setGrams(v);
                       if (refGrams !== null && typeof v === "number" && v > 0) {
-                        const ratio = v / refGrams;
-                        const scale = (n: number | "") =>
-                          n === "" ? "" : Math.round(n * ratio * 10) / 10;
-                        setMCal((p) => (p === "" ? p : Math.round(Number(p) * ratio)));
-                        setMProt((p) => scale(p));
-                        setMCarb((p) => scale(p));
-                        setMFat((p) => scale(p));
+                        const scaled = rescaleMacros(
+                          { calories: mCal, protein_g: mProt, carbs_g: mCarb, fat_g: mFat },
+                          refGrams,
+                          v,
+                        );
+                        setMCal(scaled.calories);
+                        setMProt(scaled.protein_g);
+                        setMCarb(scaled.carbs_g);
+                        setMFat(scaled.fat_g);
                         setRefGrams(v);
                       }
                     }}
