@@ -18,6 +18,13 @@ const inputSchema = z.object({
 interface UserContext {
   ctxText: string;
   recentHistory: any[];
+  /** Contagens de dados usadas para calcular o nível de confiança (heurística, como no coachAdvice). */
+  stats: {
+    workoutCount: number;
+    mealCount: number;
+    weightCount: number;
+    waterCount: number;
+  };
 }
 
 /**
@@ -157,7 +164,17 @@ ${workoutsText}`;
 
   const recentHistory = (history ?? []).reverse();
 
-  return { ctxText, recentHistory };
+  // Contagens dos arrays já buscados (sem queries extras). Nota: janelas não são idênticas
+  // às do coachAdvice (workouts aqui usa .limit(5), meals usa gte weekAgo) — a confiança é
+  // heurística, então contar o que já foi buscado é suficiente.
+  const stats = {
+    workoutCount: workoutsData?.length ?? 0,
+    mealCount: meals?.length ?? 0,
+    weightCount: weights?.length ?? 0,
+    waterCount: water?.length ?? 0,
+  };
+
+  return { ctxText, recentHistory, stats };
 }
 
 /**
@@ -287,6 +304,35 @@ export async function executeRecordWorkout(
   return "Treino registrado com sucesso (sem séries).";
 }
 
+/**
+ * Nível de confiança e próxima ação — mesma heurística determinística do coachAdvice
+ * (nutrition.functions.ts): a IA responde em texto livre e a confiança é derivada da
+ * quantidade de dados recentes, não da saída da IA.
+ */
+function confidenceFromStats(stats: {
+  workoutCount: number;
+  mealCount: number;
+  weightCount: number;
+  waterCount: number;
+}): "baixa" | "media" | "alta" {
+  const score = stats.workoutCount + stats.mealCount + stats.weightCount + stats.waterCount;
+  return score >= 12 ? "alta" : score >= 6 ? "media" : "baixa";
+}
+
+function nextActionFromStats(stats: {
+  workoutCount: number;
+  mealCount: number;
+  weightCount: number;
+}): string {
+  if (stats.workoutCount === 0)
+    return "Registre pelo menos um treino na proxima semana para melhorar a leitura do Coach.";
+  if (stats.mealCount === 0)
+    return "Registre refeicoes com mais frequencia para cruzar melhor treino e nutricao.";
+  if (stats.weightCount === 0)
+    return "Adicione ao menos um peso recente para o Coach comparar com sua evolucao.";
+  return "Mantenha a rotina atual e revise os dados na proxima atualizacao.";
+}
+
 export const sendChat = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => inputSchema.parse(d))
@@ -301,7 +347,7 @@ export const sendChat = createServerFn({ method: "POST" })
     const weekAgo = getLocalDate(new Date(Date.now() - 7 * 86400000));
 
     // 1. Fetch relevant user context and chat messages history
-    const { ctxText, recentHistory } = await fetchUserContext(supabase, userId, today, weekAgo);
+    const { ctxText, recentHistory, stats } = await fetchUserContext(supabase, userId, today, weekAgo);
 
     // 2. Optimistic save of user's message
     const dbMessage = data.images?.length ? `[${data.images.length} Imagens] ${data.message}` : data.message;
@@ -457,5 +503,9 @@ Dados do usuário:\n${ctxText}` + (process.env.COACH_ALWAYS_SUGGEST === "true" ?
     // 4. Save assistant reply and return
     const reply = choice.message.content || "Registro concluído.";
     await saveChatMessage(supabase, userId, "assistant", reply);
-    return { reply };
+    // Confiança + próxima ação derivadas dos dados (heurística), não da IA. O banco persiste
+    // apenas o reply; esses campos vão só no retorno para a UI exibir chips na última mensagem.
+    const confidence = confidenceFromStats(stats);
+    const nextAction = nextActionFromStats(stats);
+    return { reply, confidence, nextAction };
   });

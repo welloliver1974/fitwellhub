@@ -2,6 +2,15 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [02/08/2026] - Claude Code (Scanner salva na biblioteca + Confiança/Próxima ação no chat)
+- **Escopo**:
+  - **"Salvar na biblioteca" pós-scan**: Em `src/routes/app.nutricao.tsx`, nova função `saveToLibrary` que insere o alimento preenchido no modal (scanner, busca manual ou IA) em `food_library`, com dedup por nome (case-insensitive via `.ilike`). Botão `outline` "Salvar na biblioteca" (ícone Apple) ao lado do "Adicionar" no diálogo. Categoria default "Outros". Payload espelha o insert do `FoodLibrary`.
+  - **Confiança + próxima ação no chat**: Em `src/server-fns/chat.functions.ts`, `fetchUserContext` agora retorna `stats` (workoutCount/mealCount/weightCount/waterCount) contados dos arrays já buscados (zero queries extras); `sendChat` calcula `confidence` e `nextAction` com a mesma heurística determinística do `coachAdvice` e retorna `{ reply, confidence, nextAction }` — o banco persiste só o `reply`.
+  - **Chip de confiança na UI**: Em `src/routes/app.chat.tsx`, tipo `Msg` ganhou `confidence?`/`nextAction?`; a última resposta ao vivo exibe chip colorido (baixa=amber, média=azul, alta=verde) + linha de próxima ação. Histórico recarregado fica sem chips.
+  - **Sem json_schema**: Loop de `tools` (record_meal/record_workout) e prompt de IA **intactos**. Achado-chave registrado: o `coachAdvice` **não usa** `response_format` — confiança/plano são computados em JS deterministicamente.
+  - **Docs**: `doc/changelog/FIXLOG.md` (sessão 02/08), `doc/roadmap/melhorias.md` (item4 concluído, item5 parcial, item2 esclarecido).
+- **Status**: Concluído, `npm run build` validado (Client + SSR). Teste manual do scanner e do tool-use do chat pendente pelo usuário.
+
 ## [01/08/2026] - Claude Code (Biblioteca de Alimentos na aba Nutrição)
 - **Escopo**:
   - **Nova migration**: `supabase/migrations/20260801000000_food_library.sql` cria a tabela `food_library` (id, user_id, name, category, grams, calories, protein_g, carbs_g, fat_g, created_at) com RLS e índice em `user_id`.

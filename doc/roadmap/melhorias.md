@@ -8,6 +8,13 @@ Opinião geral: o app já tem uma base forte, com bastante funcionalidade útil 
 - Parciais: 2, UX 2, UX 3
 - Pendentes: 4, 5, Técnica 3
 
+## Status atualizado (02/08/2026)
+
+- **Concluída agora:** 4 — confiança + próxima ação foram levadas ao chat conversacional
+- **Parcial agora:** 5 — próxima ação no chat; plano semanal completo segue só no `/app/coach`
+- **Ainda pendentes:** 2 (saída estruturada de IA real — ver nota no item), Técnica 3 (testes)
+- **Nota:** o `coachAdvice` calcula `confidence` e `plan` deterministicamente em JS (não usa `response_format`/json_schema). Ver `doc/changelog/FIXLOG.md` sessão 02/08.
+
 ## Melhoria de IA
 
 ### 1. ✅ Concluída - Dar mais consistência ao Coach IA
@@ -24,11 +31,14 @@ Nem tudo precisa ser texto livre. Para algumas partes, vale muito mais usar uma 
 **O que foi feito:**
 - Criada página `/app/coach` com análise semanal estruturada: `CoachSnapshot` (confidence, nextAction, sources) e `CoachPlan` (title, focus, trainingGoal, checklist)
 - Tipos `CoachSnapshot` e `CoachPlan` definidos com TypeScript
+- (02/08/2026) Chat ganhou o snapshot: `confidence` + `nextAction` com chip visual na última resposta
+
+**Esclarecimento importante (02/08/2026):** o `coachAdvice` **não usa `response_format`/json_schema** — a IA responde em texto livre e `confidence`/`plan` são computados **deterministicamente em JS** (`buildCoachPlan`). Ou seja, "saída estruturada de IA" (schema JSON real) **não existe** nem no coach. Se for desejada de verdade, é esforço separado e maior.
 
 **Ainda pendente:**
-- Aplicar saída estruturada nas respostas do chat conversacional (`/app/chat`)
+- Saída estruturada de IA real (json_schema) onde fizer sentido — definir escopo
 - Sugestão nutricional com formato previsível
-- Cards visuais no frontend para os dados estruturados
+- Plano semanal completo (CoachPlan) dentro do chat
 
 ### 3. ✅ Concluída - Fazer a IA explicar melhor as conclusões
 As respostas ficam mais confiáveis quando a IA mostra de onde tirou a ideia.
@@ -38,19 +48,24 @@ As respostas ficam mais confiáveis quando a IA mostra de onde tirou a ideia.
 - System prompt exige citação de dados específicos (datas, exercícios, cargas, peso)
 - Página de análise semanal (`/app/coach`) exibe "Base usada" com fontes listadas
 
-### 4. ⏳ Pendente - Adicionar nível de confiança e fallback
+### 4. ✅ Concluída - Adicionar nível de confiança e fallback
 Quando a IA tiver poucos dados, ela deveria dizer isso claramente.
 
-**Parcialmente implementado:** A análise semanal (`/app/coach`) já tem campo `confidence` (baixa/media/alta). Falta aplicar no chat conversacional.
+**Implementado (02/08/2026):**
+- Análise semanal (`/app/coach`) tem campo `confidence` (baixa/media/alta)
+- Chat conversacional (`/app/chat`) agora também: `sendChat` calcula `confidence` + `nextAction` (mesma heurística do coach) e o frontend exibe chip de confiança + próxima ação sob a última resposta
 
 Exemplo desejado:
 - "Tenho poucos treinos recentes, então esta sugestão tem confiança média."
 - "Não há histórico suficiente para afirmar progressão com segurança."
 
-### 5. ⏳ Pendente - Transformar o Coach em planejador, não só respondedor
+### 5. 🔄 Parcial - Transformar o Coach em planejador, não só respondedor
 Em vez de apenas comentar o que já aconteceu, a IA pode ajudar a planejar o próximo passo.
 
-**Parcialmente implementado:** A análise semanal (`/app/coach`) já gera plano com foco da semana, meta de treino, meta nutricional e checklist.
+**Parcialmente implementado:**
+- A análise semanal (`/app/coach`) gera plano com foco da semana, meta de treino, meta nutricional e checklist
+- (02/08/2026) O chat conversacional agora fecha cada resposta com uma **próxima ação** concreta derivada dos dados
+- **Ainda falta:** levar o plano semanal completo (foco, metas, checklist) para dentro do chat — hoje vive só no `/coach`, com link "Análise Semanal" no header do chat
 
 Exemplos desejados para o chat:
 - foco da semana

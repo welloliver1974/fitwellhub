@@ -1122,3 +1122,38 @@ O som do fim do descanso tinha 3 bipes com padrão 880Hz → 660Hz → 880Hz (no
 - ✅ 3 bipes ascendentes (800→1200→1600Hz) — som que sobe, chama atenção
 - ✅ Corta música ambiente mesmo com fone
 - ✅ Zero dependências externas
+
+---
+
+## Sessão: 02/08/2026 — Scanner salva na biblioteca + Confiança/Próxima ação no chat
+
+### 🎯 Funcionalidades trabalhadas
+- `src/routes/app.nutricao.tsx` → botão "Salvar na biblioteca" no diálogo de alimento
+- `src/server-fns/chat.functions.ts` → `confidence` + `nextAction` no retorno do `sendChat`
+- `src/routes/app.chat.tsx` → chip de confiança + próxima ação na última resposta
+
+---
+
+### 🔍 Contexto 1: Scanner não guardava produtos
+O fluxo `onBarcode` (escaneia → Open Food Facts ou IA) **só preenchia o modal** e, ao confirmar, inseria em `meal_items` da refeição do **dia**. O produto não ia para `favorite_foods` nem `food_library` — então um alimento escaneado ontem não aparecia hoje (a tela carrega só `meal_items` de hoje). Sem favorito/biblioteca, o produto evaporava.
+
+### 🛠️ Solução 1 — Botão "Salvar na biblioteca" (`app.nutricao.tsx`)
+1. **Nova função `saveToLibrary`**: insere em `food_library` com payload espelhando o `FoodLibrary` (`user_id, name, category, grams, macros`) — macros já vêm na porção detectada pelo scanner, sem recálculo.
+2. **Dedup por nome** (case-insensitive via `.ilike`): se já existir, `toast.error("'X' já existe na biblioteca")` e não insere.
+3. **Botão `outline`** ao lado do "Adicionar" (mesmo diálogo), com ícone `Apple` — atende scanner, busca manual e IA. Categoria default "Outros" (editável depois no FoodLibrary).
+
+### 🔍 Contexto 2: Roadmap chat (confiança + planejador) era real, mas descascado
+Pendências 4 e 5 do `doc/roadmap/melhorias.md` existiam só no `/app/coach`, não no `/app/chat`. **Achado-chave:** o `coachAdvice` **não usa `response_format`/json_schema** — a IA responde em texto livre e `confidence`/`plan` são calculados **deterministicamente em JS** (`score >= 12 ? alta : >= 6 ? media : baixa`). Ou seja, "saída estruturada de IA" não existe nem no coach.
+
+### 🛠️ Solução 2 — Confiança + próxima ação no chat (`chat.functions.ts` + `app.chat.tsx`)
+1. **`fetchUserContext`** agora retorna `stats` (workoutCount, mealCount, weightCount, waterCount) contados dos arrays já buscados — **zero queries extras**. Nota: janelas diferem do coach (workouts usa `.limit(5)`, meals `gte weekAgo`) — heurística, suficiente.
+2. **`sendChat`** calcula `confidence` e `nextAction` com a **mesma fórmula do coach** (`confidenceFromStats` / `nextActionFromStats`) e retorna `{ reply, confidence, nextAction }`. O banco persiste **só o reply** (os campos vão só no retorno para a UI).
+3. **`app.chat.tsx`**: tipo `Msg` ganhou `confidence?`/`nextAction?`; na última resposta ao vivo, exibe chip colorido (baixa=amber, média=azul, alta=verde) + linha de próxima ação. Mensagens antigas recarregadas do banco ficam sem chips (comportamento preservado).
+4. **Loop de `tools` (record_meal/record_workout) e prompt de IA intactos** — nada de json_schema, sem risco de quebrar o registro de refeição/treino.
+
+### ✅ Estado final
+- ✅ Alimento escaneado/manual/IA pode ser salvo na biblioteca em 1 toque (com dedup)
+- ✅ Chat mostra confiança (baixa/média/alta) + próxima ação sob a última resposta
+- ✅ Tool-use do chat (registrar refeição/treino) sem regressão
+- ✅ `npm run build` validado (Client + SSR)
+- ⬜ **Teste manual pendente (usuário):** escanear produto → salvar na biblioteca → conferir em "Meus alimentos"; duplicar scan → aviso; chat com tool-use de almoço/treino

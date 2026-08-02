@@ -12,7 +12,15 @@ export const Route = createFileRoute("/app/chat")({
   component: ChatPage,
 });
 
-type Msg = { id: string; role: string; content: string; created_at: string };
+type Msg = {
+  id: string;
+  role: string;
+  content: string;
+  created_at: string;
+  // Só presente na última resposta ao vivo (não é persistido no banco).
+  confidence?: "baixa" | "media" | "alta";
+  nextAction?: string;
+};
 
 const SUGGESTIONS = [
   "Como estou na meta de proteína?",
@@ -20,6 +28,18 @@ const SUGGESTIONS = [
   "Sugira um lanche pré-treino",
   "Análise dos meus últimos 7 dias",
 ];
+
+const CONFIDENCE_LABEL: Record<NonNullable<Msg["confidence"]>, string> = {
+  baixa: "Confiança baixa",
+  media: "Confiança média",
+  alta: "Confiança alta",
+};
+
+const CONFIDENCE_STYLE: Record<NonNullable<Msg["confidence"]>, string> = {
+  baixa: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+  media: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
+  alta: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+};
 
 function ChatPage() {
   const { user, session } = useAuth();
@@ -116,6 +136,8 @@ function ChatPage() {
             role: "assistant",
             content: r.reply,
             created_at: new Date().toISOString(),
+            confidence: r.confidence,
+            nextAction: r.nextAction,
           },
         ];
       });
@@ -176,10 +198,26 @@ function ChatPage() {
         )}
         {messages.map((m) => (
           <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div
-              className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap ${m.role === "user" ? "bg-primary text-primary-foreground" : "bg-card border"}`}
-            >
-              {m.content}
+            <div className="max-w-[85%]">
+              <div
+                className={`rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap ${m.role === "user" ? "bg-primary text-primary-foreground" : "bg-card border"}`}
+              >
+                {m.content}
+              </div>
+              {m.confidence && m.role === "assistant" && (
+                <div className="mt-1.5 space-y-0.5">
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${CONFIDENCE_STYLE[m.confidence]}`}
+                  >
+                    {CONFIDENCE_LABEL[m.confidence]}
+                  </span>
+                  {m.nextAction && (
+                    <p className="text-[11px] text-muted-foreground leading-snug">
+                      {m.nextAction}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         ))}

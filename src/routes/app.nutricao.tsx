@@ -356,6 +356,39 @@ function NutricaoPage() {
     }
   };
 
+  // Salva o alimento preenchido no modal (scanner, busca manual ou IA) na biblioteca pessoal.
+  // Payload espelha o insert do FoodLibrary. Dedup por nome (case-insensitive).
+  const saveToLibrary = async () => {
+    if (!user || !query.trim()) return;
+    const name = query.trim();
+    try {
+      const { data: existing } = await supabase
+        .from("food_library")
+        .select("id")
+        .eq("user_id", user.id)
+        .ilike("name", name);
+      if (existing && existing.length > 0) {
+        toast.error(`"${name}" já existe na biblioteca`);
+        return;
+      }
+      const { error } = await supabase.from("food_library").insert({
+        user_id: user.id,
+        name,
+        category: "Outros",
+        grams: Number(grams) || 100,
+        calories: Number(mCal) || 0,
+        protein_g: Number(mProt) || 0,
+        carbs_g: Number(mCarb) || 0,
+        fat_g: Number(mFat) || 0,
+      });
+      if (error) throw error;
+      toast.success(`"${name}" salvo na biblioteca`);
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar na biblioteca");
+    }
+  };
+
   const addRecent = async (it: Item) => {
     if (!user) return;
     try {
@@ -780,13 +813,23 @@ function NutricaoPage() {
                     </div>
                   </div>
                 )}
-                <Button onClick={addFood} disabled={loading || !query.trim()} className="w-full">
-                  {loading
-                    ? "Calculando macros…"
-                    : manual
-                      ? "Adicionar"
-                      : "Calcular com IA e adicionar"}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={saveToLibrary}
+                    disabled={loading || !query.trim() || mCal === ""}
+                    className="flex-1"
+                  >
+                    <Apple className="h-4 w-4 mr-1" /> Salvar na biblioteca
+                  </Button>
+                  <Button onClick={addFood} disabled={loading || !query.trim()} className="flex-1">
+                    {loading
+                      ? "Calculando macros…"
+                      : manual
+                        ? "Adicionar"
+                        : "Calcular com IA e adicionar"}
+                  </Button>
+                </div>
               </div>
             </DialogContent>
           </Dialog>
