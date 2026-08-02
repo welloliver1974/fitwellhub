@@ -1303,3 +1303,20 @@ O `/coach` gerava o plano (foco, metas de treino/nutrição/acompanhamento, chec
 - ✅ `npm test` → **60 testes verdes** (6 arquivos: 55 anterior + 5 integração)
 - ✅ `npm run build` validado (client + server)
 - ✅ `tsc --noEmit` limpo nos arquivos tocados
+
+## Sessão: 02/08/2026 — Expansão de integração: pages de CRUD (Lembretes + Metas) — 5ª bateria
+
+### 🎯 O que foi feito
+- **Escopo (decidido com o usuário = "de forma segura")**: estender o teste de integração a mais **componentes de página de CRUD** (não rotas inteiras via MemoryRouter). O MemoryRouter puxaria o layout `/app` inteiro (theme, reminders, nav, dezenas de `Link`) — superfície grande e frágil. Alvos: Lembretes e Metas, renderizando a página com supabase "fake" + `useAuth` mock.
+- **`src/components/reminders-page.tsx` + `app.lembretes.tsx`**: extraí `RemindersPage` da rota para `src/components/` (a rota importa dele).
+- **`src/components/goals-page.tsx` + `app.metas.tsx`**: extraí `GoalsPage` da rota para `src/components/`.
+- **Por que extrair (lição importante)**: exportar a página **do arquivo de rota** faz o TanStack Router emitir warning de performance — "não será code-split e aumenta o bundle" (é o oposto do que fizemos no bundle splitting). Ao mover para `src/components/`, a rota fica limpa e o componente segue code-splitted.
+- **Testes** (`reminders-page.component.test.tsx` **5**, `goals-page.component.test.tsx` **4**): 
+  - Lembretes: carrega e lista; adiciona (`insert` `reminders`); não insere sem dias; toggle (`update`); remove (`delete`).
+  - Metas: pré-carrega meta existente (`maybeSingle`); mostra soma calórica `macroKcal`; salvar → `upsert` `goals` + `navigate`; aviso "difere >50kcal".
+- **Padrão**: `vi.hoisted` inline (vi.mock hoisted), `beforeEach(mock.reset)` p/ isolar calls entre testes, `Notification` stub no antes.
+
+### ✅ Estado final
+- ✅ `npm test` → **69 testes verdes** (8 arquivos: 60 + 5 lembretes + 4 metas)
+- ✅ `npm run build` validado (client + server) — **sem** warning de code-split
+- ✅ `tsc --noEmit` limpo nos arquivos tocados

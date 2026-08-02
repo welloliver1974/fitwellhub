@@ -2,6 +2,13 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [02/08/2026] - Claude Code (Expansão de integração: leaf pages Lembretes+Metas — 5ª bateria)
+- **Escopo**: estender o teste de integração a **componentes de página de CRUD** (padrão seguro do usuário, não MemoryRouter/layout inteiro).
+- **Extração para `src/components/`**: `RemindersPage` (de `app.lembretes.tsx`) e `GoalsPage` (de `app.metas.tsx`) movidos para arquivos próprios; as rotas passam a importá-los.
+  - **Lição**: exportar a página do próprio arquivo de rota dispara warning do TanStack Router ("não será code-split e aumenta o bundle") — contradiz o bundle splitting. Mover para `src/components/` mantém code-splitting. Confirmar para componentes alvo de teste futuros.
+- **Testes**: `reminders-page.component.test.tsx` (5: lista, add, sem-dias, toggle, delete) e `goals-page.component.test.tsx` (4: pré-carrega, macroKcal, salvar→upsert+navigate, aviso>50). Padrão `vi.hoisted` inline + `beforeEach(mock.reset)` + mock `@/lib/auth-context` + stub `Notification`.
+- **Status**: Concluído, `npm test` 69/69 (8 arquivos) + `npm run build` sem code-split warning + `tsc --noEmit` limpo.
+
 ## [02/08/2026] - Claude Code (Testes de integração — FoodLibrary com supabase mock, 4ª bateria)
 - **Escopo**:
   - **Primeiro teste de integração** `src/components/food-library.component.test.tsx` (jsdom): renderiza o `FoodLibrary` inteiro com **supabase "fake" chainable** (via `vi.mock` do `@/integrations/supabase/client` + `lookupNutrition` mockee). Fluxo real: load da biblioteca, busca, card vazio, diálogo adicionar com escala de macros (100→150g) + insert `meal_items`, e desabilitar com porção zerada.
