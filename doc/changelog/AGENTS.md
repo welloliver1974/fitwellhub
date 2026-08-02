@@ -2,6 +2,13 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [02/08/2026] - Claude Code (Testes automatizados — Vitest, primeira bateria)
+- **Escopo**:
+  - **Setup**: `vitest@^4.1.10` (devDep, compatível com Vite 7); bloco `test: { environment: "node", include: ["src/**/*.test.{ts,tsx}"] }` no `vite.config.ts`; script `"test": "vitest run"`.
+  - **Refactor para testabilidade (sem mudança de comportamento)**: criados `src/lib/coach-plan.ts` (tipos `CoachPlan`/`CoachObjective`/`CoachGoals`/`CoachStats` + `inferCoachObjective` + `buildCoachPlan` movidos de `nutrition.functions.ts`; `confidenceFromStats` + `nextActionFromStats` movidos de `chat.functions.ts`) e `src/lib/food-utils.ts` (`parseFoodWeight` + `scaleMacros` movidos de `app.nutricao.tsx`). `nutrition.functions.ts`, `chat.functions.ts`, `app.chat.tsx` e `app.nutricao.tsx` agora importam dos módulos puros. Bônus: **some o cross-import** `chat.functions → nutrition.functions`.
+  - **Bateria**: `coach-plan.test.ts`, `food-utils.test.ts` e `utils.test.ts` (getLocalDate) — **27 testes**, cobrindo fronteiras de `confidenceFromStats` (12/6), `inferCoachObjective` (inclusive borda cal-baixa/prot-baixa→Recomposição), `buildCoachPlan`, `parseFoodWeight` e `scaleMacros`.
+- **Status**: Concluído, `npm test` 27/27 verde + `npm run build` + `tsc --noEmit` limpo nos arquivos tocados. Smoke manual do refactor pendente (comportamento deve ser idêntico).
+
 ## [02/08/2026] - Claude Code (Balcão único no "+" + Plano semanal no chat)
 - **Escopo**:
   - **Balcão único de adição** (`src/routes/app.nutricao.tsx`): página carrega `food_library` (`loadLibrary`, chamada no `load()` e pós-`saveToLibrary`); diálogo do "+" ganhou a seção "Da sua biblioteca" com busca (`libQuery`) e lista filtrada clicável — tocar num item preenche o formulário (nome/gramas/macros/`manual=true`). Novo estado `refGrams` faz a **escala proporcional** dos macros ao mudar a porção (igual ao `confirmAdd` do FoodLibrary); limpo ao editar o nome e no reset pós-`addFood`. "Meus alimentos" embaixo continua sendo a área de gestão (FoodLibrary.tsx intacto).

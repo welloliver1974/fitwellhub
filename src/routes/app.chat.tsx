@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Send, Sparkles, Loader2, Trash2, Paperclip, X, ChevronDown } from "lucide-react";
 import { sendChat } from "@/server-fns/chat.functions";
-import type { CoachPlan } from "@/server-fns/nutrition.functions";
+import type { CoachPlan } from "@/lib/coach-plan";
 import {
   Collapsible,
   CollapsibleContent,

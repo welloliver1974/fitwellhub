@@ -1216,3 +1216,24 @@ O `/coach` gerava o plano (foco, metas de treino/nutrição/acompanhamento, chec
 - ✅ Loop de `tools` (record_meal/record_workout) e prompt de IA intactos
 - ✅ `npm run build` validado; `tsc --noEmit` limpo nos arquivos tocados (erros pré-existentes de `body_measurements`/`BarcodeDetector` seguem fora de escopo)
 - ⬜ **Teste manual (usuário):** "+" → buscar biblioteca → tocar item → mudar porção → macros escalam → Adicionar; chat: "qual meu plano da semana?" → card; "como estou na meta de proteína?" → sem card; `registra meu almoço: ...` → tool-use ok
+
+---
+
+## Sessão: 02/08/2026 — Testes automatizados (Vitest) — primeira bateria
+
+### 🎯 O que foi feito
+- **Setup Vitest**: `npm i -D vitest` (v4.1.10, compatível com Vite 7); bloco `test` no `vite.config.ts` (`environment: node`, `include: ["src/**/*.test.{ts,tsx}"]`); script `npm test` (`vitest run`). Sem jsdom — lógica é node puro.
+- **Refactor para testabilidade** (SEM mudança de comportamento):
+  - Novo `src/lib/coach-plan.ts` (puro, zero imports): `CoachPlan`/`CoachObjective`/`CoachGoals`/`CoachStats` + `inferCoachObjective` + `buildCoachPlan` (movidos de `nutrition.functions.ts`) + `confidenceFromStats` + `nextActionFromStats` (movidos de `chat.functions.ts`).
+  - Novo `src/lib/food-utils.ts` (puro): `parseFoodWeight` + `scaleMacros` (movidos de `app.nutricao.tsx`).
+  - Bônus de arquitetura: **some o cross-import** `chat.functions → nutrition.functions` (agora ambos importam de `@/lib/coach-plan`).
+- **Bateria de testes (27 passando)**:
+  - `coach-plan.test.ts`: `inferCoachObjective` (Emagrecimento/Hipertrofia/Recomposição/Manutenção + borda cal-baixa-prot-baixa→Recomposição); `buildCoachPlan` (foco, metas, próximo ação, checklist com 3 itens, objetivo preferido); `confidenceFromStats` (fronteiras 12/6); `nextActionFromStats` (prioridade treino→refeição→peso→rotina).
+  - `food-utils.test.ts`: `parseFoodWeight` (g/kg/vírgula/ml default/inválidos); `scaleMacros` (serving vs 100g, escala, precedência, alias `energy-kcal`, arredondamento 1 casa).
+  - `utils.test.ts`: `getLocalDate` (formato local, pad-start).
+
+### ✅ Estado final
+- ✅ `npm test` → **27 testes verdes** (3 arquivos)
+- ✅ `npm run build` validado após o refactor
+- ✅ `tsc --noEmit` limpo nos arquivos tocados
+- ⬜ **Smoke manual:** Nutrição (buscar biblioteca, scanner) e Chat (plano da semana) — comportamento idêntico (refactor é só movimentação de código)

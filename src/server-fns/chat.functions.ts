@@ -11,9 +11,11 @@ import {
 import { getLocalDate } from "@/lib/utils";
 import {
   buildCoachPlan,
+  confidenceFromStats,
   inferCoachObjective,
+  nextActionFromStats,
   type CoachPlan,
-} from "@/server-fns/nutrition.functions";
+} from "@/lib/coach-plan";
 
 const inputSchema = z.object({
   message: z.string().trim().max(2000).optional().default(""),
@@ -309,35 +311,6 @@ export async function executeRecordWorkout(
   }
 
   return "Treino registrado com sucesso (sem séries).";
-}
-
-/**
- * Nível de confiança e próxima ação — mesma heurística determinística do coachAdvice
- * (nutrition.functions.ts): a IA responde em texto livre e a confiança é derivada da
- * quantidade de dados recentes, não da saída da IA.
- */
-function confidenceFromStats(stats: {
-  workoutCount: number;
-  mealCount: number;
-  weightCount: number;
-  waterCount: number;
-}): "baixa" | "media" | "alta" {
-  const score = stats.workoutCount + stats.mealCount + stats.weightCount + stats.waterCount;
-  return score >= 12 ? "alta" : score >= 6 ? "media" : "baixa";
-}
-
-function nextActionFromStats(stats: {
-  workoutCount: number;
-  mealCount: number;
-  weightCount: number;
-}): string {
-  if (stats.workoutCount === 0)
-    return "Registre pelo menos um treino na proxima semana para melhorar a leitura do Coach.";
-  if (stats.mealCount === 0)
-    return "Registre refeicoes com mais frequencia para cruzar melhor treino e nutricao.";
-  if (stats.weightCount === 0)
-    return "Adicione ao menos um peso recente para o Coach comparar com sua evolucao.";
-  return "Mantenha a rotina atual e revise os dados na proxima atualizacao.";
 }
 
 export const sendChat = createServerFn({ method: "POST" })

@@ -130,15 +130,15 @@ Já existe uma boa lógica híbrida no projeto.
 - Camada compartilhada `ai-settings.functions.ts` para configurar provedor (Groq, OpenRouter, OmniRoute)
 - Tela de IA (`/app/ia`) para configurar sem editar `.env`
 
-### 3. ⏳ Pendente - Criar testes de avaliação da IA
-Hoje muita coisa depende de funcionamento real. Seria bom ter uma bateria de casos de teste para detectar regressão.
+### 3. ✅ Primeira bateria entregue (02/08/2026) - Criar testes de avaliação da IA
+Antes nada era testado. **Vitest** foi configurado (`environment: node`, script `npm test`) e a lógica pura foi extraída para módulos testáveis (`src/lib/coach-plan.ts`, `src/lib/food-utils.ts`). **27 testes verdes** cobrindo: `buildCoachPlan`/`inferCoachObjective`/`confidenceFromStats`/`nextActionFromStats`, `parseFoodWeight`/`scaleMacros` (scanner) e `getLocalDate`.
 
-Casos úteis:
-- treino com dados incompletos
-- foto de prato com muitos itens
-- busca nutricional com alimento desconhecido
-- análise de medidas com poucos registros
-- resposta do coach com histórico curto
+Casos ainda úteis (próximas etapas):
+- resposta do coach com histórico curto (já parcialmente coberto por `confidenceFromStats`)
+- treino com dados incompletos (integração)
+- busca nutricional com alimento desconhecido (integração / mock)
+- foto de prato com muitos itens (integração)
+- análise de medidas com poucos registros (integração)
 
 ## O Que Eu Faria Primeiro
 
@@ -147,8 +147,8 @@ Se fosse escolher só as melhorias com melhor custo-benefício, eu faria nesta o
 1. ~~deixar o Coach IA mais estruturado e confiável~~ ✅
 2. ~~fazer a IA explicar melhor as conclusões~~ ✅
 3. colocar saída estruturada para as respostas mais importantes
-4. criar testes de regressão para IA
-5. transformar o Coach em planejador no chat
+4. ~~criar testes de regressão para IA~~ ✅ (primeira bateria Vitest — 27 testes)
+5. ~~transformar o Coach em planejador no chat~~ ✅
 
 ## Resumo Final
 
@@ -162,13 +162,13 @@ Isso tende a melhorar bastante a experiência do usuário sem exigir uma mudanç
 
 ## Proximos Passos (Ideias para o futuro)
 
-### 🧪 Testes automatizados
-O projeto nao tem nenhum framework de teste. Toda refatoracao e feita no escuro — so o build do TypeScript valida que nao quebrou tipo.
+### 🧪 Testes automatizados — ✅ Vitest configurado (02/08/2026)
+Primeira bateria entregue: `npm test` (27 testes verdes) sobre a lógica pura extraída em `src/lib/`. O refactor de testabilidade também removeu o cross-import `chat.functions → nutrition.functions`.
 
-Sugestao:
-- Adicionar Vitest (ja vem com Vite)
-- Testes unitarios para `ai-settings.functions.ts` (logica pura)
-- Testes de integracao para as server functions principais
+Sugestoes de proximas etapas:
+- Testes unitarios para `ai-settings.functions.ts` (logica de provider/modelo)
+- Testes de componentes/UI (jsdom + testing-library)
+- Testes de integracao para as server functions principais (mock de supabase)
 
 ### 📦 Bundle splitting
 O build produz bundles grandes:
