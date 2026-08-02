@@ -1287,3 +1287,19 @@ O `/coach` gerava o plano (foco, metas de treino/nutrição/acompanhamento, chec
 - Primeiro load de `/app` deve parecer mais rápido.
 - Navegar para `/app/medidas` (gráficos) → chart só carrega ao entrar (já era assim).
 - Foco/hover num link (prefetch) → navegação quase instantânea.
+
+## Sessão: 02/08/2026 — Testes de integração (FoodLibrary renderizado com supabase mock) — 4ª bateria
+
+### 🎯 O que foi feito
+- **Primeiro teste de integração** (`src/components/food-library.component.test.tsx`, jsdom): renderiza o componente `FoodLibrary` inteiro com um **supabase "fake" chainable** (injetado via `vi.mock` do `@/integrations/supabase/client`) e da server-fn `lookupNutrition` mockee. Confirma o fluxo real de dados:
+  1. **load**: `useEffect` consulta `food_library` e lista os alimentos do banco.
+  2. **busca**: filtra a lista pelo nome.
+  3. **vazio**: card "Nenhum alimento" quando a biblioteca está vazia.
+  4. **diálogo adicionar**: muda a porção (100→150g) → macros escalam no preview (195 kcal→**293**, prot 31→46.5) → confirma insert em `meal_items` com `ensureMeal` + `onItemAdded`.
+  5. **validação**: "Adicionar" desabilitado quando a porção é zerada.
+- **Mock inline em `vi.hoisted`** (lição): o `vi.mock` é hoisted ao topo, então **não consegue ler consts top-level** do módulo de teste. O supabase fake é construído **inline** no `vi.hoisted` (sem import externo) — por isso o helper separado `src/test/supabase-mock.ts` que criei acabou ficando sem uso (removido).
+
+### ✅ Estado final
+- ✅ `npm test` → **60 testes verdes** (6 arquivos: 55 anterior + 5 integração)
+- ✅ `npm run build` validado (client + server)
+- ✅ `tsc --noEmit` limpo nos arquivos tocados

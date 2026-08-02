@@ -2,6 +2,12 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [02/08/2026] - Claude Code (Testes de integração — FoodLibrary com supabase mock, 4ª bateria)
+- **Escopo**:
+  - **Primeiro teste de integração** `src/components/food-library.component.test.tsx` (jsdom): renderiza o `FoodLibrary` inteiro com **supabase "fake" chainable** (via `vi.mock` do `@/integrations/supabase/client` + `lookupNutrition` mockee). Fluxo real: load da biblioteca, busca, card vazio, diálogo adicionar com escala de macros (100→150g) + insert `meal_items`, e desabilitar com porção zerada.
+  - **Lição de hoisting**: o `vi.mock` é hoisted ao topo e **não lê consts top-level** do módulo de teste → o supabase fake é construído **inline no `vi.hoisted`** (sem import externo). O helper `src/test/supabase-mock.ts` que criei primeiro ficou sem uso → removido.
+- **Status**: Concluído, `npm test` 60/60 (55 + 5) + `npm run build` + `tsc --noEmit` limpo nos tocados. Smoke manual do fluxo de nutrição pendente.
+
 ## [02/08/2026] - Claude Code (Bundle splitting + router prefetch)
 - **Escopo**:
   - **Medição (importante)**: o roadmap citava `recharts`/`supabase` como vilões, mas o build real mostrou que **recharts e jspdf já eram lazy por rota** (chunk isolado + `await import("jspdf")` em `app.relatorio.tsx`). O problema real: o entry `index` (362 KB) com o shell configurando deps sem separar.

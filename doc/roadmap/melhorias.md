@@ -130,13 +130,14 @@ Já existe uma boa lógica híbrida no projeto.
 - Camada compartilhada `ai-settings.functions.ts` para configurar provedor (Groq, OpenRouter, OmniRoute)
 - Tela de IA (`/app/ia`) para configurar sem editar `.env`
 
-### 3. ✅ Três baterias entregues (02/08/2026) - Criar testes de avaliação da IA
-Antes nada era testado. **Vitest** configurado e a lógica pura foi extraída para módulos testáveis (`src/lib/coach-plan.ts`, `src/lib/food-utils.ts`, `src/lib/ai-settings.ts`). **55 testes verdes** em três baterias:
+### 3. ✅ Quatro baterias entregues (02/08/2026) - Criar testes de avaliação da IA
+Antes nada era testado. **Vitest** configurado e a lógica pura foi extraída para módulos testáveis (`src/lib/coach-plan.ts`, `src/lib/food-utils.ts`, `src/lib/ai-settings.ts`) + componente extraído (`src/components/plan-card.tsx`). **60 testes verdes** em quatro baterias:
 
 - **1ª bateria (node):** 27 testes — `buildCoachPlan`/`inferCoachObjective`/`confidenceFromStats`/`nextActionFromStats`, `parseFoodWeight`/`scaleMacros` (scanner) e `getLocalDate`.
 - **2ª bateria (jsdom + testing-library):** 11 testes — `rescaleMacros` (nova função pura extraída do diálogo do "+": reescala proporcional de macros ao mudar a porção, kcal = inteiro vs P/C/G 1 casa) e `PlanCard` (componente extraído para `src/components/`, testado com render/expandir/checklist/próxima ação/recolher).
 - **3ª bateria (node, unit de providers):** 17 testes — `ai-settings` extraído para `src/lib/ai-settings.ts` (puro): `normalizeAiSettings`, `resolveAiProvider`, `getTextModel`, `resolveAiApiKey`, `resolveAiChatEndpoint`. Cobre detalhes bug-prone: `nvidia` usa `openrouter_api_key`; `nvidia_model` de `omniroute_base_url`; fallback de env por provider.
-- **Infra:** `src/test/setup.ts` (jest-dom + cleanup). jsdom ativado por **docblock** `// @vitest-environment jsdom` em `*.component.test.tsx` — **Vitest 4 removeu `environmentMatchGlobs`**.
+- **4ª bateria (jsdom, integração):** 5 testes — `FoodLibrary` renderizado inteiro com **supabase "fake" chainable** (`vi.hoisted` + `vi.mock`): load da biblioteca, busca, card vazio, diálogo adicionar com escala de macros + insert `meal_items`, desabilitar porção zerada.
+- **Infra:** `src/test/setup.ts` (jest-dom + cleanup). jsdom ativado por **docblock** `// @vitest-environment jsdom` em `*.component.test.tsx` — **Vitest 4 removeu `environmentMatchGlobs`**. Para mockar supabase em teste de integração, o `vi.mock` é hoisted → singleton fake **inline no `vi.hoisted`** (não lê consts top-level).
 
 Casos ainda úteis (próximas etapas):
 - resposta do coach com histórico curto (já parcialmente coberto por `confidenceFromStats`)
@@ -169,11 +170,11 @@ Isso tende a melhorar bastante a experiência do usuário sem exigir uma mudanç
 ## Proximos Passos (Ideias para o futuro)
 
 ### 🧪 Testes automatizados — ✅ Vitest configurado (02/08/2026)
-**55 testes verdes** em três baterias, sobre lógica pura extraída em `src/lib/` (`coach-plan.ts`, `food-utils.ts`, `ai-settings.ts`) + componente `src/components/plan-card.tsx`. A testabilidade também removeu o cross-import `chat.functions → nutrition.functions`.
+**60 testes verdes** em quatro baterias, sobre lógica pura em `src/lib/` (`coach-plan.ts`, `food-utils.ts`, `ai-settings.ts`), componente `src/components/plan-card.tsx`, e agora **integração**: `FoodLibrary` renderizado com um supabase "fake" chainable (`vi.hoisted` + `vi.mock` do `@/integrations/supabase/client`). A testabilidade também removeu o cross-import `chat.functions → nutrition.functions`.
 
-Sugestaes de proximas etapas:
-- Testes de integracao para as server functions principais (mock de supabase) — **pendente** (amadurece o padrão de mock pra renderizar `NutricaoPage`/`ChatPage` inteiras)
-- Testes de componentes/UI para mais componentes isolados (Dropdown/Select, dialogs) — mesmo padrão do `PlanCard`
+Sugestoes de proximas etapas:
+- Testes de integracao das **páginas completas** (`NutricaoPage`/`ChatPage`) — o padrão de mock/supabase agora está maduro; renderizar rota inteira exige mockar também router/`useAuth`, superfície maior.
+- Testes de componentes/UI para mais componentes isolados (Dropdown/Select, dialogs) — mesmo padrão do `PlanCard`.
 
 ### 📦 Bundle splitting ✅ Concluído (02/08/2026)
 A medição do build real mostrou que `recharts` e `jspdf` **já eram lazy por rota** (chunk isolado + `await import("jspdf")`). O problema real era o entry `index` (362 KB) com as deps do shell misturadas.
