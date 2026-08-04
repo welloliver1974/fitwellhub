@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
-import { getLocalDate } from "@/lib/utils";
+import { getLocalDate, getLocalDateMinusDays } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -539,7 +539,7 @@ function NutricaoPage() {
 
   const duplicateYesterday = async (type: string) => {
     if (!user) return;
-    const y = getLocalDate(new Date(Date.now() - 86400000));
+    const y = getLocalDateMinusDays(1);
     const { data: yMeal } = await supabase
       .from("meals")
       .select("id")

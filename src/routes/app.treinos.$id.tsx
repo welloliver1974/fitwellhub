@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { cn, playBeep } from "@/lib/utils";
+import { cn, formatLocalDate, playBeep } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { Card } from "@/components/ui/card";
@@ -495,7 +495,7 @@ function WorkoutDetail() {
             </>
           )}
           <p className="text-sm text-muted-foreground ml-1">
-            {new Date(workout.workout_date + "T00:00").toLocaleDateString("pt-BR")}
+            {formatLocalDate(workout.workout_date)}
           </p>
         </div>
         <div className="flex items-center gap-1">

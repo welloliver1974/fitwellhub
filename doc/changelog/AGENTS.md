@@ -2,6 +2,15 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [04/08/2026] - Claude Code (Fuso horário FIXO em America/Sao_Paulo — correção definitiva do UTC)
+- **Escopo**: tornar toda data do app independente do fuso do runtime. Antes o `getLocalDate` (`src/lib/utils.ts`) usava `getFullYear/getMonth/getDate` (dependentes do runtime) → no Cloudflare Worker (UTC) uma refeição às 22h de SP caía no dia seguinte; a exibição `new Date(x+"T00:00").toLocaleDateString` mostrava ontem.
+- **Histórico**: 3º ajuste de fuso. Os anteriores (24/06 e 15/07) padronizaram o *uso* de `getLocalDate`, mas a *função* continuava dependente do fuso do runtime — daí o bug voltar em produção (Worker = UTC).
+- **Helpers em `src/lib/utils.ts`**: `getLocalDate` via `Intl.DateTimeFormat(timeZone)` + `getLocalDateMinusDays` (dias civis, não ms) + `formatLocalDate` (data civil → pt-BR sem instant) + `todayBoundsSaoPaulo` (limites UTC de "hoje SP" p/ query de timestamp).
+- **Decisões do usuário**: São Paulo **fixo** em todo o app; timestamps no banco continuam `toISOString()` (UTC) — só leitura/formação usam SP; **não mexer** em idade, relógio de lembretes (`getHours`) e cronômetro de treino.
+- **Migração**: ~15 arquivos (server-fns chat/medidas/corpo + rotas coach/relatorio/nutricao/nutricao-historico/peso/corpo/medidas/treinos/exercicios/index + Heatmap).
+- **Testes**: `utils.test.ts` reescrito com instants absolutos `new Date("...Z")` (inclui borda 02:00Z vs 03:00Z).
+- **Status**: Concluído, `TZ=UTC npx vitest run` **75/75** (independência de fuso provada) + `npm run build` + `tsc --noEmit` sem erros novos. Smoke manual pendente no celular (refeição noturna).
+
 ## [02/08/2026] - Claude Code (Expansão de integração: leaf pages Lembretes+Metas — 5ª bateria)
 - **Escopo**: estender o teste de integração a **componentes de página de CRUD** (padrão seguro do usuário, não MemoryRouter/layout inteiro).
 - **Extração para `src/components/`**: `RemindersPage` (de `app.lembretes.tsx`) e `GoalsPage` (de `app.metas.tsx`) movidos para arquivos próprios; as rotas passam a importá-los.

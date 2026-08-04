@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
-import { getLocalDate } from "@/lib/utils";
+import { formatLocalDate, getLocalDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -388,7 +388,7 @@ function MedidasPage() {
   const chartData = useMemo(() => {
     if (!activeGroup) return [];
     return (groups.get(activeGroup) ?? []).map((e) => ({
-      date: new Date(e.log_date + "T00:00").toLocaleDateString("pt-BR", {
+      date: formatLocalDate(e.log_date, {
         day: "2-digit",
         month: "2-digit",
       }),
@@ -660,7 +660,7 @@ function MedidasPage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
               {summaryCards.map(({ label, last, prev, diff, status }) => {
                 const isSelected = activeGroup === label;
-                const formattedDate = new Date(last.log_date + "T00:00").toLocaleDateString("pt-BR", {
+                const formattedDate = formatLocalDate(last.log_date, {
                   day: "2-digit",
                   month: "short",
                 });
@@ -876,7 +876,7 @@ function MedidasPage() {
                               </p>
                             )}
                             <p className="text-xs text-muted-foreground mt-0.5">
-                              {new Date(e.log_date + "T00:00").toLocaleDateString("pt-BR", {
+                              {formatLocalDate(e.log_date, {
                                 weekday: "short",
                                 day: "2-digit",
                                 month: "short",
@@ -918,10 +918,9 @@ function MedidasPage() {
             <TabsContent value="timeline" className="focus-visible:outline-none pt-2">
               <div className="space-y-5 relative pl-4 before:absolute before:inset-y-1 before:left-[19px] before:w-0.5 before:bg-border/60">
                 {timelineDays.map(([dateStr, dayEntries]) => {
-                  const dateObj = new Date(dateStr + "T00:00");
-                  const weekday = dateObj.toLocaleDateString("pt-BR", { weekday: "short" });
-                  const day = dateObj.toLocaleDateString("pt-BR", { day: "2-digit" });
-                  const monthYear = dateObj.toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
+                  const weekday = formatLocalDate(dateStr, { weekday: "short" });
+                  const day = formatLocalDate(dateStr, { day: "2-digit" });
+                  const monthYear = formatLocalDate(dateStr, { month: "short", year: "numeric" });
                   
                   return (
                     <div key={dateStr} className="flex gap-4 relative animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -1050,7 +1049,7 @@ function MedidasPage() {
                           <SelectContent className="rounded-xl">
                             {availableDates.map((d) => (
                               <SelectItem key={d} value={d}>
-                                {new Date(d + "T00:00").toLocaleDateString("pt-BR", {
+                                {formatLocalDate(d, {
                                   day: "2-digit",
                                   month: "long",
                                   year: "numeric",
@@ -1074,7 +1073,7 @@ function MedidasPage() {
                           <SelectContent className="rounded-xl">
                             {availableDates.map((d) => (
                               <SelectItem key={d} value={d}>
-                                {new Date(d + "T00:00").toLocaleDateString("pt-BR", {
+                                {formatLocalDate(d, {
                                   day: "2-digit",
                                   month: "long",
                                   year: "numeric",
@@ -1118,7 +1117,7 @@ function MedidasPage() {
                       <Card className="rounded-3xl border-border/70 overflow-hidden shadow-sm">
                         <div className="px-5 py-3 border-b border-border/60 bg-muted/40 flex items-center justify-between">
                           <span className="text-xs uppercase font-extrabold text-foreground">
-                            Resumo de {new Date(dateA + "T00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}
+                            Resumo de {formatLocalDate(dateA, { day: "2-digit", month: "short", year: "numeric" })}
                           </span>
                         </div>
                         <div className="p-4 space-y-3">
@@ -1154,7 +1153,7 @@ function MedidasPage() {
                       <Card className="rounded-3xl border-border/70 overflow-hidden shadow-sm">
                         <div className="px-5 py-3 border-b border-border/60 bg-muted/40 flex items-center justify-between">
                           <span className="text-xs uppercase font-extrabold text-foreground">
-                            Resumo de {new Date(dateB + "T00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}
+                            Resumo de {formatLocalDate(dateB, { day: "2-digit", month: "short", year: "numeric" })}
                           </span>
                         </div>
                         <div className="p-4 space-y-3">
@@ -1204,7 +1203,7 @@ function MedidasPage() {
                       </div>
                       <div className="mt-4 border-t border-muted/50 pt-3 text-[10px] text-muted-foreground flex items-center justify-between font-mono">
                         <span>FitWell Hub AI Engine</span>
-                        <span>Medidas & Peso: {new Date(dateA + "T00:00").toLocaleDateString("pt-BR")} vs {new Date(dateB + "T00:00").toLocaleDateString("pt-BR")}</span>
+                        <span>Medidas & Peso: {formatLocalDate(dateA)} vs {formatLocalDate(dateB)}</span>
                       </div>
                     </Card>
                   )}

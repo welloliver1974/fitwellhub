@@ -1320,3 +1320,35 @@ O `/coach` gerava o plano (foco, metas de treino/nutrição/acompanhamento, chec
 - ✅ `npm test` → **69 testes verdes** (8 arquivos: 60 + 5 lembretes + 4 metas)
 - ✅ `npm run build` validado (client + server) — **sem** warning de code-split
 - ✅ `tsc --noEmit` limpo nos arquivos tocados
+
+---
+
+## Sessão: 04/08/2026 — Fuso horário FIXO em America/Sao_Paulo (correção definitiva de UTC)
+
+### 🎯 O que foi feito
+- **`src/lib/utils.ts`**: `getLocalDate` reescrito para `Intl.DateTimeFormat` com `timeZone: "America/Sao_Paulo"` (antes usava `getFullYear/getMonth/getDate` — getters **dependentes do fuso do runtime**). Novos helpers: `getLocalDateMinusDays`, `formatLocalDate`, `todayBoundsSaoPaulo` (interna `toYmd`).
+- **~15 arquivos** (server-fns `chat`/`medidas`/`corpo` + rotas `coach`/`relatorio`/`nutricao`/`nutricao-historico`/`peso`/`corpo`/`medidas`/`treinos`/`exercicios`/`index` + `Heatmap`) migrados para os helpers novos.
+- **`src/lib/utils.test.ts`**: testes reescritos com instants absolutos (`new Date("...Z")`) — provam fuso independente da máquina (inclui borda 02:00Z vs 03:00Z).
+
+### 🔍 Déficit real (por que voltou a aparecer)
+Este é o terceiro ajuste de fuso; os dois anteriores **corrigiam o sintoma, não a causa**:
+- **24/06** (sessão "Correção de Datas UTC vs Local em Todo o App"): trocou `toISOString()` por `getLocalDate()`.
+- **15/07** (sessão "Datas UTC Reintroduzidas no Chat"): `getLocalDate()` também no `sendChat`.
+- **Problema:** o `getLocalDate` ainda dependia do **fuso do runtime**. Funcionava no browser (aparelho em SP) e em dev local, mas o **Cloudflare Worker roda em UTC** — logo, de novo, uma refeição às 22h de SP = 01h UTC do dia seguinte caía no dia errado. A primeira correção padronizou o *uso* de `getLocalDate`, mas não tornou a *função* independente de fuso.
+
+### 🛠️ Solução definitiva (fuso FIXO, independente do runtime)
+1. **`getLocalDate(date?)`** — hoje/data do instant em `America/Sao_Paulo` via `Intl.DateTimeFormat.formatToParts`. Independente de runtime (browser, Worker UTC, servidor de teste, CI).
+2. **`getLocalDateMinusDays(days, from?)`** — data civil SP de N dias atrás; **conta dias civis**, não subtrai ms (`Date.now() - N*86400000` desliza na virada de fuso). Usado nos filtros de janela (7/28/30 dias) dos server-fns e rotas.
+3. **`formatLocalDate(iso, opts?)`** — string `YYYY-MM-DD` → pt-BR sem construir instant sujeito ao fuso. Corrige a exibição `new Date(x + "T00:00").toLocaleDateString("pt-BR")` que mostrava **ontem** no Worker (00:00Z = 21h do dia anterior em SP).
+4. **`todayBoundsSaoPaulo()`** — limites ISO UTC de "hoje SP" (00:00 SP = 03:00Z) para query `gte/lte` em colunas TIMESTAMP. Corrige `app.index.tsx` (treino-de-hoje), que montava `dayStart/dayEnd` com `now.getFullYear()` (dia UTC no Worker).
+
+### 🧭 Decisões (alinhadas com o usuário)
+- **São Paulo fixo em todo o app** (SP sem horário de verão desde 2020 → UTC-3 estável), mesmo no Worker.
+- **Timestamps no banco continuam `new Date().toISOString()` em UTC** (`completed_at`, `created_at`) — instante absoluto, correto; só a leitura/formação usa SP. Sem migration, preserva histórico.
+- **NÃO mexer**: cálculo de idade (diferença de calendário em anos); `use-reminders.tsx` `getHours()` (dispara no **relógio do aparelho** — correto para lembrete); cronômetro de treino (`Date.now() - startedAt`, duração de instante).
+
+### ✅ Estado final
+- ✅ **`TZ=UTC npx vitest run` → 75 testes verdes** (prova independência de fuso; antes eram 69)
+- ✅ `tsc --noEmit` sem erros novos (só pré-existentes de schema Supabase: `body_measurements`/`profiles`)
+- ✅ `npm run build` validado (client + SSR)
+- ⬜ **Teste manual no celular (usuário):** registrar refeição/medida às 21h–23h do relógio de SP e confirmar que fica no dia de SP (não vira amanhã); conferir datas do histórico (não mostram ontem) — de preferência no deploy com o Worker.

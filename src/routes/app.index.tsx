@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
-import { getLocalDate } from "@/lib/utils";
+import { getLocalDate, todayBoundsSaoPaulo } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,9 +55,7 @@ function TodayPage() {
   const today = getLocalDate();
 
   const findTodayWorkout = async (userId: string) => {
-    const now = new Date();
-    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).toISOString();
-    const dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
+    const { start: dayStart, end: dayEnd } = todayBoundsSaoPaulo();
     const { data: completedToday } = await supabase
       .from("workout_sessions")
       .select("id, workout_id, name")

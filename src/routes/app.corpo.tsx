@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
-import { getLocalDate } from "@/lib/utils";
+import { formatLocalDate, getLocalDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -504,7 +504,7 @@ function CorpoPage() {
   // Recharts Chart Data Formatting (reverse ordered for chart chronology)
   const chartData = useMemo(() => {
     return bioLogs.map((log) => ({
-      date: new Date(log.log_date + "T00:00").toLocaleDateString("pt-BR", {
+      date: formatLocalDate(log.log_date, {
         day: "2-digit",
         month: "2-digit",
       }),
@@ -1218,7 +1218,7 @@ function CorpoPage() {
                   {[...bioLogs]
                     .reverse()
                     .map((log) => {
-                      const formattedDate = new Date(log.log_date + "T00:00").toLocaleDateString("pt-BR", {
+                      const formattedDate = formatLocalDate(log.log_date, {
                         weekday: "short",
                         day: "2-digit",
                         month: "short",
@@ -1321,7 +1321,7 @@ function CorpoPage() {
               <div className="flex items-center gap-1.5 text-xs bg-secondary/50 p-2.5 rounded-xl border">
                 <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="font-semibold text-muted-foreground">
-                  Leitura de {new Date(selectedBioLog.log_date + "T00:00").toLocaleDateString("pt-BR", {
+                  Leitura de {formatLocalDate(selectedBioLog.log_date, {
                     day: "2-digit",
                     month: "long",
                     year: "numeric",

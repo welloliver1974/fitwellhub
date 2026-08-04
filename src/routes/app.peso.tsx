@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
-import { getLocalDate } from "@/lib/utils";
+import { formatLocalDate, getLocalDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -81,7 +81,7 @@ function WeightPage() {
   const delta = last && first ? last.weight_kg - first.weight_kg : 0;
 
   const chartData = entries.map((e) => ({
-    date: new Date(e.log_date + "T00:00").toLocaleDateString("pt-BR", {
+    date: formatLocalDate(e.log_date, {
       day: "2-digit",
       month: "2-digit",
     }),
@@ -178,7 +178,7 @@ function WeightPage() {
                 <div>
                   <p className="font-medium">{e.weight_kg.toFixed(1)} kg</p>
                   <p className="text-xs text-muted-foreground">
-                    {new Date(e.log_date + "T00:00").toLocaleDateString("pt-BR", {
+                    {formatLocalDate(e.log_date, {
                       weekday: "short",
                       day: "2-digit",
                       month: "short",

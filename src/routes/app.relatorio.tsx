@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
-import { getLocalDate } from "@/lib/utils";
+import { formatLocalDate, getLocalDate, getLocalDateMinusDays } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FileDown, Loader2, History } from "lucide-react";
@@ -59,7 +59,7 @@ function RelatorioPage() {
     setLoading(true);
     try {
       const { default: jsPDF } = await import("jspdf");
-      const start = getLocalDate(new Date(Date.now() - 7 * 86400000));
+      const start = getLocalDateMinusDays(7);
       const today = getLocalDate();
 
       const [
@@ -333,7 +333,7 @@ function HistoryList({ userId }: { userId?: string }) {
       {Object.entries(grouped).map(([date, dateLogs]) => (
         <div key={date} className="border rounded-lg p-3">
           <p className="font-medium text-sm">
-            {new Date(date + "T00:00").toLocaleDateString("pt-BR", {
+            {formatLocalDate(date, {
               weekday: "long",
               day: "numeric",
               month: "long",

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
-import { getLocalDate } from "@/lib/utils";
+import { getLocalDate, getLocalDateMinusDays } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 
 const DAYS = 84; // 12 weeks
@@ -34,9 +34,7 @@ export function Heatmap() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const start = new Date();
-      start.setDate(start.getDate() - DAYS + 1);
-      const startStr = getLocalDate(start);
+      const startStr = getLocalDateMinusDays(DAYS - 1);
 
       const [{ data: g }, { data: meals }] = await Promise.all([
         supabase.from("goals").select("calories").eq("user_id", user.id).maybeSingle(),
@@ -67,9 +65,7 @@ export function Heatmap() {
 
       const out: Cell[] = [];
       for (let i = 0; i < DAYS; i++) {
-        const d = new Date(start);
-        d.setDate(start.getDate() + i);
-        const ds = getLocalDate(d);
+        const ds = getLocalDateMinusDays(DAYS - 1 - i);
         out.push({ date: ds, value: totals[ds] ?? 0, goal });
       }
       setCells(out);

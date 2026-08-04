@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
-import { getLocalDate } from "@/lib/utils";
+import { getLocalDate, getLocalDateMinusDays } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
@@ -30,7 +30,7 @@ function NutHistoryPage() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const since = getLocalDate(new Date(Date.now() - range * 86400000));
+      const since = getLocalDateMinusDays(range);
       const [{ data: g }, { data: meals }] = await Promise.all([
         supabase.from("goals").select("calories").eq("user_id", user.id).maybeSingle(),
         supabase
@@ -44,7 +44,7 @@ function NutHistoryPage() {
       const dateByMeal = new Map((meals ?? []).map((m) => [m.id, m.meal_date]));
       const map = new Map<string, Day>();
       for (let i = range; i >= 0; i--) {
-        const d = getLocalDate(new Date(Date.now() - i * 86400000));
+        const d = getLocalDateMinusDays(i);
         map.set(d, { date: d, calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
       }
       if (ids.length) {

@@ -8,7 +8,7 @@ import {
   resolveAiApiKey,
   resolveAiProvider,
 } from "@/server-fns/ai-settings.functions";
-import { getLocalDate } from "@/lib/utils";
+import { getLocalDate, getLocalDateMinusDays } from "@/lib/utils";
 import {
   buildCoachPlan,
   confidenceFromStats,
@@ -324,7 +324,7 @@ export const sendChat = createServerFn({ method: "POST" })
     if (!apiKey) throw new Error("Configure uma chave de IA nas configuracoes.");
 
     const today = getLocalDate();
-    const weekAgo = getLocalDate(new Date(Date.now() - 7 * 86400000));
+    const weekAgo = getLocalDateMinusDays(7);
 
     // 1. Fetch relevant user context and chat messages history
     const { ctxText, recentHistory, stats, goals } = await fetchUserContext(

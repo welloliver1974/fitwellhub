@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
-import { getLocalDate } from "@/lib/utils";
+import { formatLocalDate, getLocalDate } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, TrendingUp } from "lucide-react";
 import {
@@ -104,7 +104,7 @@ function ExerciseHistory() {
               {pr.weight} kg × {pr.reps}
             </p>
             <p className="text-xs text-muted-foreground">
-              {new Date(pr.date + "T00:00").toLocaleDateString("pt-BR")}
+              {formatLocalDate(pr.date)}
             </p>
           </div>
         </Card>
@@ -142,7 +142,7 @@ function ExerciseHistory() {
           {[...rows].reverse().map((r) => (
             <div key={r.date} className="p-3 flex items-center justify-between text-sm">
               <span className="text-muted-foreground">
-                {new Date(r.date + "T00:00").toLocaleDateString("pt-BR")}
+                {formatLocalDate(r.date)}
               </span>
               <span className="font-medium">
                 {r.maxWeight}kg × {r.maxReps} · vol {Math.round(r.volume)}
