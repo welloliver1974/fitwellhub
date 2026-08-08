@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
-import { isDefaultGoals, suggestGoals } from "@/lib/nutrition-goals";
+import { isDefaultGoals, matchesSuggestion, suggestGoals } from "@/lib/nutrition-goals";
 import { calculateTdee } from "@/server-fns/corpo.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,6 +81,17 @@ export function GoalsPage() {
   const save = async () => {
     if (!userId) return;
     setSaving(true);
+    // goal_auto = true SOMENTE se os campos continuam batendo com a sugestão
+    // (o usuário não mexeu ou reaplicou "Usar calculada") → o app segue
+    // sincronizando sozinho. Editou manualmente → goal_auto = false → o home
+    // nunca mais sobrescreve.
+    const goalAuto =
+      !!tdeeData &&
+      matchesSuggestion(
+        { calories, protein_g: protein, carbs_g: carbs, fat_g: fat },
+        tdeeData.tdee,
+        tdeeData.weight,
+      );
     const { error } = await supabase.from("goals").upsert(
       {
         user_id: userId,
@@ -88,6 +99,7 @@ export function GoalsPage() {
         protein_g: protein,
         carbs_g: carbs,
         fat_g: fat,
+        goal_auto: goalAuto,
       },
       { onConflict: "user_id" },
     );

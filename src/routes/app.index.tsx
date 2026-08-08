@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { getLocalDate, todayBoundsSaoPaulo } from "@/lib/utils";
-import { isDefaultGoals, matchesSuggestion, suggestGoals } from "@/lib/nutrition-goals";
+import { isDefaultGoals, matchesSuggestion, shouldAutoUpdateGoal, suggestGoals } from "@/lib/nutrition-goals";
 import { calculateTdee } from "@/server-fns/corpo.functions";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,13 @@ export const Route = createFileRoute("/app/")({
   component: TodayPage,
 });
 
-type Goals = { calories: number; protein_g: number; carbs_g: number; fat_g: number };
+type Goals = {
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  goal_auto?: boolean;
+};
 type Totals = { calories: number; protein_g: number; carbs_g: number; fat_g: number };
 
 const WATER_GOAL_ML = 2500;
@@ -97,7 +103,7 @@ function TodayPage() {
       await Promise.all([
         supabase
           .from("goals")
-          .select("calories,protein_g,carbs_g,fat_g")
+          .select("calories,protein_g,carbs_g,fat_g,goal_auto")
           .eq("user_id", user.id)
           .maybeSingle(),
         supabase.from("meals").select("id").eq("user_id", user.id).eq("meal_date", today),
@@ -119,14 +125,19 @@ function TodayPage() {
 
     if (tdeeRes && tdeeRes.tdee != null && tdeeRes.weight != null) {
       const suggested = suggestGoals(tdeeRes.tdee, tdeeRes.weight);
-      // Só substitui o padrão do signup (2000/140/220/65); nunca sobrescreve
-      // uma meta que o usuário já editou.
-      if (!g || isDefaultGoals(g)) {
+      // Sincroniza automaticamente quando: não há meta salva, ela ainda é o
+      // padrão do signup, ou veio de auto-seed (goal_auto=true). Meta editada
+      // à mão (goal_auto=false) nunca é sobrescrita pela sugestão.
+      const auto = shouldAutoUpdateGoal(g, g?.goal_auto);
+      if (auto && !matchesSuggestion(g, tdeeRes.tdee, tdeeRes.weight)) {
         await supabase
           .from("goals")
-          .upsert({ user_id: user.id, ...suggested }, { onConflict: "user_id" });
-        nextGoals = suggested;
+          .upsert(
+            { user_id: user.id, ...suggested, goal_auto: true },
+            { onConflict: "user_id" },
+          );
       }
+      if (auto) nextGoals = suggested;
       source = matchesSuggestion(nextGoals, tdeeRes.tdee, tdeeRes.weight)
         ? "suggested"
         : "custom";

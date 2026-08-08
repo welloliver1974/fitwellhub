@@ -54,3 +54,17 @@ export function matchesSuggestion(
     g.fat_g === s.fat_g
   );
 }
+
+// Uma meta está em modo "sincronizada automaticamente com o TDEE" quando:
+// não existe meta salva, ainda é o padrão do signup, OU foi marcada
+// `goal_auto` = true (veio de auto-seed). Quando o usuário EDITA manualmente,
+// o app grava `goal_auto` = false → dali em diante a sugestão NUNCA mais
+// sobrescreve. Usado no home: só regrava a meta se o modo automático estiver
+// ativo e a sugestão tiver MUDADO.
+export function shouldAutoUpdateGoal(
+  g: GoalsInput | null | undefined,
+  goalAuto: boolean | undefined,
+): boolean {
+  if (!g) return true;
+  return isDefaultGoals(g) || goalAuto === true;
+}

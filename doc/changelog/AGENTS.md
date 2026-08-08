@@ -2,6 +2,15 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [08/08/2026] - Claude Code (Meta de calorias: auto-sync com o TDEE — recalcula sozinha quando muda)
+- **Contexto**: o usuário perguntou se o app "vê" quando vai/não vai à academia. Esclarecido: o TDEE usa a **média de treinos dos últimos 28 dias** (fator de atividade 1.2–1.725), não o dia atual — faltar ontem/hoje não muda a meta. Antes, a meta gravada era "congelada" na 1ª visita (decisão anterior "só se ainda padrão").
+- **Decisão do usuário**: **sincronizar automaticamente** — a meta se atualiza sozinha sempre que a sugestão (TDEE × peso × fator) muda; **mantém manual** no dia em que ele editar.
+- **Coluna nova `goals.goal_auto BOOLEAN NOT NULL DEFAULT FALSE`** (migration `20260808130000_add_goal_auto.sql`): `TRUE` = veio de auto-seed/sugestão (home regrava quando a sugestão muda); `FALSE` = editada à mão (nunca mais sobrescreve). **Default FALSE preserva edições manuais já gravadas** — sem isso o "auto" varrerias metas customizadas antigas.
+- **Home `src/routes/app.index.tsx`**: novo `shouldAutoUpdateGoal` (lib) → `!g || isDefaultGoals(g) || goal_auto===true`; quando auto **e** a sugestão mudou → `upsert` da nova sugestão com `goal_auto:true` (só grava se mudou; badge "Meta calculada" mantém). Meta manual → nunca toca.
+- **Metas `src/components/goals-page.tsx`**: no "Salvar metas", `goal_auto = tdeeData && matchesSuggestion(campos, tdee, peso)` → salvou o mesmo da sugestão ("Usar calculada") = auto; editou qualquer campo = manual (`false`).
+- **Tipos**: `src/integrations/supabase/types.ts` goals Row/Insert/Update + `goal_auto?: boolean` no `Goals` do home.
+- **Validação**: `TZ=UTC npx vitest run` **95/95** (+4 `shouldAutoUpdateGoal`, +2 goal_auto no save da metas) + `tsc --noEmit` limpo nos tocados + `npm run build` ok. **PENDENTE no usuário**: aplicar a migration no SQL Editor antes de rodar o build novo (sem a coluna, o upsert falha).
+
 ## [08/08/2026] - Claude Code (Dividir "Lanche" em "Lanche da manhã" + "Lanche da tarde")
 - **Escopo**: o tipo de refeição único "Lanche" virou **"Lanche da manhã"** e **"Lanche da tarde"** — o dropdown "Refeição" (Nutrição/Receitas/Foto) passa a oferecer 6 tipos; no MESMO dia agora cabem lanche da manhã E da tarde como linhas separadas (o `UNIQUE INDEX meals_user_date_type_uniq (user_id, meal_date, meal_type)` garante 1 por tipo/dia).
 - **Decisão do usuário**: **não mexer nos dados antigos** — refeições gravadas como "Lanche" ficam como estão (não há migration: `meal_type` é TEXT sem CHECK constraint; os novos rótulos funcionam direto).

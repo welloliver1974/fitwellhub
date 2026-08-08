@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isDefaultGoals, matchesSuggestion, suggestGoals } from "@/lib/nutrition-goals";
+import {
+  isDefaultGoals,
+  matchesSuggestion,
+  shouldAutoUpdateGoal,
+  suggestGoals,
+} from "@/lib/nutrition-goals";
 
 describe("isDefaultGoals", () => {
   it("reconhece a meta padrão gravada pelo signup", () => {
@@ -51,5 +56,28 @@ describe("matchesSuggestion", () => {
 
   it("false quando a meta difere da sugestão (customizada)", () => {
     expect(matchesSuggestion({ calories: 2000, protein_g: 140, carbs_g: 220, fat_g: 65 }, 2400, 80)).toBe(false);
+  });
+});
+
+describe("shouldAutoUpdateGoal", () => {
+  const custom = { calories: 1800, protein_g: 160, carbs_g: 150, fat_g: 70 };
+
+  it("true quando não há meta salva", () => {
+    expect(shouldAutoUpdateGoal(null, undefined)).toBe(true);
+    expect(shouldAutoUpdateGoal(undefined, undefined)).toBe(true);
+  });
+
+  it("true quando ainda é o padrão do signup", () => {
+    expect(
+      shouldAutoUpdateGoal({ calories: 2000, protein_g: 140, carbs_g: 220, fat_g: 65 }, undefined),
+    ).toBe(true);
+  });
+
+  it("true quando a meta veio de auto-seed (goal_auto)", () => {
+    expect(shouldAutoUpdateGoal(custom, true)).toBe(true);
+  });
+
+  it("false quando editada manualmente (goal_auto=false)", () => {
+    expect(shouldAutoUpdateGoal(custom, false)).toBe(false);
   });
 });

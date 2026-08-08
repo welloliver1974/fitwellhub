@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { GoalsPage } from "@/components/goals-page";
 
@@ -182,6 +182,47 @@ describe("GoalsPage — integração (supabase mock + calculateTdee mock)", () =
         fat_g: 65,
       });
       expect(navigate).toHaveBeenCalledWith({ to: "/app" });
+    });
+  });
+
+  it("salvar mantendo a sugestão grava goal_auto=true", async () => {
+    mock.setSelect("goals", []); // pré-preenche com a sugestão (2400/160/67/289)
+    const user = userEvent.setup();
+    render(<GoalsPage />);
+    await screen.findByDisplayValue("2400");
+
+    await user.click(screen.getByRole("button", { name: "Salvar metas" }));
+
+    await waitFor(() => {
+      const up = mock.upsertCalls.find((c) => c.table === "goals");
+      expect(up).toBeTruthy();
+      expect(up!.payload).toMatchObject({
+        calories: 2400,
+        protein_g: 160,
+        carbs_g: 289,
+        fat_g: 67,
+        goal_auto: true,
+      });
+    });
+  });
+
+  it("salvar após editar os campos grava goal_auto=false", async () => {
+    mock.setSelect("goals", []); // pré-preenche com a sugestão (2400/160/67/289)
+    const user = userEvent.setup();
+    render(<GoalsPage />);
+    await screen.findByDisplayValue("2400");
+
+    // Usuário edita a meta de calorias para um valor diferente da sugestão.
+    fireEvent.change(screen.getByDisplayValue("2400"), { target: { value: "1800" } });
+    await user.click(screen.getByRole("button", { name: "Salvar metas" }));
+
+    await waitFor(() => {
+      const up = mock.upsertCalls.find((c) => c.table === "goals");
+      expect(up).toBeTruthy();
+      expect(up!.payload).toMatchObject({
+        calories: 1800,
+        goal_auto: false,
+      });
     });
   });
 
