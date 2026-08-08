@@ -199,7 +199,11 @@ export async function saveChatMessage(
 }
 
 /**
- * Executes the record_meal tool: inserts a new meal and its constituent items.
+ * Executes the record_meal tool: reuses the meal of the day (if it already exists)
+ * or inserts a new one, then inserts its constituent items.
+ * NOTA: sem o reaproveitamento, o chat criava uma SEGUNDA refeição do mesmo tipo
+ * no mesmo dia sempre que registrava uma refeição — a tela de Nutrição só mostra a
+ * primeira (a duplicada fica invisível), mas o card de calorias e o coach somam as duas.
  */
 export async function executeRecordMeal(
   supabase: any,
@@ -207,18 +211,30 @@ export async function executeRecordMeal(
   today: string,
   args: { meal_type: string; items: Array<{ name: string; calories?: string; protein_g?: string; carbs_g?: string; fat_g?: string }> }
 ): Promise<string> {
-  const { data: meal, error: mealErr } = await supabase
+  // 1) Reaproveita a refeição do tipo já existente hoje (se houver).
+  const { data: existingMeal } = await supabase
     .from("meals")
-    .insert({ user_id: userId, meal_type: args.meal_type, meal_date: today })
-    .select()
-    .single();
+    .select("id")
+    .eq("user_id", userId)
+    .eq("meal_date", today)
+    .eq("meal_type", args.meal_type)
+    .maybeSingle();
+  let mealId = existingMeal?.id as string | undefined;
 
-  if (mealErr || !meal) {
-    return `Erro ao registrar refeição: ${mealErr?.message || "Registro falhou"}`;
+  if (!mealId) {
+    const { data: meal, error: mealErr } = await supabase
+      .from("meals")
+      .insert({ user_id: userId, meal_type: args.meal_type, meal_date: today })
+      .select("id")
+      .single();
+    if (mealErr || !meal) {
+      return `Erro ao registrar refeição: ${mealErr?.message || "Registro falhou"}`;
+    }
+    mealId = meal.id;
   }
 
   const mappedItems = args.items.map((it: any) => ({
-    meal_id: meal.id,
+    meal_id: mealId,
     user_id: userId,
     name: it.name,
     calories: Number(it.calories || 0),

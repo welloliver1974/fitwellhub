@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS public.meals (
 ALTER TABLE public.meals ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "own meals all" ON public.meals FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE INDEX IF NOT EXISTS meals_user_date_idx ON public.meals(user_id, meal_date DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS meals_user_date_type_uniq ON public.meals(user_id, meal_date, meal_type);
 
 -- Meal Items
 CREATE TABLE IF NOT EXISTS public.meal_items (

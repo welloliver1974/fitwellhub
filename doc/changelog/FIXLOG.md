@@ -1352,3 +1352,22 @@ Este é o terceiro ajuste de fuso; os dois anteriores **corrigiam o sintoma, nã
 - ✅ `tsc --noEmit` sem erros novos (só pré-existentes de schema Supabase: `body_measurements`/`profiles`)
 - ✅ `npm run build` validado (client + SSR)
 - ⬜ **Teste manual no celular (usuário):** registrar refeição/medida às 21h–23h do relógio de SP e confirmar que fica no dia de SP (não vira amanhã); conferir datas do histórico (não mostram ontem) — de preferência no deploy com o Worker.
+
+---
+
+## Sessão: 08/08/2026 — Refeição duplicada (card de calorias em dobro) + coach perdido
+
+### 🎯 O que foi feito
+O usuário registrou **um** café da manhã e o card de calorias do dia mostrou **o dobro**; o coach IA também somou errado. A causa-raiz era a mesma: **duas linhas `meals` para o mesmo (user_id, meal_date, meal_type)** — não existia nenhuma constraint única. A tela de Nutrição só renderiza a **primeira** refeição por tipo (`meals.find(meal_type)`), então a duplicada ficava **invisível**, mas o card do dia e o coach somavam os `meal_items` das **duas**. O caso do usuário veio do botão **"Copiar de ontem"**, mas o chat (`record_meal`) e um duplo-toque também criavam duplicadas.
+
+### 🛠️ Correções (código + banco)
+1. **`app.nutricao.tsx` — `ensureMeal` à prova de duplicata**: antes consultava só o estado em memória (desatualizado); agora (1) procura na lista, (2) **consulta o banco** por `(user_id, meal_date, meal_type)` com `maybeSingle`, (3) insere só se não existir e **trata corrida 23505** (re-consulta e usa o vencedor). 
+2. **`app.nutricao.tsx` — guard anti double-tap**: `writingRef` + `guard(async fn)` serializa `addFood`, `addRecent`, `addFavoriteToMeal`, `confirmPhotoItems` e `duplicateYesterday`. Na segunda tecnologia, o botão é bloqueado até a primeira terminar.
+3. **`chat.functions.ts` — `executeRecordMeal`**: o chat criava uma **nova** refeição a cada `record_meal`. Agora **reaproveita** a refeição do dia/tipo já existente (`maybeSingle`) e só insere se não houver; itens vão para o `meal_id` resolvido.
+4. **MIGRATION `20260808000000_dedupe_meals_duplicate.sql`** (⚠️ o usuário precisa aplicar): (1) reponta `meal_items` das duplicadas para a refeição **mais antiga** do grupo; (2) deleta as refeições duplicadas; (3) deduplica `meal_items` **idênticos** (efeito double-tap); (4) `CREATE UNIQUE INDEX` `meals(user_id, meal_date, meal_type)` — **proteção definitiva**. Remove o índice antigo `meals_user_date_idx` (redundante).
+
+### ✅ Estado final
+- ✅ `TZ=UTC npx vitest run` → **75 testes verdes** (nenhum teste da área de nutrição/chat quebrado)
+- ✅ `tsc --noEmit` sem erros novos nos arquivos tocados (62 pré-existentes de schema Supabase — não relacionados)
+- ✅ `npm run build` validado (client + SSR)
+- ✅ **Migration APLICADA** no Supabase em 08/08/2026 (a etapa 1 precisou de correção: `JOIN "keep" k ON ...` no `UPDATE...FROM` falhava com `42703: column k.user_id does not exist` — reescrita como `UPDATE ... SET (subquery correlacionada) ... WHERE ... IN (subquery)`); banco agora tem `UNIQUE INDEX meals(user_id, meal_date, meal_type)` e dados duplicados antigos limpos.

@@ -374,4 +374,12 @@ Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hu
   - **Frequências alteradas**: `playBeep` em `src/lib/utils.ts` mudou de `[880, 660, 880]` (nota do meio mais grave) para `[800, 1200, 1600]` (escala ascendente).
   - **Frequência aguda**: 1600Hz corta melhor a música no fone — faixa que instrumentos e vocais não ocupam.
   - **Padrão mais rápido**: `beepLen` de `0.4s` → `0.3s`, gap de `0.2s` → `0.1s` para padrão rítmico mais distinto.
-- **Status**: Concluido, commitado e enviado ao GitHub.
+- **Status**: Concluído, commitado e enviado ao GitHub.
+
+## [08/08/2026] - Claude Code (Refeição duplicada: card de calorias em dobro + coach perdido)
+- **Escopo**:
+  - **Causa-raiz**: duas linhas `meals` para o mesmo (user_id, meal_date, meal_type) — a tela de Nutrição só renderiza a primeira (`meals.find`), a duplicada fica invisível mas o card de calorias e o coach somam as duas. Sem constraint única no banco, "Copiar de ontem" / chat `record_meal` / double-tap criavam duplicadas.
+  - **`app.nutricao.tsx`**: `ensureMeal` agora consulta o banco (`maybeSingle`) antes de inserir e trata a corrida 23505; novo guard `writingRef` + `guard(fn)` serializa os 5 caminhos de inserção (double-tap).
+  - **`chat.functions.ts`**: `executeRecordMeal` reaproveita a refeição do dia/tipo existente em vez de inserir uma nova a cada `record_meal`.
+  - **Migration `20260808000000_dedupe_meals_duplicate.sql`**: reponta itens das duplicadas para a mais antiga, deleta duplicadas, deduplica itens idênticos e cria `UNIQUE INDEX meals(user_id, meal_date, meal_type)`.
+- **Status**: Código validado (75 testes verdes, tsc limpo nos arquivos tocados, build OK) **e migration aplicada com sucesso** no Supabase (etapa 1 reescrita em subquery correlacionada por erro `42703` no `UPDATE...FROM` com CTE). Commitado e enviado ao GitHub.

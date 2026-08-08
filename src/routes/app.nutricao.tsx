@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { getLocalDate, getLocalDateMinusDays } from "@/lib/utils";
@@ -133,6 +133,20 @@ function NutricaoPage() {
   // porção de referência dos macros preenchidos; quando definida, mudar a porção
   // reescala os macros proporcionalmente (mesmo comportamento do FoodLibrary).
   const [refGrams, setRefGrams] = useState<number | null>(null);
+
+  // Guarda síncrona anti double-tap: impede que um disparo duplo do botão
+  // (toque rápido repetido antes do reload) insira refeição/itens em duplicidade.
+  // useRef é síncrono — funciona mesmo antes de o estado `loading` re-renderizar.
+  const writingRef = useRef(false);
+  const guard = async (fn: () => Promise<unknown>): Promise<void> => {
+    if (writingRef.current) return;
+    writingRef.current = true;
+    try {
+      await fn();
+    } finally {
+      writingRef.current = false;
+    }
+  };
 
   const today = getLocalDate();
 
@@ -283,18 +297,47 @@ function NutricaoPage() {
   }, [user]);
 
   const ensureMeal = async (type: string): Promise<Meal> => {
+    // 1) Fast path: já temos pela do dia carregada.
     const existing = meals.find((m) => m.meal_type === type);
     if (existing) return existing;
+    // 2) Sem estar no estado (ex.: refeição criada pelo chat/outra aba depois do
+    //    load), consulta o BANCO antes de inserir — assim não cria uma segunda
+    //    refeição do mesmo tipo no mesmo dia (que ficaria invisível na tela,
+    //    mas seria somada no card de calorias e no coach).
+    const { data: inDb } = await supabase
+      .from("meals")
+      .select("id,meal_type,meal_date")
+      .eq("user_id", user!.id)
+      .eq("meal_date", today)
+      .eq("meal_type", type)
+      .maybeSingle();
+    if (inDb) return inDb;
+    // 3) Não existe — cria. O índice único (user_id, meal_date, meal_type)
+    //    adicionado na migração de dedupe barra corridas concorrentes.
     const { data: newMeal, error } = await supabase
       .from("meals")
       .insert({ user_id: user!.id, meal_type: type, meal_date: today })
       .select("id,meal_type,meal_date")
       .single();
-    if (error) throw error;
+    if (error) {
+      // Caso raro de corrida: outro registro ganhou primeiro — usa dele.
+      if (error.code === "23505") {
+        const { data: won } = await supabase
+          .from("meals")
+          .select("id,meal_type,meal_date")
+          .eq("user_id", user!.id)
+          .eq("meal_date", today)
+          .eq("meal_type", type)
+          .maybeSingle();
+        if (won) return won;
+      }
+      throw error;
+    }
     return newMeal as Meal;
   };
 
   const addFood = async () => {
+    await guard(async () => {
     if (!user || !query.trim()) return;
     setLoading(true);
     try {
@@ -345,6 +388,7 @@ function NutricaoPage() {
     } finally {
       setLoading(false);
     }
+    });
   };
 
   // Salva o alimento preenchido no modal (scanner, busca manual ou IA) na biblioteca pessoal.
@@ -382,6 +426,7 @@ function NutricaoPage() {
   };
 
   const addRecent = async (it: Item) => {
+    await guard(async () => {
     if (!user) return;
     try {
       const meal = await ensureMeal(mealType);
@@ -401,6 +446,7 @@ function NutricaoPage() {
       console.error(e);
       toast.error(e instanceof Error ? e.message : "Erro");
     }
+    });
   };
 
   const toggleFavorite = async (it: Item) => {
@@ -430,6 +476,7 @@ function NutricaoPage() {
     favorites.some((f) => f.name.toLowerCase().trim() === name.toLowerCase().trim());
 
   const addFavoriteToMeal = async (f: (typeof favorites)[number]) => {
+    await guard(async () => {
     if (!user) return;
     const meal = await ensureMeal(mealType);
     await supabase.from("meal_items").insert({
@@ -444,6 +491,7 @@ function NutricaoPage() {
     });
     toast.success(`${f.name} adicionado em ${mealType}`);
     load();
+    });
   };
 
   const removeItem = async (id: string) => {
@@ -510,6 +558,7 @@ function NutricaoPage() {
   };
 
   const confirmPhotoItems = async () => {
+    await guard(async () => {
     if (!user) return;
     const sel = photoItems.filter((i) => i.selected);
     if (sel.length === 0) return;
@@ -535,9 +584,11 @@ function NutricaoPage() {
       console.error(e);
       toast.error(e instanceof Error ? e.message : "Erro");
     }
+    });
   };
 
   const duplicateYesterday = async (type: string) => {
+    await guard(async () => {
     if (!user) return;
     const y = getLocalDateMinusDays(1);
     const { data: yMeal } = await supabase
@@ -565,6 +616,7 @@ function NutricaoPage() {
     await supabase.from("meal_items").insert(rows);
     toast.success(`${type} de ontem copiado`);
     load();
+    });
   };
 
   const openEdit = (it: Item) => {
