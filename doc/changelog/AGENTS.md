@@ -2,6 +2,16 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [08/08/2026] - Claude Code (Meta de calorias calculada automaticamente — TDEE no card do Home)
+- **Escopo**: a meta de calorias do home agora **já vem calculada** a partir de peso, altura, sexo, nascimento e frequência de treinos — sem o usuário precisar preencher a meta na mão. Botação de edição (`Target` → `/app/metas`) continua intacta.
+- **Decisão do usuário**: base = **manutenção (TDEE)** ("ali tenho a realidade, e vou controlando eu mesmo"); aplicação = **auto, só se ainda padrão** — substitui o default do signup (2000/140/220/65) na primeira visita ao home, **nunca** sobrescreve meta já editada.
+- **Sem migration**: reutiliza o server fn existente `calculateTdee` (`src/server-fns/corpo.functions.ts`, Mifflin-St Jeor + fator de atividade por treinos/28d), chamado do cliente com `headers: { Authorization: Bearer ${session?.access_token} }` (padrão de `app.corpo.tsx`).
+- **Novo `src/lib/nutrition-goals.ts`** (puro, testável em node): `isDefaultGoals(g)` (detecta 2000/140/220/65 gravado pelo signup), `suggestGoals(tdee, weightKg)` (kcal=TDEE, proteína 2 g/kg, gordura 25% das kcal, resto em carbo, nunca negativo) e `matchesSuggestion`.
+- **Home `src/routes/app.index.tsx`**: no `load()` soma `calculateTdee` ao `Promise.all`; se goals ausente/padrão e tdee válido → `upsert` da sugestão `{ onConflict: "user_id" }` e usa como meta do card; estado `goalSource`/`tdeeGoal`. Badge "Meta calculada · TMB {bmr} × atividade {fator}" quando sugerida; hint clicável "Preencha peso/altura p/ calcular sua meta" → `/app/corpo` quando faltam dados; meta customizada → sem rótulo extra. Botão `Target` intacto.
+- **Metas `src/components/goals-page.tsx`**: fetch de `calculateTdee` junto do goals; pré-preenche os campos com a sugestão quando não há meta salva ou ainda é padrão; carrega o valor salvo quando custom (não sobrescreve). Banner "Sugestão calculada: N kcal · TMB X × fator Y · peso Z kg" + botão **"Usar calculada"** (preenche os 4 campos; usuário confirma em "Salvar metas"). Sem dados → hint "Preencha sexo, altura, nascimento e peso em Corpo / Peso".
+- **Validação**: `TZ=UTC npx vitest run` **88/88** (novos `nutrition-goals.test.ts` 8 + `goals-page.component.test.tsx` atualizado com mock de `calculateTdee`: pré-preenche, carrega custom, "Usar calculada", hint tdee-null) + `npm run build` ok + `tsc --noEmit` limpo nos tocados (5 erros pré-existentes em `corpo.functions.ts` de schema Supabase — baseline). 
+- **Lições**: efeito depende de `userId`/`session?.access_token` (id estável), não do objeto `user` (mock `useAuth` devolve objeto novo por render → efeito re-roda e sobrescreviria o clique de "Usar calculada"). Texto quebrado em `<span>/<strong>` não casa `getByText` regex → matcher por `content.includes`.
+
 ## [04/08/2026] - Claude Code (Fuso horário FIXO em America/Sao_Paulo — correção definitiva do UTC)
 - **Escopo**: tornar toda data do app independente do fuso do runtime. Antes o `getLocalDate` (`src/lib/utils.ts`) usava `getFullYear/getMonth/getDate` (dependentes do runtime) → no Cloudflare Worker (UTC) uma refeição às 22h de SP caía no dia seguinte; a exibição `new Date(x+"T00:00").toLocaleDateString` mostrava ontem.
 - **Histórico**: 3º ajuste de fuso. Os anteriores (24/06 e 15/07) padronizaram o *uso* de `getLocalDate`, mas a *função* continuava dependente do fuso do runtime — daí o bug voltar em produção (Worker = UTC).
@@ -383,3 +393,10 @@ Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hu
   - **`chat.functions.ts`**: `executeRecordMeal` reaproveita a refeição do dia/tipo existente em vez de inserir uma nova a cada `record_meal`.
   - **Migration `20260808000000_dedupe_meals_duplicate.sql`**: reponta itens das duplicadas para a mais antiga, deleta duplicadas, deduplica itens idênticos e cria `UNIQUE INDEX meals(user_id, meal_date, meal_type)`.
 - **Status**: Código validado (75 testes verdes, tsc limpo nos arquivos tocados, build OK) **e migration aplicada com sucesso** no Supabase (etapa 1 reescrita em subquery correlacionada por erro `42703` no `UPDATE...FROM` com CTE). Commitado e enviado ao GitHub.
+
+## [08/08/2026] - Claude Code (Auditoria de cálculos + ver ontem: NutDayDetail + fix scanner)
+- **Escopo**:
+  - **Auditoria de cálculos**: somas diárias corretas (eram infladas por duplicação, já corrigida); escala por gramas OK nos caminhos principais. BUG real achado no **scanner de código de barras**: `refGrams` não era setado → mudar a "Porção (g)" após escanear não reescalava os macros (subestimava kcal).
+  - **Fix `app.nutricao.tsx`**: `setRefGrams(null)` no início do scan; `setRefGrams(servingGrams)` no ramo OFF; `setRefGrams(100)` no fallback IA.
+  - **NOVO `src/components/nutrition-day-detail.tsx`**: card "Alimentação do dia" com date input (padrão **ontem**), lista refeições/itens do dia agrupadas por tipo com total — integrado no topo de `app.nutricao-historico.tsx`. Efeito depende de `user?.id` (estável), não do objeto `user` (evita re-busca em loop).
+- **Status**: Concluído — **78 testes verdes** (75 + 3), tsc limpo nos arquivos tocados, build OK.

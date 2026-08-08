@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { getLocalDate, todayBoundsSaoPaulo } from "@/lib/utils";
+import { isDefaultGoals, matchesSuggestion, suggestGoals } from "@/lib/nutrition-goals";
+import { calculateTdee } from "@/server-fns/corpo.functions";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,7 +44,7 @@ const WATER_GOAL_ML = 2500;
 const CUP_ML = 250;
 
 function TodayPage() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [goals, setGoals] = useState<Goals | null>(null);
   const [totals, setTotals] = useState<Totals>({ calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
   const [waterMl, setWaterMl] = useState(0);
@@ -51,6 +53,9 @@ function TodayPage() {
   const [weightOpen, setWeightOpen] = useState(false);
   const [weightInput, setWeightInput] = useState("");
   const [loading, setLoading] = useState(true);
+  // Meta de calorias calculada (TDEE): fonte da meta exibida no card.
+  const [goalSource, setGoalSource] = useState<"suggested" | "custom" | "dataMissing">("custom");
+  const [tdeeGoal, setTdeeGoal] = useState<{ bmr: number; activityFactor: number } | null>(null);
 
   const today = getLocalDate();
 
@@ -88,7 +93,7 @@ function TodayPage() {
 
   const load = async () => {
     if (!user) return;
-    const [{ data: g }, { data: meals }, { data: water }, { data: weight }] =
+    const [{ data: g }, { data: meals }, { data: water }, { data: weight }, tdeeRes] =
       await Promise.all([
         supabase
           .from("goals")
@@ -103,8 +108,36 @@ function TodayPage() {
           .eq("user_id", user.id)
           .order("log_date", { ascending: false })
           .limit(1),
+        calculateTdee({
+          headers: { Authorization: `Bearer ${session?.access_token}` },
+        }),
       ]);
-    setGoals(g ?? { calories: 2000, protein_g: 140, carbs_g: 220, fat_g: 65 });
+
+    const defaults: Goals = { calories: 2000, protein_g: 140, carbs_g: 220, fat_g: 65 };
+    let nextGoals = g ?? defaults;
+    let source: "suggested" | "custom" | "dataMissing" = "custom";
+
+    if (tdeeRes && tdeeRes.tdee != null && tdeeRes.weight != null) {
+      const suggested = suggestGoals(tdeeRes.tdee, tdeeRes.weight);
+      // Só substitui o padrão do signup (2000/140/220/65); nunca sobrescreve
+      // uma meta que o usuário já editou.
+      if (!g || isDefaultGoals(g)) {
+        await supabase
+          .from("goals")
+          .upsert({ user_id: user.id, ...suggested }, { onConflict: "user_id" });
+        nextGoals = suggested;
+      }
+      source = matchesSuggestion(nextGoals, tdeeRes.tdee, tdeeRes.weight)
+        ? "suggested"
+        : "custom";
+      setTdeeGoal({ bmr: tdeeRes.bmr ?? 0, activityFactor: tdeeRes.activityFactor ?? 1.2 });
+    } else {
+      source = "dataMissing";
+      setTdeeGoal(null);
+    }
+
+    setGoals(nextGoals);
+    setGoalSource(source);
     setWaterMl((water ?? []).reduce((a, w) => a + (w.ml || 0), 0));
     setLastWeight(weight && weight[0] ? Number(weight[0].weight_kg) : null);
     setTodayWorkout(await findTodayWorkout(user.id));
@@ -205,6 +238,19 @@ function TodayPage() {
           value={Math.min(100, (totals.calories / goals.calories) * 100)}
           className="mt-4"
         />
+        {goalSource === "suggested" && tdeeGoal ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Meta calculada · TMB {tdeeGoal.bmr} × atividade{" "}
+            {tdeeGoal.activityFactor.toLocaleString("pt-BR")}
+          </p>
+        ) : goalSource === "dataMissing" ? (
+          <Link
+            to="/app/corpo"
+            className="mt-3 block text-xs text-primary underline-offset-4 hover:underline"
+          >
+            Preencha peso/altura p/ calcular sua meta
+          </Link>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-3 gap-3">

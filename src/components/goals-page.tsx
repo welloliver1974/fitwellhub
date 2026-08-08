@@ -1,48 +1,89 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
+import { isDefaultGoals, suggestGoals } from "@/lib/nutrition-goals";
+import { calculateTdee } from "@/server-fns/corpo.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, Target } from "lucide-react";
+import { ArrowLeft, Sparkles, Target } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 
+// Valores da sugestão calculada (server fn `calculateTdee`), quando disponível.
+type TdeeData = { tdee: number; bmr: number; activityFactor: number; weight: number };
+
 export function GoalsPage() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
+  const userId = user?.id;
   const navigate = useNavigate();
   const [calories, setCalories] = useState(2000);
   const [protein, setProtein] = useState(140);
   const [carbs, setCarbs] = useState(220);
   const [fat, setFat] = useState(65);
+  const [tdeeData, setTdeeData] = useState<TdeeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
     (async () => {
-      const { data } = await supabase
-        .from("goals")
-        .select("*")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (data) {
+      const [{ data }, res] = await Promise.all([
+        supabase
+          .from("goals")
+          .select("*")
+          .eq("user_id", userId)
+          .maybeSingle(),
+        calculateTdee({ headers: { Authorization: `Bearer ${session?.access_token}` } }).catch(
+          () => null,
+        ),
+      ]);
+
+      let tdee: TdeeData | null = null;
+      if (res && res.tdee != null && res.weight != null) {
+        tdee = {
+          tdee: res.tdee,
+          bmr: res.bmr ?? 0,
+          activityFactor: res.activityFactor ?? 1.2,
+          weight: res.weight,
+        };
+        setTdeeData(tdee);
+      }
+
+      if (data && !isDefaultGoals(data)) {
+        // Meta customizada (editada): carrega o valor salvo.
         setCalories(data.calories);
         setProtein(data.protein_g);
         setCarbs(data.carbs_g);
         setFat(data.fat_g);
+      } else if (tdee) {
+        // Sem meta ou ainda padrão do signup → já vem com a sugestão calculada.
+        const s = suggestGoals(tdee.tdee, tdee.weight);
+        setCalories(s.calories);
+        setProtein(s.protein_g);
+        setCarbs(s.carbs_g);
+        setFat(s.fat_g);
       }
       setLoading(false);
     })();
-  }, [user]);
+  }, [userId, session?.access_token]);
+
+  const applySuggestion = () => {
+    if (!tdeeData) return;
+    const s = suggestGoals(tdeeData.tdee, tdeeData.weight);
+    setCalories(s.calories);
+    setProtein(s.protein_g);
+    setCarbs(s.carbs_g);
+    setFat(s.fat_g);
+  };
 
   const save = async () => {
-    if (!user) return;
+    if (!userId) return;
     setSaving(true);
     const { error } = await supabase.from("goals").upsert(
       {
-        user_id: user.id,
+        user_id: userId,
         calories,
         protein_g: protein,
         carbs_g: carbs,
@@ -71,6 +112,31 @@ export function GoalsPage() {
           <p className="text-xs text-muted-foreground">Ajuste seus alvos de calorias e macros</p>
         </div>
       </div>
+
+      {tdeeData ? (
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+          <p className="flex items-center gap-1.5 text-xs">
+            <Sparkles className="h-3.5 w-3.5 text-primary" />
+            <span>
+              Sugestão calculada: <strong className="text-foreground">{tdeeData.tdee} kcal</strong>{" "}
+              · TMB {tdeeData.bmr} × fator {tdeeData.activityFactor.toLocaleString("pt-BR")} · peso{" "}
+              {tdeeData.weight} kg
+            </span>
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-2 h-7 text-xs"
+            onClick={applySuggestion}
+          >
+            Usar calculada
+          </Button>
+        </div>
+      ) : (
+        <div className="rounded-xl bg-secondary/50 p-3 text-xs text-muted-foreground">
+          Preencha sexo, altura, nascimento e peso em Corpo / Peso para calcularmos sua meta.
+        </div>
+      )}
 
       <Card className="p-5 space-y-4">
         <Field
