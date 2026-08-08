@@ -127,13 +127,17 @@ export const analyzePhoto = createServerFn({ method: "POST" })
     const apiKey = resolveAiApiKey(settings, photoProvider);
     if (!apiKey) throw new Error("Configure uma chave de IA nas configuracoes.");
 
-    const photoModel = settings.photo_model?.trim() || "qwen/qwen2.5-vl-72b-instruct";
+    const photoModel =
+      settings.photo_model?.trim() ||
+      (photoProvider === "openrouter"
+        ? "qwen/qwen2.5-vl-72b-instruct"
+        : "nvidia/llama-3.2-90b-vision-instruct");
 
     const res = await callAiChatCompletion({
       provider: photoProvider,
       apiKey,
       model: photoModel,
-      baseUrl: settings.omniroute_base_url,
+      baseUrl: photoProvider === "omniroute" ? settings.omniroute_base_url : undefined,
       maxTokens: 512,
       messages: [
         {
