@@ -1,4 +1,4 @@
-const CACHE = "fitwellhub-v1";
+const CACHE = "fitwellhub-v2";
 const STATIC_ASSETS = [
   "/",
   "/app",

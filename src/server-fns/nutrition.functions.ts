@@ -115,16 +115,26 @@ export const analyzePhoto = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const settings = await fetchAiSettings(supabase, userId);
-    const photoProvider: "openrouter" | "omniroute" =
-      settings.provider === "omniroute" ? "omniroute" : "openrouter";
+    // Foto do prato: provedor/modelo de visao dedicados (se configurados na tela IA);
+    // senao, segue o provedor padrao + qwen2.5-vl, independente do modelo de texto do Coach.
+    const photoProvider: "openrouter" | "omniroute" | "nvidia" =
+      settings.photo_provider ??
+      (settings.provider === "omniroute"
+        ? "omniroute"
+        : settings.provider === "nvidia"
+          ? "nvidia"
+          : "openrouter");
     const apiKey = resolveAiApiKey(settings, photoProvider);
-    if (!apiKey) throw new Error("Configure a chave do OpenRouter nas configuracoes.");
+    if (!apiKey) throw new Error("Configure uma chave de IA nas configuracoes.");
+
+    const photoModel = settings.photo_model?.trim() || "qwen/qwen2.5-vl-72b-instruct";
 
     const res = await callAiChatCompletion({
       provider: photoProvider,
       apiKey,
-      model: "qwen/qwen2.5-vl-72b-instruct",
+      model: photoModel,
       baseUrl: settings.omniroute_base_url,
+      maxTokens: 512,
       messages: [
         {
           role: "system",

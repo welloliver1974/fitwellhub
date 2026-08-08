@@ -95,6 +95,8 @@ export type Database = {
           omniroute_api_key: string | null;
           omniroute_base_url: string | null;
           openrouter_api_key: string | null;
+          photo_model: string | null;
+          photo_provider: string | null;
           provider: string;
           updated_at: string;
           user_id: string;
@@ -105,6 +107,8 @@ export type Database = {
           omniroute_api_key?: string | null;
           omniroute_base_url?: string | null;
           openrouter_api_key?: string | null;
+          photo_model?: string | null;
+          photo_provider?: string | null;
           provider?: string;
           updated_at?: string;
           user_id: string;
@@ -115,6 +119,8 @@ export type Database = {
           omniroute_api_key?: string | null;
           omniroute_base_url?: string | null;
           openrouter_api_key?: string | null;
+          photo_model?: string | null;
+          photo_provider?: string | null;
           provider?: string;
           updated_at?: string;
           user_id?: string;

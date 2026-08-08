@@ -26,7 +26,7 @@ type AiSettingsRow = Database["public"]["Tables"]["ai_settings"]["Row"];
 export async function fetchAiSettings(supabase: any, userId: string): Promise<AiSettings> {
   const { data } = await supabase
     .from("ai_settings")
-    .select("provider,groq_api_key,openrouter_api_key,omniroute_api_key,omniroute_base_url,updated_at")
+    .select("provider,photo_provider,photo_model,groq_api_key,openrouter_api_key,omniroute_api_key,omniroute_base_url,updated_at")
     .eq("user_id", userId)
     .maybeSingle();
 

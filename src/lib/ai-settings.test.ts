@@ -112,6 +112,25 @@ describe("resolveAiApiKey", () => {
   });
 });
 
+describe("normalizeAiSettings — foto do prato (visao)", () => {
+  it("preserva photo_provider/photo_model definidos", () => {
+    const s = normalizeAiSettings({
+      provider: "nvidia",
+      photo_provider: "openrouter",
+      photo_model: " meu-vl ",
+    });
+    expect(s.photo_provider).toBe("openrouter");
+    expect(s.photo_model).toBe("meu-vl");
+  });
+
+  it("photo_provider invalido/ausente cai em null", () => {
+    expect(normalizeAiSettings({ provider: "groq" }).photo_provider).toBeNull();
+    expect(
+      normalizeAiSettings({ provider: "groq", photo_provider: "groq" } as never).photo_provider,
+    ).toBeNull();
+  });
+});
+
 describe("resolveAiChatEndpoint", () => {
   it("resolve por provider", () => {
     expect(resolveAiChatEndpoint("groq")).toBe("https://api.groq.com/openai/v1/chat/completions");

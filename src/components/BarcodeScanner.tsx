@@ -318,8 +318,20 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
     const video = videoRef.current;
     let frameAttempts = 0;
 
+    // Se o vídeo abrir mas a detecção não achar nada, mostramos uma dica
+    // (em vez de ficar eternamente em silêncio) e continuamos tentando.
+    let stallNotified = false;
+    const STALL_MS = 6000;
+    const startTime = Date.now();
+
     const detect = async () => {
+      // Nunca morre silenciosamente: quando ainda não há frame ou um ref não
+      // montou, re-agenda o próximo frame — só a detecção bem-sucedida retorna.
       if (!video || !video.videoWidth || !video.videoHeight) {
+        if (!stallNotified && Date.now() - startTime > STALL_MS) {
+          stallNotified = true;
+          setHint("Ajustando a camera... Se demorar, toque em Capturar e ler");
+        }
         rafRef.current = requestAnimationFrame(detect);
         return;
       }
@@ -333,7 +345,10 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
 
       const canvas = canvasRef.current;
       const guideEl = guideRef.current;
-      if (!canvas || !guideEl) return;
+      if (!canvas || !guideEl) {
+        rafRef.current = requestAnimationFrame(detect);
+        return;
+      }
 
       const vw = video.videoWidth;
       const vh = video.videoHeight;
@@ -356,7 +371,10 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
       canvas.width = Math.max(80, Math.round(scanWidth));
       canvas.height = Math.max(60, Math.round(scanHeight));
       const ctx = canvas.getContext("2d", { willReadFrequently: true });
-      if (!ctx) return;
+      if (!ctx) {
+        rafRef.current = requestAnimationFrame(detect);
+        return;
+      }
       ctx.drawImage(video, sx, sy, scanWidth, scanHeight, 0, 0, canvas.width, canvas.height);
 
       try {
@@ -366,6 +384,12 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
       }
 
       frameAttempts += 1;
+      // Detecção rodando há um tempo sem achar nada → mostra dica em vez do
+      // silêncio eterno; a leitura contínua segue tentando depois disso.
+      if (!stallNotified && frameAttempts * 350 > STALL_MS) {
+        stallNotified = true;
+        setHint("Sem deteccao ainda. Aproxime da moldura ou use Capturar e ler");
+      }
       if (frameAttempts % 4 === 0) {
         try {
           if (await detectFromSource(detector, video)) return;

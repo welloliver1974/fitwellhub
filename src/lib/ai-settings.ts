@@ -5,6 +5,8 @@ export type AiProvider = "groq" | "openrouter" | "omniroute" | "nvidia";
 
 export type AiSettings = {
   provider: AiProvider;
+  photo_provider: "openrouter" | "omniroute" | "nvidia" | null;
+  photo_model: string | null;
   groq_api_key: string | null;
   openrouter_api_key: string | null;
   omniroute_api_key: string | null;
@@ -17,6 +19,8 @@ export type AiSettings = {
 // do Supabase (o server-fn passa a linha tipada por validação estrutural).
 export type AiSettingsRow = {
   provider?: string | null;
+  photo_provider?: string | null;
+  photo_model?: string | null;
   groq_api_key?: string | null;
   openrouter_api_key?: string | null;
   omniroute_api_key?: string | null;
@@ -43,6 +47,13 @@ export function normalizeAiSettings(row?: AiSettingsRow | null): AiSettings {
           : "groq";
   return {
     provider,
+    photo_provider:
+      row?.photo_provider === "openrouter" ||
+      row?.photo_provider === "omniroute" ||
+      row?.photo_provider === "nvidia"
+        ? row.photo_provider
+        : null,
+    photo_model: row?.photo_model?.trim() || null,
     groq_api_key: row?.groq_api_key ?? null,
     openrouter_api_key: row?.openrouter_api_key ?? null,
     omniroute_api_key: row?.omniroute_api_key ?? null,

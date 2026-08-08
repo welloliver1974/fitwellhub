@@ -31,6 +31,8 @@ function AiSettingsPage() {
   const [omniKey, setOmniKey] = useState("");
   const [omniBaseUrl, setOmniBaseUrl] = useState("");
   const [nvidiaModel, setNvidiaModel] = useState("");
+  const [photoProvider, setPhotoProvider] = useState<"auto" | "openrouter" | "omniroute" | "nvidia">("auto");
+  const [photoModel, setPhotoModel] = useState("");
   const [nvidiaModels, setNvidiaModels] = useState<string[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -41,7 +43,7 @@ function AiSettingsPage() {
     (async () => {
       const { data, error } = await supabase
         .from("ai_settings")
-        .select("provider,groq_api_key,openrouter_api_key,omniroute_api_key,omniroute_base_url")
+        .select("provider,photo_provider,photo_model,groq_api_key,openrouter_api_key,omniroute_api_key,omniroute_base_url")
         .eq("user_id", user.id)
         .maybeSingle();
 
@@ -56,6 +58,14 @@ function AiSettingsPage() {
         setOmniKey(data.omniroute_api_key ?? "");
         setOmniBaseUrl(data.omniroute_base_url ?? "");
         setNvidiaModel(data.omniroute_base_url ?? "");
+        setPhotoProvider(
+          data.photo_provider === "openrouter" ||
+            data.photo_provider === "omniroute" ||
+            data.photo_provider === "nvidia"
+            ? data.photo_provider
+            : "auto",
+        );
+        setPhotoModel(data.photo_model ?? "");
       }
       setLoading(false);
     })();
@@ -73,6 +83,8 @@ function AiSettingsPage() {
         openrouter_api_key: openrouterKey.trim() || null,
         omniroute_api_key: omniKey.trim() || null,
         omniroute_base_url: baseUrl || null,
+        photo_provider: photoProvider === "auto" ? null : photoProvider,
+        photo_model: photoModel.trim() || null,
       },
       { onConflict: "user_id" },
     );
@@ -224,10 +236,10 @@ function AiSettingsPage() {
           <div className="flex items-start gap-2">
             <ShieldCheck className="mt-0.5 h-4 w-4 text-primary" />
             <p>
-              O provedor padrao sera usado no Coach, chat e analises de texto. O OpenRouter
-              continua sendo usado para analise de foto quando houver chave salva. O OmniRoute
-              permite usar um endpoint proprio compativel com OpenAI. O NVIDIA usa o modelo
-              Nemotron-70B diretamente pela API da NVIDIA.
+              O provedor padrao sera usado no Coach, chat, analises de texto e analise de foto
+              (a foto usa um modelo de visao). O OmniRoute permite usar um endpoint proprio
+              compativel com OpenAI. O NVIDIA usa o modelo escolhido pela API da NVIDIA — para a
+              foto, escolha um modelo de visao (ex.: qwen 2.5 vl) na lista de modelos.
             </p>
           </div>
         </div>
@@ -235,6 +247,48 @@ function AiSettingsPage() {
         <Button onClick={save} disabled={saving} className="w-full">
           {saving ? "Salvando..." : "Salvar configuracoes"}
         </Button>
+      </Card>
+
+      <Card className="p-4 space-y-4">
+        <div className="space-y-1">
+          <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+            Foto do prato (modelo de visao)
+          </Label>
+          <Select
+            value={photoProvider}
+            onValueChange={(v) => setPhotoProvider(v as typeof photoProvider)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Seguir o provedor padrao" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">Seguir o provedor padrao</SelectItem>
+              <SelectItem value="nvidia">NVIDIA</SelectItem>
+              <SelectItem value="openrouter">OpenRouter</SelectItem>
+              <SelectItem value="omniroute">OmniRoute</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Provedor desconhecido para a analise de foto do prato. Independente do Coach.
+          </p>
+        </div>
+
+        {photoProvider !== "auto" && (
+          <div className="space-y-1">
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+              Modelo de visao
+            </Label>
+            <Input
+              value={photoModel}
+              onChange={(e) => setPhotoModel(e.target.value)}
+              placeholder="qwen/qwen2.5-vl-72b-instruct"
+              autoComplete="off"
+            />
+            <p className="text-xs text-muted-foreground">
+              Deixe vazio para usar o padrao qwen2.5-vl-72b. Precisa aceitar imagens.
+            </p>
+          </div>
+        )}
       </Card>
     </div>
   );
