@@ -37,6 +37,10 @@ function AiSettingsPage() {
   const [loadingModels, setLoadingModels] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const photoModelPlaceholder =
+    photoProvider === "nvidia"
+      ? "meta/llama-3.2-90b-vision-instruct"
+      : "qwen/qwen2.5-vl-72b-instruct";
 
   useEffect(() => {
     if (!user) return;
@@ -239,7 +243,8 @@ function AiSettingsPage() {
               O provedor padrao sera usado no Coach, chat, analises de texto e analise de foto
               (a foto usa um modelo de visao). O OmniRoute permite usar um endpoint proprio
               compativel com OpenAI. O NVIDIA usa o modelo escolhido pela API da NVIDIA — para a
-              foto, escolha um modelo de visao (ex.: qwen 2.5 vl) na lista de modelos.
+              foto, escolha um modelo de visao (ex.: meta/llama-3.2-90b-vision-instruct) na lista
+              de modelos.
             </p>
           </div>
         </div>
@@ -281,11 +286,11 @@ function AiSettingsPage() {
             <Input
               value={photoModel}
               onChange={(e) => setPhotoModel(e.target.value)}
-              placeholder="qwen/qwen2.5-vl-72b-instruct"
+              placeholder={photoModelPlaceholder}
               autoComplete="off"
             />
             <p className="text-xs text-muted-foreground">
-              Deixe vazio para usar o padrao qwen2.5-vl-72b. Precisa aceitar imagens.
+              Deixe vazio para usar o padrao do provedor escolhido. Precisa aceitar imagens.
             </p>
           </div>
         )}

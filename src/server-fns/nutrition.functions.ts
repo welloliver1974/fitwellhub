@@ -127,11 +127,14 @@ export const analyzePhoto = createServerFn({ method: "POST" })
     const apiKey = resolveAiApiKey(settings, photoProvider);
     if (!apiKey) throw new Error("Configure uma chave de IA nas configuracoes.");
 
+    const savedPhotoModel = settings.photo_model?.trim();
     const photoModel =
-      settings.photo_model?.trim() ||
-      (photoProvider === "openrouter"
-        ? "qwen/qwen2.5-vl-72b-instruct"
-        : "nvidia/llama-3.2-90b-vision-instruct");
+      photoProvider === "nvidia" && savedPhotoModel === "nvidia/llama-3.2-90b-vision-instruct"
+        ? "meta/llama-3.2-90b-vision-instruct"
+        : savedPhotoModel ||
+          (photoProvider === "nvidia"
+            ? "meta/llama-3.2-90b-vision-instruct"
+            : "qwen/qwen2.5-vl-72b-instruct");
 
     const res = await callAiChatCompletion({
       provider: photoProvider,
