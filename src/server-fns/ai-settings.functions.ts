@@ -1,24 +1,29 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 // Lógica pura (provider/modelo/fallback/endpoint) vive em src/lib/ai-settings.ts.
 import {
   type AiProvider,
   type AiSettings,
   getTextModel,
+  getVisionModel,
   normalizeAiSettings,
   resolveAiApiKey,
   resolveAiChatEndpoint,
   resolveAiProvider,
+  resolveVisionProvider,
 } from "@/lib/ai-settings";
 // Re-exporta os tipos/funções para manter os imports existentes das rotas/server-fns.
 export {
   type AiProvider,
   type AiSettings,
   getTextModel,
+  getVisionModel,
   normalizeAiSettings,
   resolveAiApiKey,
   resolveAiProvider,
+  resolveVisionProvider,
 } from "@/lib/ai-settings";
 
 type AiSettingsRow = Database["public"]["Tables"]["ai_settings"]["Row"];
@@ -36,6 +41,7 @@ export async function fetchAiSettings(supabase: any, userId: string): Promise<Ai
 const nvidiaKeySchema = z.object({ apiKey: z.string().min(1) });
 
 export const fetchNvidiaModels = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => nvidiaKeySchema.parse(d))
   .handler(async ({ data }) => {
     const { apiKey } = data;

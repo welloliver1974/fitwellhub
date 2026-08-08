@@ -1,10 +1,12 @@
 import { describe, expect, it, afterEach } from "vitest";
 import {
   getTextModel,
+  getVisionModel,
   normalizeAiSettings,
   resolveAiApiKey,
   resolveAiChatEndpoint,
   resolveAiProvider,
+  resolveVisionProvider,
 } from "@/lib/ai-settings";
 
 afterEach(() => {
@@ -128,6 +130,35 @@ describe("normalizeAiSettings — foto do prato (visao)", () => {
     expect(
       normalizeAiSettings({ provider: "groq", photo_provider: "groq" } as never).photo_provider,
     ).toBeNull();
+  });
+});
+
+describe("resolveVisionProvider/getVisionModel", () => {
+  it("usa provider de foto quando configurado", () => {
+    expect(resolveVisionProvider({ provider: "groq", photo_provider: "openrouter" })).toBe(
+      "openrouter",
+    );
+    expect(resolveVisionProvider({ provider: "groq", photo_provider: "nvidia" })).toBe("nvidia");
+  });
+
+  it("segue provider compativel com visao quando foto esta em auto", () => {
+    expect(resolveVisionProvider({ provider: "nvidia", photo_provider: null })).toBe("nvidia");
+    expect(resolveVisionProvider({ provider: "omniroute", photo_provider: null })).toBe(
+      "omniroute",
+    );
+    expect(resolveVisionProvider({ provider: "groq", photo_provider: null })).toBe("openrouter");
+  });
+
+  it("corrige modelo antigo da NVIDIA que gerava 404", () => {
+    expect(
+      getVisionModel("nvidia", { photo_model: "nvidia/llama-3.2-90b-vision-instruct" }),
+    ).toBe("meta/llama-3.2-90b-vision-instruct");
+  });
+
+  it("usa defaults de visao por provider", () => {
+    expect(getVisionModel("nvidia")).toBe("meta/llama-3.2-90b-vision-instruct");
+    expect(getVisionModel("openrouter")).toBe("qwen/qwen2.5-vl-72b-instruct");
+    expect(getVisionModel("omniroute")).toBe("qwen/qwen2.5-vl-72b-instruct");
   });
 });
 

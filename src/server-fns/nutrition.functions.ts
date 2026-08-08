@@ -5,8 +5,10 @@ import {
   callAiChatCompletion,
   fetchAiSettings,
   getTextModel,
+  getVisionModel,
   resolveAiApiKey,
   resolveAiProvider,
+  resolveVisionProvider,
 } from "@/server-fns/ai-settings.functions";
 import { buildCoachPlan } from "@/lib/coach-plan";
 
@@ -115,26 +117,10 @@ export const analyzePhoto = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const settings = await fetchAiSettings(supabase, userId);
-    // Foto do prato: provedor/modelo de visao dedicados (se configurados na tela IA);
-    // senao, segue o provedor padrao + qwen2.5-vl, independente do modelo de texto do Coach.
-    const photoProvider: "openrouter" | "omniroute" | "nvidia" =
-      settings.photo_provider ??
-      (settings.provider === "omniroute"
-        ? "omniroute"
-        : settings.provider === "nvidia"
-          ? "nvidia"
-          : "openrouter");
+    const photoProvider = resolveVisionProvider(settings);
     const apiKey = resolveAiApiKey(settings, photoProvider);
     if (!apiKey) throw new Error("Configure uma chave de IA nas configuracoes.");
-
-    const savedPhotoModel = settings.photo_model?.trim();
-    const photoModel =
-      photoProvider === "nvidia" && savedPhotoModel === "nvidia/llama-3.2-90b-vision-instruct"
-        ? "meta/llama-3.2-90b-vision-instruct"
-        : savedPhotoModel ||
-          (photoProvider === "nvidia"
-            ? "meta/llama-3.2-90b-vision-instruct"
-            : "qwen/qwen2.5-vl-72b-instruct");
+    const photoModel = getVisionModel(photoProvider, settings);
 
     const res = await callAiChatCompletion({
       provider: photoProvider,

@@ -34,9 +34,14 @@ self.addEventListener("fetch", (event) => {
   // Only handle same-origin requests
   if (url.origin !== self.location.origin) return;
 
-  // Always network-first for API calls and server functions
+  // Never cache writes, API calls, or server functions.
+  if (request.method !== "GET") {
+    event.respondWith(fetch(request));
+    return;
+  }
+
   if (url.pathname.startsWith("/api/") || url.pathname.includes("_server")) {
-    event.respondWith(networkFirst(request));
+    event.respondWith(fetch(request));
     return;
   }
 

@@ -2,6 +2,7 @@
 // Sem imports — testável em node. Extraído de ai-settings.functions.ts.
 
 export type AiProvider = "groq" | "openrouter" | "omniroute" | "nvidia";
+export type VisionAiProvider = "openrouter" | "omniroute" | "nvidia";
 
 export type AiSettings = {
   provider: AiProvider;
@@ -73,6 +74,28 @@ export function resolveAiProvider(settings?: Partial<AiSettings> | null): AiProv
 export function getTextModel(provider: AiProvider, settings?: Partial<AiSettings> | null): string {
   if (provider === "nvidia" && settings?.nvidia_model) return settings.nvidia_model;
   return TEXT_MODELS[provider];
+}
+
+export function resolveVisionProvider(settings?: Partial<AiSettings> | null): VisionAiProvider {
+  if (settings?.photo_provider === "openrouter") return "openrouter";
+  if (settings?.photo_provider === "omniroute") return "omniroute";
+  if (settings?.photo_provider === "nvidia") return "nvidia";
+  if (settings?.provider === "omniroute") return "omniroute";
+  if (settings?.provider === "nvidia") return "nvidia";
+  return "openrouter";
+}
+
+export function getVisionModel(
+  provider: VisionAiProvider,
+  settings?: Partial<AiSettings> | null,
+): string {
+  const saved = settings?.photo_model?.trim();
+  if (provider === "nvidia" && saved === "nvidia/llama-3.2-90b-vision-instruct") {
+    return "meta/llama-3.2-90b-vision-instruct";
+  }
+  if (saved) return saved;
+  if (provider === "nvidia") return "meta/llama-3.2-90b-vision-instruct";
+  return "qwen/qwen2.5-vl-72b-instruct";
 }
 
 export function resolveAiApiKey(

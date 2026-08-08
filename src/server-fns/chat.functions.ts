@@ -5,8 +5,10 @@ import {
   callAiChatCompletion,
   fetchAiSettings,
   getTextModel,
+  getVisionModel,
   resolveAiApiKey,
   resolveAiProvider,
+  resolveVisionProvider,
 } from "@/server-fns/ai-settings.functions";
 import { getLocalDate, getLocalDateMinusDays } from "@/lib/utils";
 import { MEAL_TYPES } from "@/lib/meal-types";
@@ -336,7 +338,10 @@ export const sendChat = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const settings = await fetchAiSettings(supabase, userId);
-    const provider = resolveAiProvider(settings);
+    const hasImages = Boolean(data.images?.length);
+    const textProvider = resolveAiProvider(settings);
+    const visionProvider = resolveVisionProvider(settings);
+    const provider = hasImages ? visionProvider : textProvider;
     const apiKey = resolveAiApiKey(settings, provider);
     if (!apiKey) throw new Error("Configure uma chave de IA nas configuracoes.");
 
@@ -352,14 +357,12 @@ export const sendChat = createServerFn({ method: "POST" })
     );
 
     // 2. Optimistic save of user's message
-    const dbMessage = data.images?.length ? `[${data.images.length} Imagens] ${data.message}` : data.message;
+    const dbMessage = hasImages ? `[${data.images!.length} Imagens] ${data.message}` : data.message;
     await saveChatMessage(supabase, userId, "user", dbMessage);
 
-    const modelToUse = data.images?.length
-      ? provider === "openrouter"
-        ? "qwen/qwen2.5-vl-72b-instruct"
-        : "meta-llama/llama-4-scout-17b-16e-instruct"
-      : getTextModel(provider, settings);
+    const modelToUse = hasImages
+      ? getVisionModel(visionProvider, settings)
+      : getTextModel(textProvider, settings);
 
     const userContent: any[] = [{ type: "text", text: data.message || "Analise estas imagens." }];
     (data.images ?? []).forEach(img => {
@@ -461,7 +464,7 @@ Dados do usuário:\n${ctxText}` + (process.env.COACH_ALWAYS_SUGGEST === "true" ?
       model: modelToUse,
       messages,
       tools,
-      baseUrl: settings.omniroute_base_url,
+      baseUrl: provider === "omniroute" ? settings.omniroute_base_url : undefined,
     });
     let choice = response.choices[0];
     const createdWorkoutNames = new Set<string>();
@@ -497,7 +500,7 @@ Dados do usuário:\n${ctxText}` + (process.env.COACH_ALWAYS_SUGGEST === "true" ?
         model: modelToUse,
         messages,
         tools,
-        baseUrl: settings.omniroute_base_url,
+        baseUrl: provider === "omniroute" ? settings.omniroute_base_url : undefined,
       });
       choice = response.choices[0];
     }

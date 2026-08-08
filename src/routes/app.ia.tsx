@@ -24,7 +24,7 @@ export const Route = createFileRoute("/app/ia")({
 type AiProvider = "groq" | "openrouter" | "omniroute" | "nvidia";
 
 function AiSettingsPage() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [provider, setProvider] = useState<AiProvider>("groq");
   const [groqKey, setGroqKey] = useState("");
   const [openrouterKey, setOpenrouterKey] = useState("");
@@ -185,7 +185,12 @@ function AiSettingsPage() {
                   if (!openrouterKey.trim()) return toast.error("Cole a chave da NVIDIA primeiro.");
                   setLoadingModels(true);
                   try {
-                    const models = await fetchNvidiaModels({ data: { apiKey: openrouterKey.trim() } });
+                    const models = await fetchNvidiaModels({
+                      headers: session?.access_token
+                        ? { Authorization: `Bearer ${session.access_token}` }
+                        : undefined,
+                      data: { apiKey: openrouterKey.trim() },
+                    });
                     setNvidiaModels(models);
                     if (!nvidiaModel && models.length) setNvidiaModel(models[0]);
                     toast.success(`${models.length} modelos carregados`);
