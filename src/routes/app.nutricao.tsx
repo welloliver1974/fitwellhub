@@ -163,6 +163,7 @@ function NutricaoPage() {
     setMFat("");
     setBarcodePortionLabel("");
     setBarcodePortionSource("");
+    setRefGrams(null);
     try {
       const r = await fetch(
         `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`,
@@ -188,6 +189,8 @@ function NutricaoPage() {
         setMProt(macros.protein_g);
         setMCarb(macros.carbs_g);
         setMFat(macros.fat_g);
+        // macros correspondem à porção escaneada → mudar "Porção (g)" reescala proporcional
+        setRefGrams(servingGrams);
         setOpen(true);
         toast.success(
           servingGrams === 100 ? `${name} encontrado` : `${name} encontrado (${servingGrams}g)`,
@@ -207,6 +210,8 @@ function NutricaoPage() {
       setMProt(macros.protein_g);
       setMCarb(macros.carbs_g);
       setMFat(macros.fat_g);
+      // macros estimados para 100g → mudar "Porção (g)" reescala proporcional
+      setRefGrams(100);
       setBarcodePortionLabel("Porção estimada pela IA");
       setBarcodePortionSource("ai");
       setOpen(true);

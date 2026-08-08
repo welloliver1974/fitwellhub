@@ -6,6 +6,7 @@ import { getLocalDate, getLocalDateMinusDays } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+import { NutDayDetail } from "@/components/nutrition-day-detail";
 import {
   BarChart,
   Bar,
@@ -97,6 +98,8 @@ function NutHistoryPage() {
           </Button>
         </div>
       </div>
+
+      <NutDayDetail />
 
       <div className="grid grid-cols-2 gap-3">
         <Card className="p-4">

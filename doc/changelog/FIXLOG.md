@@ -1371,3 +1371,26 @@ O usuário registrou **um** café da manhã e o card de calorias do dia mostrou 
 - ✅ `tsc --noEmit` sem erros novos nos arquivos tocados (62 pré-existentes de schema Supabase — não relacionados)
 - ✅ `npm run build` validado (client + SSR)
 - ✅ **Migration APLICADA** no Supabase em 08/08/2026 (a etapa 1 precisou de correção: `JOIN "keep" k ON ...` no `UPDATE...FROM` falhava com `42703: column k.user_id does not exist` — reescrita como `UPDATE ... SET (subquery correlacionada) ... WHERE ... IN (subquery)`); banco agora tem `UNIQUE INDEX meals(user_id, meal_date, meal_type)` e dados duplicados antigos limpos.
+
+---
+
+## Sessão: 08/08/2026 — Auditoria de cálculos + ver ontem (detalhe por dia) + fix scanner
+
+### 🎯 O que o usuário perguntou
+"Consigo ver a alimentação do dia anterior?" e "os cálculos nutricionais estão corretos?" → auditamos a matemática, corrigimos um bug real do scanner e adicionamos a visualização detalhada de um dia no histórico.
+
+### 🔍 Auditoria (resultado)
+- **Somas diárias** (card do dashboard, total da página, gráfico do histórico, coach): soma simples de `meal_items` do dia — **corretas**; o "dobro" era dado duplicado (já resolvido).
+- **Escala por gramas corrigida nos caminhos principais**: busca por nome (`lookupNutrition`), biblioteca "+", editar item, recentes/favoritos.
+- **BUG REAL encontrado — scanner de código de barras** (`onBarcode`): o fluxo **não** setava `refGrams`. Resultado: escanear um produto e depois **mudar a "Porção (g)" NÃO reescalava os macros** — ficava o valor da porção escaneada (subestimava kcal). 
+
+### 🛠️ Correções e melhorias
+1. **`app.nutricao.tsx` — fix scanner**: `setRefGrams(null)` no início do scan (também evita refGrams obsoleto no caminho manual); `setRefGrams(servingGrams)` no ramo Open Food Facts; `setRefGrams(100)` no fallback IA. Agora mudar a porção após escanear reescala proporcional.
+2. **NOVO `src/components/nutrition-day-detail.tsx` (`NutDayDetail`)**: card "Alimentação do dia" com date input (padrão: **ontem** — a tela principal já é hoje; max = hoje). Lista as refeições/itens do dia selecionado agrupadas por tipo (Café da manhã→Ceia) com gramas/kcal/P/C/G e **total do dia**. Vai pela mesma estrutura do `meals.find` + `meal_items` — com o unique index, no máximo uma refeição por tipo/dia.
+   - **Detalhe importante**: efeito depende de `user?.id` (string estável), **não** do objeto `user` — o contexto recria o objeto a cada render e sem isso o `useEffect` re-buscava em loop (a128amento também o teste). 
+3. **`app.nutricao-historico.tsx`**: `<NutDayDetail />` integrado no topo da "Visão geral" (antes dos gráficos).
+
+### ✅ Estado final
+- ✅ `TZ=UTC npx vitest run` → **78 testes verdes** (75 + 3 novos em `nutrition-day-detail.component.test.tsx` com o padrão `vi.hoisted` de supabase mock + useAuth)
+- ✅ `tsc --noEmit` sem erros novos nos arquivos tocados (62 pré-existentes — baseline)
+- ✅ `npm run build` validado (client + SSR)
