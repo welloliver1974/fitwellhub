@@ -81,6 +81,28 @@ describe("NutDayDetail — integração (supabase mock)", () => {
     expect(screen.getByText(/P 20/)).toBeInTheDocument();
   });
 
+  it("exibe refeições de tipos legados fora de MEAL_TYPES (ex.: 'Lanche')", async () => {
+    mock.setSelect("meals", [{ id: "m1", meal_type: "Lanche" }]);
+    mock.setSelect("meal_items", [
+      {
+        id: "i1",
+        meal_id: "m1",
+        name: "Castanhas",
+        grams: 30,
+        calories: 180,
+        protein_g: 5,
+        carbs_g: 4,
+        fat_g: 15,
+      },
+    ]);
+
+    render(<NutDayDetail />);
+
+    expect(await screen.findByText("Castanhas")).toBeInTheDocument();
+    // O grupo legado ainda aparece (com o título original), no fim da lista.
+    expect(screen.getByText("Lanche")).toBeInTheDocument();
+  });
+
   it("dia sem refeições mostra mensagem vazia", async () => {
     mock.setSelect("meals", []);
     render(<NutDayDetail />);

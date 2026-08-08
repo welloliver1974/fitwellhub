@@ -9,6 +9,7 @@ import {
   resolveAiProvider,
 } from "@/server-fns/ai-settings.functions";
 import { getLocalDate, getLocalDateMinusDays } from "@/lib/utils";
+import { MEAL_TYPES } from "@/lib/meal-types";
 import {
   buildCoachPlan,
   confidenceFromStats,
@@ -374,7 +375,7 @@ export const sendChat = createServerFn({ method: "POST" })
           parameters: {
             type: "object",
             properties: {
-              meal_type: { type: "string", enum: ["Café da manhã", "Almoço", "Jantar", "Lanche"] },
+              meal_type: { type: "string", enum: [...MEAL_TYPES] },
               items: {
                 type: "array",
                 items: {

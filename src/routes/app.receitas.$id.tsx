@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { getLocalDate } from "@/lib/utils";
+import { MEAL_TYPES } from "@/lib/meal-types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,8 +39,6 @@ type Item = {
   carbs_g: number;
   fat_g: number;
 };
-
-const MEAL_TYPES = ["Café da manhã", "Almoço", "Lanche", "Jantar", "Ceia"];
 
 function RecipeDetail() {
   const { id } = Route.useParams();

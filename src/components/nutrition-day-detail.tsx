@@ -2,13 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { formatLocalDate, getLocalDate, getLocalDateMinusDays } from "@/lib/utils";
+import { MEAL_TYPES } from "@/lib/meal-types";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UtensilsCrossed } from "lucide-react";
-
-// Ordem canônica dos tipos de refeição (mesma da tela de Nutrição).
-export const MEAL_TYPES = ["Café da manhã", "Almoço", "Lanche", "Jantar", "Ceia"];
 
 type DayItem = {
   id: string;
@@ -58,14 +56,22 @@ export function NutDayDetail() {
         its = (items ?? []) as DayItem[];
       }
       if (cancelled) return;
-      setGroups(
-        MEAL_TYPES.map((type) => {
-          const meal = ((meals ?? []) as { id: string; meal_type: string }[]).find(
-            (m) => m.meal_type === type,
-          );
+      const dayMeals = (meals ?? []) as { id: string; meal_type: string }[];
+      // Grupos na ordem canônica da tela de Nutrição.
+      const canonical = MEAL_TYPES.map((type) => {
+        const meal = dayMeals.find((m) => m.meal_type === type);
+        return { type, items: meal ? its.filter((i) => i.meal_id === meal.id) : [] };
+      });
+      // Fallback: tipos fora da lista (ex.: o legado "Lanche", anterior ao
+      // desdobramento manhã/tarde) continuam aparecendo no final — o histórico
+      // do usuário não fica invisível por não ser mais opção de novo registro.
+      const extra = [...new Set(dayMeals.map((m) => m.meal_type))]
+        .filter((t) => !MEAL_TYPES.includes(t))
+        .map((type) => {
+          const meal = dayMeals.find((m) => m.meal_type === type);
           return { type, items: meal ? its.filter((i) => i.meal_id === meal.id) : [] };
-        }),
-      );
+        });
+      setGroups([...canonical, ...extra]);
       setLoading(false);
     })();
     return () => {

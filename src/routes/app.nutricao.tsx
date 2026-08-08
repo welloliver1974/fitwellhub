@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { getLocalDate, getLocalDateMinusDays } from "@/lib/utils";
+import { MEAL_TYPES } from "@/lib/meal-types";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -80,8 +81,6 @@ type LibraryFood = {
   carbs_g: number;
   fat_g: number;
 };
-
-const MEAL_TYPES = ["Café da manhã", "Almoço", "Lanche", "Jantar", "Ceia"];
 
 function NutricaoPage() {
   const { user, session } = useAuth();

@@ -2,6 +2,14 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [08/08/2026] - Claude Code (Dividir "Lanche" em "Lanche da manhã" + "Lanche da tarde")
+- **Escopo**: o tipo de refeição único "Lanche" virou **"Lanche da manhã"** e **"Lanche da tarde"** — o dropdown "Refeição" (Nutrição/Receitas/Foto) passa a oferecer 6 tipos; no MESMO dia agora cabem lanche da manhã E da tarde como linhas separadas (o `UNIQUE INDEX meals_user_date_type_uniq (user_id, meal_date, meal_type)` garante 1 por tipo/dia).
+- **Decisão do usuário**: **não mexer nos dados antigos** — refeições gravadas como "Lanche" ficam como estão (não há migration: `meal_type` é TEXT sem CHECK constraint; os novos rótulos funcionam direto).
+- **Fonte única nova `src/lib/meal-types.ts`**: a lista estava **3× duplicada** (`app.nutricao.tsx:84`, `app.receitas.$id.tsx:42`, `nutrition-day-detail.tsx:11`) + **enum divergente** no chat (`chat.functions.ts:377` tinha 4 itens, sem "Ceia"). Centralizado em `MEAL_TYPES` (ordem cronológica; `[0]`/`[1]` = defaults de Café da manhã/Almoço **preservados**); o enum do tool do LLM virou `[...MEAL_TYPES]` (ganha os 2 novos **e** "Ceia").
+- **Legado visível**: `nutrition-day-detail.tsx` passou a agrupar no final qualquer `meal_type` fora de `MEAL_TYPES` (ex.: o antigo "Lanche") — o histórico não "some", só não é opção de novo registro.
+- Toda escrita é por string (`ensureMeal`, `duplicateYesterday`, find por `meal_type === type`, Select, botões "X de ontem") — agnóstica, sem mudança de lógica além da constante.
+- **Validação**: `TZ=UTC npx vitest run` **89/89** (+1 teste de fallback legado no `nutrition-day-detail.component.test.tsx`) + `tsc --noEmit` limpo nos tocados + `npm run build` ok. Smoke manual pendente no `Select` de refeição (6 tipos) e no registro de 2 lanches no mesmo dia.
+
 ## [08/08/2026] - Claude Code (Meta de calorias calculada automaticamente — TDEE no card do Home)
 - **Escopo**: a meta de calorias do home agora **já vem calculada** a partir de peso, altura, sexo, nascimento e frequência de treinos — sem o usuário precisar preencher a meta na mão. Botação de edição (`Target` → `/app/metas`) continua intacta.
 - **Decisão do usuário**: base = **manutenção (TDEE)** ("ali tenho a realidade, e vou controlando eu mesmo"); aplicação = **auto, só se ainda padrão** — substitui o default do signup (2000/140/220/65) na primeira visita ao home, **nunca** sobrescreve meta já editada.
