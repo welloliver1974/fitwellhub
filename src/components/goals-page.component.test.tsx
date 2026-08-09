@@ -3,6 +3,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+
+// Mock pointer capture functions and scrollIntoView for Radix UI Select components in jsdom environment
+if (typeof window !== "undefined") {
+  window.HTMLElement.prototype.hasPointerCapture = () => false;
+  window.HTMLElement.prototype.setPointerCapture = () => {};
+  window.HTMLElement.prototype.releasePointerCapture = () => {};
+  window.HTMLElement.prototype.scrollIntoView = () => {};
+}
 import { GoalsPage } from "@/components/goals-page";
 
 // Teste de INTEGRAÇÃO da página de Metas: supabase "fake" (maybeSingle + upsert)
@@ -235,5 +243,41 @@ describe("GoalsPage — integração (supabase mock + calculateTdee mock)", () =
 
     // macroKcal 2025 − meta 1000 = 1025 kcal de diferença → aviso
     expect(screen.getByText(/Difere 1025 kcal da meta calórica/)).toBeInTheDocument();
+  });
+
+  it("altera a estratégia de proteína recalcula os macros sugeridos", async () => {
+    mock.setSelect("goals", []); // pré-preenche com a sugestão (2400/160/67/289)
+    const user = userEvent.setup();
+    render(<GoalsPage />);
+    await screen.findByDisplayValue("2400");
+
+    // Abre o select
+    const trigger = screen.getByLabelText("Estratégia de proteína");
+    await user.click(trigger);
+
+    // Seleciona Conservador (1.6 g/kg)
+    const option = await screen.findByText("Conservador (1.6 g/kg)");
+    await user.click(option);
+
+    // Proteína sugerida: 1.6 * 80 = 128g
+    // Gordura sugerida: 25% de 2400 = 600kcal / 9 = 67g
+    // Carboidratos sugeridos: (2400 - 128 * 4 - 67 * 9) / 4 = 321g
+    expect(screen.getByDisplayValue("128")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("321")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("67")).toBeInTheDocument();
+  });
+
+  it("muda a estratégia para manual ao editar um macro diretamente", async () => {
+    mock.setSelect("goals", []); // pré-preenche com a sugestão (2400/160/67/289)
+    const user = userEvent.setup();
+    render(<GoalsPage />);
+    await screen.findByDisplayValue("2400");
+
+    // Edita proteína diretamente
+    const proteinInput = screen.getByDisplayValue("160");
+    fireEvent.change(proteinInput, { target: { value: "150" } });
+
+    // Estratégia deve virar "Manual (Personalizado)" no visual do select trigger
+    expect(screen.getByText("Manual (Personalizado)")).toBeInTheDocument();
   });
 });

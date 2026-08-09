@@ -278,6 +278,7 @@ export type Database = {
           carbs_g: number;
           fat_g: number;
           goal_auto: boolean;
+          protein_factor: number;
           protein_g: number;
           updated_at: string;
           user_id: string;
@@ -287,6 +288,7 @@ export type Database = {
           carbs_g?: number;
           fat_g?: number;
           goal_auto?: boolean;
+          protein_factor?: number;
           protein_g?: number;
           updated_at?: string;
           user_id: string;
@@ -296,6 +298,7 @@ export type Database = {
           carbs_g?: number;
           fat_g?: number;
           goal_auto?: boolean;
+          protein_factor?: number;
           protein_g?: number;
           updated_at?: string;
           user_id?: string;

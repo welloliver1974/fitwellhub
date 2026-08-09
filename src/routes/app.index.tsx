@@ -3,7 +3,13 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { getLocalDate, todayBoundsSaoPaulo } from "@/lib/utils";
-import { isDefaultGoals, matchesSuggestion, shouldAutoUpdateGoal, suggestGoals } from "@/lib/nutrition-goals";
+import {
+  DEFAULT_PROTEIN_FACTOR,
+  isDefaultGoals,
+  matchesSuggestion,
+  shouldAutoUpdateGoal,
+  suggestGoals,
+} from "@/lib/nutrition-goals";
 import { calculateTdee } from "@/server-fns/corpo.functions";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -43,6 +49,7 @@ type Goals = {
   carbs_g: number;
   fat_g: number;
   goal_auto?: boolean;
+  protein_factor?: number | null;
 };
 type Totals = { calories: number; protein_g: number; carbs_g: number; fat_g: number };
 
@@ -103,7 +110,7 @@ function TodayPage() {
       await Promise.all([
         supabase
           .from("goals")
-          .select("calories,protein_g,carbs_g,fat_g,goal_auto")
+          .select("calories,protein_g,carbs_g,fat_g,goal_auto,protein_factor")
           .eq("user_id", user.id)
           .maybeSingle(),
         supabase.from("meals").select("id").eq("user_id", user.id).eq("meal_date", today),
@@ -124,21 +131,22 @@ function TodayPage() {
     let source: "suggested" | "custom" | "dataMissing" = "custom";
 
     if (tdeeRes && tdeeRes.tdee != null && tdeeRes.weight != null) {
-      const suggested = suggestGoals(tdeeRes.tdee, tdeeRes.weight);
+      const proteinFactor = g?.protein_factor ?? DEFAULT_PROTEIN_FACTOR;
+      const suggested = suggestGoals(tdeeRes.tdee, tdeeRes.weight, proteinFactor);
       // Sincroniza automaticamente quando: não há meta salva, ela ainda é o
       // padrão do signup, ou veio de auto-seed (goal_auto=true). Meta editada
       // à mão (goal_auto=false) nunca é sobrescrita pela sugestão.
       const auto = shouldAutoUpdateGoal(g, g?.goal_auto);
-      if (auto && !matchesSuggestion(g, tdeeRes.tdee, tdeeRes.weight)) {
+      if (auto && !matchesSuggestion(g, tdeeRes.tdee, tdeeRes.weight, proteinFactor)) {
         await supabase
           .from("goals")
           .upsert(
-            { user_id: user.id, ...suggested, goal_auto: true },
+            { user_id: user.id, ...suggested, goal_auto: true, protein_factor: proteinFactor },
             { onConflict: "user_id" },
           );
       }
       if (auto) nextGoals = suggested;
-      source = matchesSuggestion(nextGoals, tdeeRes.tdee, tdeeRes.weight)
+      source = matchesSuggestion(nextGoals, tdeeRes.tdee, tdeeRes.weight, proteinFactor)
         ? "suggested"
         : "custom";
       setTdeeGoal({ bmr: tdeeRes.bmr ?? 0, activityFactor: tdeeRes.activityFactor ?? 1.2 });

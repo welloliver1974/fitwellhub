@@ -7,7 +7,10 @@ export type GoalsInput = {
   protein_g: number;
   carbs_g: number;
   fat_g: number;
+  protein_factor?: number | null;
 };
+
+export const DEFAULT_PROTEIN_FACTOR = 2;
 
 // O trigger de signup grava a meta com os defaults da tabela `goals`
 // (2000/140/220/65). Enquanto a meta for exatamente esse valor, consideramos
@@ -30,12 +33,13 @@ export function isDefaultGoals(g: GoalsInput | null | undefined): boolean {
 export function suggestGoals(
   tdee: number,
   weightKg: number,
+  proteinFactor = DEFAULT_PROTEIN_FACTOR,
 ): GoalsInput {
   const calories = Math.round(tdee);
-  const protein_g = Math.round(2 * weightKg);
+  const protein_g = Math.round(proteinFactor * weightKg);
   const fat_g = Math.round((0.25 * calories) / 9);
   const carbs_g = Math.max(0, Math.round((calories - protein_g * 4 - fat_g * 9) / 4));
-  return { calories, protein_g, carbs_g, fat_g };
+  return { calories, protein_g, carbs_g, fat_g, protein_factor: proteinFactor };
 }
 
 // Verdadeiro quando a meta atual bate exatamente com a sugestão para o TDEE
@@ -44,9 +48,10 @@ export function matchesSuggestion(
   g: GoalsInput | null | undefined,
   tdee: number,
   weightKg: number,
+  proteinFactor = DEFAULT_PROTEIN_FACTOR,
 ): boolean {
   if (!g) return false;
-  const s = suggestGoals(tdee, weightKg);
+  const s = suggestGoals(tdee, weightKg, proteinFactor);
   return (
     g.calories === s.calories &&
     g.protein_g === s.protein_g &&
