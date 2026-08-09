@@ -327,6 +327,47 @@ export async function executeRecordWorkout(
   return "Treino registrado com sucesso (sem séries).";
 }
 
+/**
+ * Executes the record_water tool: inserts or increments water intake in water_logs for today.
+ * If a record already exists for today, adds the new ml to the existing one.
+ */
+export async function executeRecordWater(
+  supabase: any,
+  userId: string,
+  today: string,
+  args: { ml: number }
+): Promise<string> {
+  if (!args.ml || args.ml <= 0) {
+    return "Quantidade de água inválida.";
+  }
+
+  const ml = Math.round(args.ml);
+
+  // Verifica se já existe um registro de água para hoje
+  const { data: existing } = await supabase
+    .from("water_logs")
+    .select("id, ml")
+    .eq("user_id", userId)
+    .eq("log_date", today)
+    .maybeSingle();
+
+  if (existing) {
+    const newTotal = Number(existing.ml) + ml;
+    const { error } = await supabase
+      .from("water_logs")
+      .update({ ml: newTotal })
+      .eq("id", existing.id);
+    if (error) return `Erro ao atualizar água: ${error.message}`;
+    return `💧 +${ml}ml de água registrado! Total do dia: ${newTotal}ml.`;
+  } else {
+    const { error } = await supabase
+      .from("water_logs")
+      .insert({ user_id: userId, log_date: today, ml });
+    if (error) return `Erro ao registrar água: ${error.message}`;
+    return `💧 ${ml}ml de água registrado para hoje!`;
+  }
+}
+
 export const sendChat = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => inputSchema.parse(d))
@@ -428,6 +469,23 @@ export const sendChat = createServerFn({ method: "POST" })
           },
         },
       },
+      {
+        type: "function",
+        function: {
+          name: "record_water",
+          description: "Registra a ingestão de água do usuário. Use quando o usuário mencionar que bebeu água ou liquidos (ex: 'Bebi 500ml de água', 'tomei um copo de água').",
+          parameters: {
+            type: "object",
+            properties: {
+              ml: {
+                type: "number",
+                description: "Quantidade em mililitros (ml). Converta para ml se o usuário disser litros, copos (240ml) ou garrafinhas (500ml).",
+              },
+            },
+            required: ["ml"],
+          },
+        },
+      },
     ];
 
     let messages: any[] = [
@@ -440,6 +498,11 @@ IMPORTANTE: Se o usuário enviar fotos, analise TODAS elas antes de chamar qualq
 - Use APENAS as chamadas de ferramentas nativas. NÃO gere JSON manualmente.
 - Seja preciso com nomes de exercícios e pesos.
 
+REGISTRO POR CONVERSA — use as ferramentas quando o usuário mencionar:
+- record_meal: alimentos, refeições, o que comeu (ex: "comi uma banana com aveia no café")
+- record_workout: treinos, exercícios realizados, séries e repetições (ex: "fiz agachamento com 80kg")
+- record_water: água ou liquidos ingeridos (ex: "bebi 500ml de água", "tomei um copo", "tomei uma garrafa"). Converta copos para 240ml e garrafinhas para 500ml.
+
 DIRETRIZES DE EXPLICABILIDADE E TRANSPARÊNCIA:
 - Suas análises, recomendações e sugestões devem ser explicitamente justificadas citando os dados de origem correspondentes.
 - Cite datas de treinos, exercícios específicos, séries, cargas, datas e valores de peso, medidas corporais ou refeições do histórico quando fizer afirmações ou recomendações.
@@ -448,6 +511,7 @@ DIRETRIZES DE EXPLICABILIDADE E TRANSPARÊNCIA:
 
 Dados do usuário:\n${ctxText}` + (process.env.COACH_ALWAYS_SUGGEST === "true" ? "\n+ Sempre informe ao usuário se ele pode aumentar a carga no próximo treino, mesmo que não haja histórico suficiente." : ""),
       },
+
       ...recentHistory.map((m: any) => ({ role: m.role, content: m.content })),
       { role: "user", content: userContent },
     ];
@@ -475,6 +539,8 @@ Dados do usuário:\n${ctxText}` + (process.env.COACH_ALWAYS_SUGGEST === "true" ?
             result = await executeRecordMeal(supabase, userId, today, args);
           } else if (toolCall.function.name === "record_workout") {
             result = await executeRecordWorkout(supabase, userId, today, args, createdWorkoutNames);
+          } else if (toolCall.function.name === "record_water") {
+            result = await executeRecordWater(supabase, userId, today, args);
           } else {
             result = `Ferramenta desconhecida: ${toolCall.function.name}`;
           }
