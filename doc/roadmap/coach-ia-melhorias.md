@@ -93,6 +93,7 @@ src/lib/
 | 5.4 | Substituição Inteligente de Exercícios por IA | `workout.functions.ts`, `exercise-substitute-dialog.tsx`, `app.treinos.$id.foco.tsx` | M | 🔴 Alto | ✅ Concluído |
 | 5.5 | Responsividade e Ajustes Mobile (360-390px) | `styles.css`, `app.nutricao.tsx`, `dialog.tsx`, `app.tsx` | XS | 🔴 Alto | ✅ Concluído |
 | **AI-5** | **Coach Semanal — Recomendação Proativa de Ajuste de Meta** | `coach-plan.ts`, `nutrition.functions.ts`, `app.coach.tsx` | M | 🔴 Alto | ✅ Concluído |
+| **AI-2** | **Chat — Registro de Água por Conversa (`record_water`)** | `chat.functions.ts`, `chat.functions.test.ts` | S | 🔴 Alto | ✅ Concluído |
 
 ---
 
@@ -143,7 +144,28 @@ src/lib/
 
 ---
 
+### AI-2: Chat — Registro de Água por Conversa 💧 ✅ CONCLUÍDO (2026-08-09)
+
+**Conceito**: O usuário pode dizer no Chat *"Bebi 500ml de água"* ou *"Tomei um copo d'água"* e a IA chama automaticamente a ferramenta `record_water`, que insere ou acumula ml no `water_logs` do dia. Funciona exatamente como `record_meal` e `record_workout` já funcionavam.
+
+**Implementado em**:
+- `src/server-fns/chat.functions.ts`:
+  - `executeRecordWater(supabase, userId, today, { ml })` — insere novo registro ou acumula ml ao existente; retorna confirmação com emoji 💧 e total do dia
+  - Ferramenta `record_water` adicionada ao array `tools` do agent loop, com conversão automática (copos → 240ml, garrafinhas → 500ml)
+  - System prompt atualizado com seção *"REGISTRO POR CONVERSA"* listando explicitamente as 3 ferramentas e seus gatilhos de uso
+- `src/server-fns/chat.functions.test.ts` — 5 testes unitários: insert novo, acumulação, validação de ml inválido, erro de insert e erro de update
+
+**Exemplos de comandos funcionais**:
+- `"Bebi 500ml de água"` → insere 500ml
+- `"Tomei dois copos de água"` → insere 480ml (2 × 240ml)
+- `"Acabei minha garrafa"` → insere 500ml
+- `"Bebi 1 litro de água"` → insere 1000ml
+
+---
+
 ### ~~5.2 Checklist Interativo no Plano do Coach~~ 📋 ✅ CONCLUÍDO (2026-08-08)
+
+
 
 **Conceito**: Permitir que o usuário toque nos itens da checklist semanal do Coach no card de plano semanal para marcar/desmarcar como concluídos.
 
