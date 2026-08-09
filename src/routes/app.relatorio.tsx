@@ -6,6 +6,7 @@ import { formatLocalDate, getLocalDate, getLocalDateMinusDays } from "@/lib/util
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FileDown, Loader2, History } from "lucide-react";
+import { buildExportPayload } from "@/lib/export-diary";
 import { toast } from "sonner";
 
 type CompletedLog = {
@@ -52,6 +53,7 @@ export const Route = createFileRoute("/app/relatorio")({
 function RelatorioPage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [loadingExport, setLoadingExport] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
   const exportPdf = async () => {
@@ -249,15 +251,66 @@ function RelatorioPage() {
     }
   };
 
+  // Backup completo do diário em JSON (cliente browser + RLS, molde do exportPdf).
+  // `ai_settings` é filtrado na montagem do payload (buildExportPayload) — chaves nunca saem.
+  const exportJson = async () => {
+    if (!user) return;
+    setLoadingExport(true);
+    try {
+      const userId = user.id;
+      const userTables = [
+        "meals", "meal_items", "workouts", "exercises", "sets", "workout_sessions",
+        "workout_session_sets", "body_weights", "body_measurements", "bioimpedance_logs",
+        "goals", "food_library", "favorite_foods", "water_logs", "chat_messages",
+        "recipes", "recipe_items", "workout_templates", "workout_template_exercises",
+        "reminders",
+      ] as const;
+      // body_measurements NÃO existe em types.ts (drift conhecido) — o `as any` local evita
+      // adicionar erro novo no tsc; a tabela existe na migration 20260527003000.
+      const tables: Record<string, unknown[]> = {};
+      for (const t of userTables) {
+        const { data } = await (supabase.from(t as any) as any)
+          .select("*")
+          .eq("user_id", userId);
+        tables[t] = data ?? [];
+      }
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .maybeSingle();
+      tables.profiles = profile ? [profile] : [];
+
+      const payload = buildExportPayload({
+        exportedAt: new Date().toISOString(),
+        user: { id: userId },
+        tables,
+      });
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `fitwell-backup-${getLocalDate()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Backup gerado");
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Erro ao exportar");
+    } finally {
+      setLoadingExport(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-3xl font-display font-bold">Relatorio</h1>
-        <p className="text-sm text-muted-foreground">Exporte seus dados da semana em PDF</p>
+        <p className="text-sm text-muted-foreground">Exporte seus dados em PDF (semana) ou JSON (backup completo)</p>
       </div>
       <Card className="p-5 space-y-3">
         <p className="text-sm text-muted-foreground">
-          Inclui nutrição diária, treinos realizados, registros de peso e consumo de água dos
+          PDF: nutrição diária, treinos realizados, registros de peso e consumo de água dos
           últimos 7 dias.
         </p>
         <Button onClick={exportPdf} disabled={loading} className="w-full">
@@ -268,6 +321,26 @@ function RelatorioPage() {
           ) : (
             <>
               <FileDown className="h-4 w-4 mr-2" /> Exportar PDF
+            </>
+          )}
+        </Button>
+        <p className="text-xs text-muted-foreground text-pretty">
+          JSON: backup completo — alimentos, treinos e sessões, medidas, peso, metas, biblioteca,
+          lembretes, receitas e histórico do Coach. Chaves de IA ficam de fora.
+        </p>
+        <Button
+          variant="outline"
+          onClick={exportJson}
+          disabled={loadingExport}
+          className="w-full"
+        >
+          {loadingExport ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Gerando…
+            </>
+          ) : (
+            <>
+              <FileDown className="h-4 w-4 mr-2" /> Exportar JSON
             </>
           )}
         </Button>

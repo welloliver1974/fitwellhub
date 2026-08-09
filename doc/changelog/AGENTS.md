@@ -2,6 +2,20 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [10/08/2026] - Claude Code ("Salvar na biblioteca" fecha lacunas + "Exportar diário" em JSON)
+- **Pedido**: (1) evitar re-analisar todo dia um alimento frequente ("salvar na biblioteca"), (2) exportar/backup do diário — usuário escolheu **JSON** ("não quero perder nada").
+- **Descoberta**: o botão **"Salvar na biblioteca" no form de adicionar JÁ EXISTIA** (`saveToLibrary`, `app.nutricao.tsx:520-550`, botão `1140-1147`) — dedupe por nome + insert em `food_library` (`category: "Outros"`), cobrindo barcode/rótulo/manual. O trabalho virou **fechar lacunas**, não criar do zero.
+- **Biblioteca — lacunas fechadas (`app.nutricao.tsx`)**:
+  - **Foto do prato**: novo botão "Salvar na biblioteca" na confirmação (itens **selecionados**, dedupe por nome por item, mantém o dialog aberto para ainda "Adicionar selecionados") — `savePhotoItemsToLibrary` + 2º botão no dialog.
+  - **Caminho "Calcular com IA e adicionar"**: `saveToLibrary` agora calcula macros via `lookupNutrition` quando `manual=false`/`mCal` vazio (o `disabled` do botão deixou de exigir `mCal === ""`).
+  - `saveToLibrary` ganhou o `guard` anti double-tap (padrão `addFood`/`addRecent`). Sem migration (RLS `FOR ALL` já permitia).
+- **Exportar JSON (`app.relatorio.tsx` + lib pura)**:
+  - NOVO `src/lib/export-diary.ts` → `buildExportPayload({ exportedAt, user, tables })` → `{ app: "fitwell-hub", version: 1, exportedAt, user, data }`. **Exclui `ai_settings` por construção** (chaves de API nunca exportadas); inclui `chat_messages` (histórico do Coach). Testável em node.
+  - NOVO `src/lib/export-diary.test.ts` (4 testes: inclui tabelas+version, exclui `ai_settings`, inclui `chat_messages`, tabela nula → `[]`).
+  - Botão **"Exportar JSON"** no Relatório ao lado do "Exportar PDF" (molde client-side `exportPdf` — cliente browser do supabase + RLS), spinner `loadingExport`, arquivo `fitwell-backup-<data SP>.json` (`getLocalDate`). Consulta 20 tabelas do usuário; `body_measurements` **não existe em types.ts** (drift conhecido) → `as any` local no select (não adiciona erro no tsc).
+  - **Chaves de IA ficam de fora por design** — o payload é montado só com o que passa por `buildExportPayload`.
+- **Validação**: `TZ=UTC npx vitest run` **171/171** (**+4** novos de `export-diary`; os existentes seguem, nada de assinatura alterada); `tsc --noEmit` **68 linhas de erro = baseline**, zero nos arquivos tocados; `npm run build` ok (client + SSR). **PENDENTE no usuário**: smoke — (a) foto do prato → "Salvar na biblioteca" → confere em "Meus alimentos"; (b) "+" → nome → "Calcular com IA e adicionar" → "Salvar na biblioteca" fica habilitado; (c) Relatório → "Exportar JSON" → abrir o arquivo e conferir refeições/treinos/medidas/chat (sem chaves de IA).
+
 ## [09/08/2026] - Claude Code (Foto do rótulo: ler a tabela "Informação Nutricional" da embalagem pela foto)
 - **Pedido**: ler a **tabela nutricional real** da embalagem pela foto — vai além do código de barras (que só existe produto na base do Open Food Facts) e da foto do prato (que **estima** macros da refeição). Decisão do usuário de design: **medo de quebrar o que funciona** → caminho **novo e paralelo**, nenhuma assinatura/function existente muda; o rótulo **popula o form principal (editável)** para revisar antes de gravar (diferente da foto do prato, que grava direto em `meal_items`).
 - **Server-fn `analyzeLabel`** (`nutrition.functions.ts`): reusa `photoSchema` de input e o trio visão `resolveVisionProvider`/`resolveAiApiKey`/`getVisionModel` (molde `analyzePhoto`); `maxTokens: 512`; **tool-forcing `report_label`** (`toolChoice` + schema JSON `labelParamsSchema`, molde `lookupNutrition:84-94`). System prompt sem acentos instrui ler só a tabela, valores **POR PORÇÃO**, `serving_g` = porção declarada (ou **100g** se a tabela só mostrar por 100g), campos não visíveis → `null`. Parse: `tool_calls[0].function.arguments` → `JSON.parse` → `labelSchema.safeParse` → `normalizeLabelMacros`.

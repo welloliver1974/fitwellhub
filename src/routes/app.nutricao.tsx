@@ -515,9 +515,12 @@ function NutricaoPage() {
     });
   };
 
-  // Salva o alimento preenchido no modal (scanner, busca manual ou IA) na biblioteca pessoal.
-  // Payload espelha o insert do FoodLibrary. Dedup por nome (case-insensitive).
+  // Salva o alimento preenchido no modal (scanner, rótulo, busca manual ou IA) na biblioteca
+  // pessoal. Payload espelha o insert do FoodLibrary. Dedup por nome (case-insensitive).
+  // Se ainda não há macros preenchidos (manual=false / mCal vazio — caminho "Calcular com
+  // IA e adicionar"), calcula na hora via lookupNutrition antes de salvar.
   const saveToLibrary = async () => {
+    await guard(async () => {
     if (!user || !query.trim()) return;
     const name = query.trim();
     try {
@@ -530,15 +533,29 @@ function NutricaoPage() {
         toast.error(`"${name}" já existe na biblioteca`);
         return;
       }
+      const macros =
+        manual && mCal !== ""
+          ? {
+              calories: Number(mCal) || 0,
+              protein_g: Number(mProt) || 0,
+              carbs_g: Number(mCarb) || 0,
+              fat_g: Number(mFat) || 0,
+            }
+          : await lookupNutrition({
+              headers: session?.access_token
+                ? { Authorization: `Bearer ${session.access_token}` }
+                : undefined,
+              data: { query: name, grams: Number(grams) || 100 },
+            });
       const { error } = await supabase.from("food_library").insert({
         user_id: user.id,
         name,
         category: "Outros",
         grams: Number(grams) || 100,
-        calories: Number(mCal) || 0,
-        protein_g: Number(mProt) || 0,
-        carbs_g: Number(mCarb) || 0,
-        fat_g: Number(mFat) || 0,
+        calories: macros.calories,
+        protein_g: macros.protein_g,
+        carbs_g: macros.carbs_g,
+        fat_g: macros.fat_g,
       });
       if (error) throw error;
       toast.success(`"${name}" salvo na biblioteca`);
@@ -547,6 +564,7 @@ function NutricaoPage() {
       console.error(e);
       toast.error(e instanceof Error ? e.message : "Erro ao salvar na biblioteca");
     }
+    });
   };
 
   const addRecent = async (it: Item) => {
@@ -676,6 +694,51 @@ function NutricaoPage() {
     } catch (e) {
       console.error(e);
       toast.error(e instanceof Error ? e.message : "Erro");
+    }
+    });
+  };
+
+  // Salva os itens marcados da foto do prato na biblioteca pessoal (dedupe por nome).
+  // Mantém o dialog aberto — o usuário ainda pode "Adicionar selecionados" à refeição.
+  const savePhotoItemsToLibrary = async () => {
+    await guard(async () => {
+    if (!user) return;
+    const sel = photoItems.filter((i) => i.selected);
+    if (sel.length === 0) return;
+    try {
+      let saved = 0;
+      let existing = 0;
+      for (const i of sel) {
+        const { data: dup } = await supabase
+          .from("food_library")
+          .select("id")
+          .eq("user_id", user.id)
+          .ilike("name", i.name);
+        if (dup && dup.length > 0) {
+          existing++;
+          continue;
+        }
+        const { error } = await supabase.from("food_library").insert({
+          user_id: user.id,
+          name: i.name,
+          category: "Outros",
+          grams: Math.round(i.grams) || 100,
+          calories: i.calories,
+          protein_g: i.protein_g,
+          carbs_g: i.carbs_g,
+          fat_g: i.fat_g,
+        });
+        if (error) throw error;
+        saved++;
+      }
+      if (saved > 0 && existing > 0)
+        toast.success(`${saved} salvos na biblioteca · ${existing} já existiam`);
+      else if (saved > 0) toast.success(`${saved} itens salvos na biblioteca`);
+      else toast.error(`${existing} já estão na biblioteca`);
+      loadLibrary();
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar na biblioteca");
     }
     });
   };
@@ -1140,7 +1203,7 @@ function NutricaoPage() {
                   <Button
                     variant="outline"
                     onClick={saveToLibrary}
-                    disabled={loading || !query.trim() || mCal === ""}
+                    disabled={loading || !query.trim()}
                     className="flex-1"
                   >
                     <Apple className="h-4 w-4 mr-1" /> Salvar na biblioteca
@@ -1238,9 +1301,19 @@ function NutricaoPage() {
                     </div>
                   </div>
                 ))}
-                <Button onClick={confirmPhotoItems} className="w-full">
-                  Adicionar selecionados
-                </Button>
+                <div className="flex flex-col gap-2">
+                  <Button onClick={confirmPhotoItems} className="w-full">
+                    Adicionar selecionados
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={savePhotoItemsToLibrary}
+                    className="w-full"
+                    disabled={photoItems.filter((i) => i.selected).length === 0}
+                  >
+                    <Apple className="h-4 w-4 mr-1" /> Salvar na biblioteca
+                  </Button>
+                </div>
               </div>
             )}
           </div>
