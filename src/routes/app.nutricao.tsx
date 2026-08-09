@@ -39,6 +39,9 @@ import {
   Barcode,
   Library,
   Mic,
+  TrendingDown,
+  TrendingUp,
+  Minus,
 } from "lucide-react";
 import { lookupNutrition, analyzePhoto } from "@/server-fns/nutrition.functions";
 import { calculateTdee } from "@/server-fns/corpo.functions";
@@ -745,6 +748,29 @@ function NutricaoPage() {
     };
   }, [userGoals, consumed]);
 
+  const caloricState = useMemo(() => {
+    const diff = consumed.calories - userGoals.calories;
+    if (diff < -100) {
+      return {
+        label: `Déficit (${Math.abs(Math.round(diff))} kcal)`,
+        className: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+        Icon: TrendingDown,
+      };
+    }
+    if (diff > 100) {
+      return {
+        label: `Superávit (+${Math.round(diff)} kcal)`,
+        className: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+        Icon: TrendingUp,
+      };
+    }
+    return {
+      label: "Manutenção Calórica",
+      className: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+      Icon: Minus,
+    };
+  }, [consumed.calories, userGoals.calories]);
+
   const visibleGroups = grouped.filter((g) => g.items.length > 0);
 
   return (
@@ -1178,11 +1204,19 @@ function NutricaoPage() {
 
       {/* Resumo Nutricional do Dia */}
       <Card className="p-4 sm:p-5 space-y-3">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <div>
-            <p className="text-xs uppercase tracking-wide font-semibold text-muted-foreground">
-              Consumo Diário
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs uppercase tracking-wide font-semibold text-muted-foreground">
+                Consumo Diário
+              </p>
+              <div
+                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${caloricState.className}`}
+              >
+                <caloricState.Icon className="h-3 w-3" />
+                <span>{caloricState.label}</span>
+              </div>
+            </div>
             <div className="flex items-baseline gap-1.5 mt-0.5">
               <span className="text-2xl sm:text-3xl font-display font-extrabold text-foreground">
                 {Math.round(consumed.calories)}
