@@ -24,6 +24,12 @@ export type CoachStats = {
   waterCount?: number;
 };
 
+export type CalorieAdjustment = {
+  recommendedAction: "manter" | "reduzir_calorias" | "aumentar_calorias" | "aumentar_proteina";
+  calorieDelta: number;
+  reasoning: string;
+};
+
 export type CoachPlan = {
   title: string;
   objective: string;
@@ -34,7 +40,9 @@ export type CoachPlan = {
   trackingGoal: string;
   nextAction: string;
   checklist: string[];
+  calorieAdjustment?: CalorieAdjustment;
 };
+
 
 export function inferCoachObjective(goals?: CoachGoals): CoachObjective {
   const calories = goals?.calories ?? 0;

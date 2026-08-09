@@ -92,8 +92,33 @@ src/lib/
 | 5.3 | Sugestão Inteligente por Macros Restantes do Dia | `suggest-meal-dialog.tsx`, `nutrition.functions.ts`, `app.nutricao.tsx` | M | 🔴 Alto | ✅ Concluído |
 | 5.4 | Substituição Inteligente de Exercícios por IA | `workout.functions.ts`, `exercise-substitute-dialog.tsx`, `app.treinos.$id.foco.tsx` | M | 🔴 Alto | ✅ Concluído |
 | 5.5 | Responsividade e Ajustes Mobile (360-390px) | `styles.css`, `app.nutricao.tsx`, `dialog.tsx`, `app.tsx` | XS | 🔴 Alto | ✅ Concluído |
+| **AI-5** | **Coach Semanal — Recomendação Proativa de Ajuste de Meta** | `coach-plan.ts`, `nutrition.functions.ts`, `app.coach.tsx` | M | 🔴 Alto | ✅ Concluído |
 
 ---
+
+### AI-5: Coach Semanal — Recomendação Proativa de Ajuste de Meta ✅ CONCLUÍDO (2026-08-09)
+
+**Conceito**: O Coach IA analisa a tendência de peso das últimas 2–4 semanas (28 dias) e, quando detecta estagnação ou perda excessiva, sugere um ajuste específico de calorias (ex: `-150 kcal/dia`). O usuário pode aplicar esse ajuste diretamente em suas metas com um único clique.
+
+**Implementado em**:
+- `src/lib/coach-plan.ts` — tipo `CalorieAdjustment` exportado com campos `recommendedAction`, `calorieDelta` e `reasoning`; adicionado como campo opcional em `CoachPlan`
+- `src/server-fns/nutrition.functions.ts` — `coachPlanTool` schema expandido com objeto `calorieAdjustment`; system prompt instrui a IA a analisar tendência de 2–4 semanas e sugerir ajuste de 100–250 kcal quando necessário
+- `src/routes/app.coach.tsx`:
+  - Query de `body_weights` expandida de 7 para **28 dias**
+  - `handleApplyCalorieAdjustment(delta)`: busca a meta atual, recalcula macros com `suggestGoals()` e faz upsert atômico na tabela `goals`
+  - Card **"Ajuste Proativo Recomendado"** renderizado condicionalmente com badge de delta (`+150 kcal/dia` ou `-150 kcal/dia`), reasoning da IA e botão **"Aplicar ajuste nas metas"**
+
+**Lógica do ajuste**:
+| Cenário | Ação recomendada | Delta sugerido |
+|---|---|---|
+| Perda de peso estagnada (< 0.2kg/sem) | `reduzir_calorias` | -100 a -200 kcal |
+| Perda muito rápida (> 1kg/sem) | `aumentar_calorias` | +150 a +250 kcal |
+| Ganho de massa estagnado | `aumentar_calorias` | +100 a +200 kcal |
+| Proteína baixa para o objetivo | `aumentar_proteina` | ajuste de fator |
+| Tudo dentro do esperado | `manter` | 0 |
+
+---
+
 
 ## 5. Próximas Funcionalidades / Roadmap Futuro
 

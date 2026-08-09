@@ -5,9 +5,10 @@ import { useAuth } from "@/lib/auth-context";
 import { getLocalDate, getLocalDateMinusDays } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Sparkles, Loader2, TrendingDown, TrendingUp } from "lucide-react";
 import { coachAdvice } from "@/server-fns/nutrition.functions";
 import { formatMeasurements } from "@/lib/format-measurements";
+import { suggestGoals } from "@/lib/nutrition-goals";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/coach")({
@@ -30,9 +31,15 @@ type CoachPlan = {
   trackingGoal: string;
   nextAction: string;
   checklist: string[];
+  calorieAdjustment?: {
+    recommendedAction: "manter" | "reduzir_calorias" | "aumentar_calorias" | "aumentar_proteina";
+    calorieDelta: number;
+    reasoning: string;
+  };
 };
 
 type CoachObjective = "auto" | "Emagrecimento" | "Hipertrofia" | "Recomposicao corporal" | "Manutencao";
+
 
 function CoachPage() {
   const { user, session } = useAuth();
@@ -42,6 +49,57 @@ function CoachPage() {
   const [plan, setPlan] = useState<CoachPlan | null>(null);
   const [objective, setObjective] = useState<CoachObjective>("auto");
   const [completedChecklist, setCompletedChecklist] = useState<Set<string>>(new Set());
+  const [applyingAdjustment, setApplyingAdjustment] = useState(false);
+
+  const handleApplyCalorieAdjustment = async (delta: number) => {
+    if (!user || !delta) return;
+    setApplyingAdjustment(true);
+    try {
+      const { data: currentGoal } = await supabase
+        .from("goals")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      const currentCalories = currentGoal?.calories ?? 2000;
+      const newCalories = Math.max(1200, currentCalories + delta);
+      const factor = currentGoal?.protein_factor ?? 2.0;
+
+      // Obtém o peso mais recente registrado
+      const { data: recentWeights } = await supabase
+        .from("body_weights")
+        .select("weight_kg")
+        .eq("user_id", user.id)
+        .order("log_date", { ascending: false })
+        .limit(1);
+
+      const weightKg = recentWeights?.[0]?.weight_kg ? Number(recentWeights[0].weight_kg) : 70;
+      const newGoals = suggestGoals(newCalories, weightKg, factor);
+
+      const { error } = await supabase.from("goals").upsert(
+        {
+          user_id: user.id,
+          calories: newCalories,
+          protein_g: newGoals.protein_g,
+          carbs_g: newGoals.carbs_g,
+          fat_g: newGoals.fat_g,
+          protein_factor: factor,
+          goal_auto: false,
+        },
+        { onConflict: "user_id" },
+      );
+
+      if (error) throw error;
+      toast.success(
+        `Meta calórica ajustada! Nova meta: ${newCalories} kcal/dia (P: ${newGoals.protein_g}g, C: ${newGoals.carbs_g}g, G: ${newGoals.fat_g}g)`
+      );
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao aplicar ajuste nas metas.");
+    } finally {
+      setApplyingAdjustment(false);
+    }
+  };
+
 
   // Carrega checklist concluída ao definir plano
   const loadChecklistState = (planTitle: string) => {
@@ -119,8 +177,9 @@ function CoachPage() {
           .from("body_weights")
           .select("weight_kg,log_date")
           .eq("user_id", user.id)
-          .gte("log_date", start)
+          .gte("log_date", getLocalDateMinusDays(28))
           .order("log_date"),
+
         supabase
           .from("water_logs")
           .select("ml,log_date")
@@ -372,7 +431,47 @@ function CoachPage() {
               <p className="mt-2 text-sm leading-relaxed text-foreground">{plan.trackingGoal}</p>
             </div>
           </div>
+
+          {plan.calorieAdjustment && plan.calorieAdjustment.calorieDelta !== 0 && (
+            <div className="mt-4 rounded-2xl border border-primary/40 bg-primary/10 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  <p className="text-xs font-extrabold uppercase tracking-wider text-primary">
+                    Ajuste Proativo Recomendado
+                  </p>
+                </div>
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-primary/20 text-primary">
+                  {plan.calorieAdjustment.calorieDelta > 0
+                    ? `+${plan.calorieAdjustment.calorieDelta} kcal/dia`
+                    : `${plan.calorieAdjustment.calorieDelta} kcal/dia`}
+                </span>
+              </div>
+              <p className="text-sm leading-relaxed text-foreground font-medium">
+                {plan.calorieAdjustment.reasoning}
+              </p>
+              <div className="pt-1 flex justify-end">
+                <Button
+                  size="sm"
+                  onClick={() => handleApplyCalorieAdjustment(plan.calorieAdjustment!.calorieDelta)}
+                  disabled={applyingAdjustment}
+                  className="w-full sm:w-auto"
+                >
+                  {applyingAdjustment ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : plan.calorieAdjustment.calorieDelta < 0 ? (
+                    <TrendingDown className="h-3.5 w-3.5 mr-1.5" />
+                  ) : (
+                    <TrendingUp className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  Aplicar ajuste de {plan.calorieAdjustment.calorieDelta > 0 ? `+${plan.calorieAdjustment.calorieDelta}` : plan.calorieAdjustment.calorieDelta} kcal nas metas
+                </Button>
+              </div>
+            </div>
+          )}
+
           <div className="mt-4 rounded-2xl border bg-background/60 p-4">
+
             <div className="flex items-center justify-between gap-2 mb-2">
               <p className="text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground">
                 Checklist da semana

@@ -246,6 +246,26 @@ export const coachAdvice = createServerFn({ method: "POST" })
               items: { type: "string" },
               description: "Lista com exatamente 3 itens acionaveis de checklist para a semana.",
             },
+            calorieAdjustment: {
+              type: "object",
+              description: "Recomendacao proativa de ajuste de calorias/metas baseada na tendencia de peso das ultimas 2 a 4 semanas. Se a mudanca de peso estiver estagnada ou inadequada para o objetivo, recomende ajuste.",
+              properties: {
+                recommendedAction: {
+                  type: "string",
+                  enum: ["manter", "reduzir_calorias", "aumentar_calorias", "aumentar_proteina"],
+                  description: "Acao recomendada",
+                },
+                calorieDelta: {
+                  type: "number",
+                  description: "Delta calorico sugerido em kcal (ex: -150 para reduzir 150 kcal, +200 para aumentar, ou 0 para manter)",
+                },
+                reasoning: {
+                  type: "string",
+                  description: "Explicacao sucinta e motivadora da razao do ajuste sugerido baseado na evolucao do peso.",
+                },
+              },
+              required: ["recommendedAction", "calorieDelta", "reasoning"],
+            },
           },
           required: [
             "insightText",
@@ -275,7 +295,7 @@ export const coachAdvice = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              `Voce e um coach pessoal e planejador de treino e nutricao. ${objectiveContext} Analise os dados da ultima semana do usuario e gere a analise semanal acompanhada de um plano altamente personalizado usando a funcao report_coach_analysis. Use markdown simples nos insights. Seja direto, prático e motivador.`,
+              `Voce e um coach pessoal e planejador de treino e nutricao. ${objectiveContext} Analise os dados de peso, consumo e treinos das ultimas 2 a 4 semanas do usuario. Se o peso estiver estagnado para emagrecimento, sugira reduzir 100-200 kcal. Se o peso cair rapido demais (>1kg/semana) ou estagnar no ganho, sugira aumentar 150-250 kcal. Se a evolucao estiver no ritmo perfeito, recomende manter. Gere a analise e o plano com report_coach_analysis.`,
           },
           { role: "user", content: data.summary },
         ],
@@ -301,8 +321,10 @@ export const coachAdvice = createServerFn({ method: "POST" })
             Array.isArray(args.checklist) && args.checklist.length > 0
               ? args.checklist
               : fallbackPlan.checklist,
+          calorieAdjustment: args.calorieAdjustment ?? undefined,
         };
       } else {
+
         text = (json.choices?.[0]?.message?.content as string) ?? "";
       }
     } catch {
