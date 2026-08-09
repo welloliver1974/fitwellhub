@@ -42,6 +42,7 @@ import {
   TrendingDown,
   TrendingUp,
   Minus,
+  Zap,
 } from "lucide-react";
 import { lookupNutrition, analyzePhoto } from "@/server-fns/nutrition.functions";
 import { calculateTdee } from "@/server-fns/corpo.functions";
@@ -58,6 +59,7 @@ import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { FoodLibrary } from "@/components/FoodLibrary";
 import { VoiceMealRecorder } from "@/components/voice-meal-recorder";
 import { SuggestMealDialog } from "@/components/suggest-meal-dialog";
+import { QuickAddMealDialog } from "@/components/quick-add-meal-dialog";
 
 export const Route = createFileRoute("/app/nutricao")({
   component: NutricaoPage,
@@ -140,6 +142,7 @@ function NutricaoPage() {
   const [scanLoading, setScanLoading] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [userGoals, setUserGoals] = useState<{
     calories: number;
     protein_g: number;
@@ -823,6 +826,14 @@ function NutricaoPage() {
             <Button
               size="icon"
               variant="ghost"
+              title="Registro rápido (Fora de casa)"
+              onClick={() => setQuickAddOpen(true)}
+            >
+              <Zap className="h-5 w-5 text-amber-500 fill-amber-500/20" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
               title="Foto do prato"
               onClick={() => setPhotoOpen(true)}
             >
@@ -1386,6 +1397,14 @@ function NutricaoPage() {
         session={session}
         user={user}
         remaining={remainingMacros}
+        ensureMeal={ensureMeal}
+        onMealAdded={load}
+      />
+
+      <QuickAddMealDialog
+        open={quickAddOpen}
+        onOpenChange={setQuickAddOpen}
+        user={user}
         ensureMeal={ensureMeal}
         onMealAdded={load}
       />
