@@ -1332,7 +1332,102 @@ function NutricaoPage() {
             </span>
           </div>
         </div>
+
+        {/* Item 4 — Distribuição % de Macros */}
+        {(() => {
+          const pKcal = consumed.protein_g * 4;
+          const cKcal = consumed.carbs_g * 4;
+          const fKcal = consumed.fat_g * 9;
+          const total = pKcal + cKcal + fKcal;
+          if (total <= 0) return null;
+          const pPct = Math.round((pKcal / total) * 100);
+          const cPct = Math.round((cKcal / total) * 100);
+          const fPct = 100 - pPct - cPct;
+          return (
+            <div className="pt-1 space-y-1">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+                Distribuição de Macros (%)
+              </p>
+              <div className="flex h-3 w-full rounded-full overflow-hidden gap-px">
+                <div
+                  title={`Proteína ${pPct}%`}
+                  className="bg-blue-500 transition-all duration-500"
+                  style={{ width: `${pPct}%` }}
+                />
+                <div
+                  title={`Carboidrato ${cPct}%`}
+                  className="bg-amber-400 transition-all duration-500"
+                  style={{ width: `${cPct}%` }}
+                />
+                <div
+                  title={`Gordura ${fPct}%`}
+                  className="bg-emerald-500 transition-all duration-500"
+                  style={{ width: `${fPct}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[10px] text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-full bg-blue-500" />P {pPct}%
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-full bg-amber-400" />C {cPct}%
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />G {fPct}%
+                </span>
+              </div>
+            </div>
+          );
+        })()}
       </Card>
+
+      {/* Item 5 — Mini-Card de Insights do Coach IA */}
+      {(() => {
+        const tips: { key: string; msg: string }[] = [];
+        const hour = new Date().getHours();
+        const protRatio =
+          userGoals.protein_g > 0 ? consumed.protein_g / userGoals.protein_g : 1;
+        const remCal = remainingMacros.calories;
+
+        // Gatilho 1: tarde (>=16h) e proteína < 50% da meta
+        if (hour >= 16 && protRatio < 0.5 && consumed.calories > 0) {
+          tips.push({
+            key: "prot",
+            msg: `Você consumiu apenas ${Math.round(protRatio * 100)}% da meta de proteína hoje. Inclua uma fonte magra no lanche da tarde ou no jantar.`,
+          });
+        }
+
+        // Gatilho 2: calorias restantes baixas (<=200 kcal) antes do jantar (<20h)
+        if (remCal > 0 && remCal <= 200 && hour < 20 && consumed.calories > 0) {
+          tips.push({
+            key: "cal",
+            msg: `Seu saldo restante está em ${Math.round(remCal)} kcal. Prefira uma refeição leve rica em fibras e proteína no jantar.`,
+          });
+        }
+
+        // Gatilho 3: excedeu calorias
+        if (remCal < -150 && consumed.calories > 0) {
+          tips.push({
+            key: "over",
+            msg: `Você excedeu a meta em ${Math.abs(Math.round(remCal))} kcal. Priorize hidratação e movimentação leve no restante do dia.`,
+          });
+        }
+
+        if (tips.length === 0) return null;
+        return (
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5 space-y-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary shrink-0" />
+              <p className="text-xs font-semibold text-primary">Dica do Coach</p>
+            </div>
+            {tips.map((t) => (
+              <p key={t.key} className="text-xs text-muted-foreground leading-relaxed">
+                {t.msg}
+              </p>
+            ))}
+          </div>
+        );
+      })()}
 
       {visibleGroups.length === 0 ? (
         <Card className="p-10 text-center">
