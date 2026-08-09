@@ -87,6 +87,8 @@ src/lib/
 | 4 | `inferCoachObjective` usar `protein_factor` | `coach-plan.ts`, `coach-plan.test.ts` | S | 🟡 Médio | ✅ Concluído |
 | 5 | Coach semanal ler medidas corporais + extrair `format-measurements.ts` | `app.coach.tsx`, `chat.functions.ts` | M | 🟡 Médio | ✅ Concluído |
 | 6 | `buildCoachPlan` gerado pela IA via structured output | `nutrition.functions.ts`, `coach-plan.ts` | L | 🔴 Alto | ✅ Concluído |
+| 5.1 | Registro de Alimentação por Áudio / Voz (Voice-to-Meal) | `voice-meal-recorder.tsx`, `audio.functions.ts`, `app.nutricao.tsx` | M | 🔴 Alto | ✅ Concluído |
+| 5.4 | Substituição Inteligente de Exercícios por IA | `workout.functions.ts`, `exercise-substitute-dialog.tsx`, `app.treinos.$id.foco.tsx` | M | 🔴 Alto | ✅ Concluído |
 
 ---
 
