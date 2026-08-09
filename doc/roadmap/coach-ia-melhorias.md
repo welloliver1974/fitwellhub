@@ -44,255 +44,49 @@ src/lib/
 
 ## 2. O que foi implementado na última sessão (2026-08-08)
 
-### Feature: Meta de proteína configurável por estratégia
+### Feature 1: Meta de proteína configurável por estratégia
 
 **Motivação**: A meta de proteína sugerida era fixa em `2 g/kg`. O usuário não podia escolher a estratégia sem editar os campos manualmente.
 
 **Arquivos alterados**:
-
-#### `supabase/migrations/20260808190000_add_goal_protein_factor.sql` *(novo)*
-```sql
-ALTER TABLE public.goals
-  ADD COLUMN IF NOT EXISTS protein_factor NUMERIC NOT NULL DEFAULT 2.0;
-```
-> ⚠️ Esta migração precisa ser aplicada com `supabase db push` antes do próximo deploy.
-
-#### `src/lib/nutrition-goals.ts`
-- Exporta `DEFAULT_PROTEIN_FACTOR = 2`
-- `suggestGoals(tdee, weightKg, proteinFactor = DEFAULT_PROTEIN_FACTOR)` — terceiro argumento opcional
-- `matchesSuggestion(g, tdee, weightKg, proteinFactor = DEFAULT_PROTEIN_FACTOR)` — idem
-- `suggestGoals` agora retorna `protein_factor` no objeto resultado
-
-#### `src/integrations/supabase/types.ts`
-- `protein_factor?: number` adicionado nos tipos `Insert` e `Update` da tabela `goals`
-
-#### `src/components/goals-page.tsx`
-- Estado `strategy: string` ("1.6" | "1.8" | "2.0" | "2.2" | "manual")
-- Dropdown `<Select>` com 5 opções de estratégia
-- `handleStrategyChange(value)` — ao escolher estratégia numérica, recalcula macros via `suggestGoals`
-- Qualquer edição direta nos campos de macro muda `strategy` para `"manual"`
-- Botão "Usar calculada" restaura os macros e a estratégia ativa
-- Salva `protein_factor` no banco via upsert
-
-#### `src/routes/app.index.tsx` (Home)
-- Lê `protein_factor` da meta salva
-- Usa o fator ao sincronizar automaticamente (`suggestGoals`, `matchesSuggestion`)
-
-#### `src/components/goals-page.component.test.tsx`
-- Mocks adicionados: `hasPointerCapture`, `setPointerCapture`, `releasePointerCapture`, `scrollIntoView` (necessários para Radix Select em jsdom)
-- 2 novos testes: seleção de estratégia recalcula macros + edição manual muda estratégia para "Manual"
-- **Total: 103 testes passando** ✅
+- `supabase/migrations/20260808190000_add_goal_protein_factor.sql`: Adiciona coluna `protein_factor NUMERIC NOT NULL DEFAULT 2.0`.
+- `src/lib/nutrition-goals.ts`: Exporta `DEFAULT_PROTEIN_FACTOR = 2`, aceita `proteinFactor` em `suggestGoals` e `matchesSuggestion`.
+- `src/components/goals-page.tsx`: Seletor de estratégia com 5 opções (Conservador 1.6, Moderado 1.8, Padrão 2.0, Agressivo 2.2, Manual) com recálculo automático.
+- `src/routes/app.index.tsx`: Sincronização automática com `protein_factor`.
 
 ---
 
-## 3. Problemas identificados no Coach IA
+### Feature 2: Integração da estratégia de proteína e snapshot diário no Coach IA ✅ (CONCLUÍDO)
 
-### 3.1 Coach não conhece o `protein_factor` (PRIORIDADE ALTA)
+**Motivação**: O Coach IA não tinha acesso ao `protein_factor` nem aos totais consumidos no dia atual.
 
-**Onde**: `src/routes/app.coach.tsx` → `generate()` → monta o `summary` e chama `coachAdvice`
+**Implementações feitas**:
+1. **Coach com Fator de Proteína** (`src/routes/app.coach.tsx` & `src/server-fns/nutrition.functions.ts`):
+   - Adicionado `protein_factor` na query de metas do Coach.
+   - Incluído `Estratégia de proteína: X g/kg` no resumo e no payload `goals`.
+   - Updated `coachSchema` com `protein_factor?: number`.
 
-**Problema**: O prompt enviado para a IA inclui `Metas: X kcal · P Yg · C Zg · G Wg` mas não indica a estratégia de proteína. A IA não sabe se o usuário está em "Conservador (1.6 g/kg)" ou "Preservação agressiva (2.2 g/kg)".
+2. **Snapshot "Consumido Hoje" no Chat** (`src/server-fns/chat.functions.ts`):
+   - O Chat injeta no topo do contexto um resumo do dia atual (Calorias consumidas/meta, %, Proteína, Carbo, Gordura e Água).
 
-**Solução**:
-1. Na linha 69 de `app.coach.tsx`, adicionar `protein_factor` ao select:
-```ts
-// ANTES
-.select("calories,protein_g,carbs_g,fat_g")
-// DEPOIS
-.select("calories,protein_g,carbs_g,fat_g,protein_factor")
-```
+3. **System Prompt Dinâmico por Objetivo** (`src/server-fns/nutrition.functions.ts`):
+   - Prompt do sistema ajustado dinamicamente de acordo com o objetivo selecionado (Emagrecimento, Hipertrofia, Recomposição, Manutenção).
 
-2. No `summary` (dentro do array que gera as linhas), adicionar:
-```ts
-`Estratégia de proteína: ${goals?.protein_factor ?? 2.0} g/kg por kg de peso`
-```
-
-3. No `coachSchema` em `nutrition.functions.ts` (linhas 172-178), aceitar `protein_factor`:
-```ts
-goals: z.object({
-  calories: z.number().nonnegative().optional(),
-  protein_g: z.number().nonnegative().optional(),
-  carbs_g: z.number().nonnegative().optional(),
-  fat_g: z.number().nonnegative().optional(),
-  protein_factor: z.number().min(1).max(3).optional(), // ADICIONAR
-}).optional(),
-```
-
----
-
-### 3.2 `inferCoachObjective` ignora o `protein_factor` (PRIORIDADE MÉDIA)
-
-**Onde**: `src/lib/coach-plan.ts` → `inferCoachObjective(goals)` (linha 38-46)
-
-**Problema**: Usa apenas `calories` e `protein_g` absoluto. Um usuário de 80kg em "Preservação agressiva" (2.2 g/kg = 176g) é classificado como Hipertrofia mesmo com calorias baixas.
-
-**Solução**:
-```ts
-// ANTES
-export function inferCoachObjective(goals?: CoachGoals): CoachObjective {
-  const calories = goals?.calories ?? 0;
-  const protein = goals?.protein_g ?? 0;
-  if (calories <= 1900 && protein >= 120) return "Emagrecimento";
-  if (calories >= 2300 && protein >= 150) return "Hipertrofia";
-  if (calories > 0 && calories < 2300) return "Recomposicao corporal";
-  return "Manutencao";
-}
-
-// DEPOIS — protein_factor ajuda a distinguir estratégia de Emagrecimento vs Hipertrofia
-export function inferCoachObjective(goals?: CoachGoals & { protein_factor?: number }): CoachObjective {
-  const calories = goals?.calories ?? 0;
-  const factor = goals?.protein_factor ?? 2.0;
-  if (calories <= 1900 && factor >= 1.6) return "Emagrecimento";
-  if (calories >= 2300 && factor >= 2.0) return "Hipertrofia";
-  if (calories > 0 && calories < 2300 && factor >= 1.8) return "Recomposicao corporal";
-  return "Manutencao";
-}
-```
-
-> ⚠️ Atualizar os testes em `src/lib/coach-plan.test.ts` após a mudança.
-
----
-
-### 3.3 O plano semanal é 100% hardcoded — a IA não o constrói (PRIORIDADE MÉDIA)
-
-**Onde**: `src/lib/coach-plan.ts` → `buildCoachPlan()` + `src/server-fns/nutrition.functions.ts` → `coachAdvice`
-
-**Problema**: A IA gera um `text` livre, mas o "Plano da semana" exibido na tela (com `trainingGoal`, `nutritionGoal`, `checklist`) é gerado por `buildCoachPlan()` com `if/else` estáticos. Dois usuários com os mesmos dados recebem o **mesmo plano**, independente da análise da IA.
-
-**Solução**: Fazer a IA retornar o plano via tool call (structured output):
-
-Em `nutrition.functions.ts`, dentro de `coachAdvice.handler`, trocar `callAiChatCompletion` para usar tools:
-```ts
-const res = await callAiChatCompletion({
-  ...
-  messages: [
-    { role: "system", content: systemPrompt },
-    { role: "user", content: data.summary },
-  ],
-  tools: [{
-    type: "function",
-    function: {
-      name: "coach_plan",
-      description: "Retorna análise e plano semanal estruturado",
-      parameters: {
-        type: "object",
-        properties: {
-          insight: { type: "string", description: "3-5 insights em markdown" },
-          focus: { type: "string", description: "Foco principal da semana, ex: Criar rotina" },
-          todaySummary: { type: "string", description: "O que fazer hoje em 1 frase" },
-          trainingGoal: { type: "string" },
-          nutritionGoal: { type: "string" },
-          trackingGoal: { type: "string" },
-          nextAction: { type: "string" },
-          checklist: { type: "array", items: { type: "string" }, maxItems: 4 },
-        },
-        required: ["insight","focus","todaySummary","trainingGoal","nutritionGoal","trackingGoal","nextAction","checklist"],
-      },
-    },
-  }],
-  toolChoice: { type: "function", function: { name: "coach_plan" } },
-});
-
-// Parsear
-const call = (res as any).choices?.[0]?.message?.tool_calls?.[0];
-if (call) {
-  const parsed = JSON.parse(call.function.arguments);
-  text = parsed.insight;
-  plan = { title: "Plano da próxima semana", objective, ...parsed };
-} else {
-  // Fallback: usar buildCoachPlan determinístico
-  text = (res as any).choices?.[0]?.message?.content ?? "";
-  plan = buildCoachPlan(data.stats ?? {}, data.goals, data.objective);
-}
-```
-
-> Manter `buildCoachPlan` como fallback — nem todos os providers suportam tool calls (ex: alguns modelos Groq menores).
-
----
-
-### 3.4 Chat não injeta snapshot "consumido hoje" automaticamente (PRIORIDADE ALTA)
-
-**Onde**: `src/server-fns/chat.functions.ts` → `fetchUserContext` → `ctxText` (linhas 161-175)
-
-**Problema**: O contexto passa histórico da semana, mas não mostra o total de hoje de forma destacada. O usuário pergunta "como estou hoje?" e a IA precisa somar manualmente.
-
-**Solução**: Antes de montar o `ctxText`, calcular os totais de hoje:
-```ts
-// Adicionar antes da linha 101 (dailyTotalsText)
-const todayTotals = dailyTotals[today] ?? { kcal: 0, p: 0, c: 0, f: 0 };
-const todayWater = (water ?? [])
-  .filter((w: any) => w.log_date === today)
-  .reduce((sum: number, w: any) => sum + Number(w.ml), 0);
-
-const todaySnapshot = `Hoje (${today}) — consumido até agora:
-  Calorias: ${Math.round(todayTotals.kcal)}/${goals?.calories ?? 2000} kcal (${Math.round((todayTotals.kcal / (goals?.calories ?? 2000)) * 100)}%)
-  Proteína: ${Math.round(todayTotals.p)}/${goals?.protein_g ?? 140}g
-  Carboidratos: ${Math.round(todayTotals.c)}/${goals?.carbs_g ?? 220}g
-  Gorduras: ${Math.round(todayTotals.f)}/${goals?.fat_g ?? 65}g
-  Água: ${Math.round(todayWater)}ml`;
-```
-
-E adicionar `${todaySnapshot}\n\n` no início do `ctxText` (linha 162).
-
----
-
-### 3.5 Coach semanal não lê medidas corporais (PRIORIDADE BAIXA)
-
-**Onde**: `src/routes/app.coach.tsx` → `generate()` — busca `goals`, `meals`, `workouts`, `body_weights`, `water_logs` mas não `body_measurements`.
-
-**Contexto**: O Chat já busca e formata medidas em `fetchUserContext` (linhas 66, 111-135 de `chat.functions.ts`).
-
-**Solução**:
-1. Adicionar ao `Promise.all` em `generate()`:
-```ts
-supabase
-  .from("body_measurements")
-  .select("log_date, label, value_cm")
-  .eq("user_id", user.id)
-  .gte("log_date", start)
-  .order("log_date"),
-```
-
-2. Extrair a função de formatação de medidas de `chat.functions.ts` (linhas 112-135) para `src/lib/format-measurements.ts`:
-```ts
-export function formatMeasurements(measurements: Array<{log_date: string, label: string, value_cm: number}>): string {
-  // ... lógica atual de chat.functions.ts
-}
-```
-
-3. Importar e usar em ambos `chat.functions.ts` e `app.coach.tsx`.
-
----
-
-### 3.6 System prompt do Coach é genérico (PRIORIDADE BAIXA)
-
-**Onde**: `src/server-fns/nutrition.functions.ts` linha 207-210
-
-**Problema**: Prompt único para todos os objetivos — não menciona o objetivo nem instrui sobre prioridades.
-
-**Solução**: Tornar dinâmico:
-```ts
-const objectiveLabel = data.objective ?? "saúde e performance geral";
-const systemPrompt = `Você é um coach pessoal especializado em ${objectiveLabel}.
-O objetivo declarado do usuário é: ${objectiveLabel}.
-Analise os dados da última semana e retorne 3-5 insights práticos em português.
-Conecte os achados a ações concretas para a próxima semana.
-Use markdown simples (negrito e listas). Seja direto, sem clichês genéricos.
-Priorize: (1) consistência nos registros, (2) aderência às metas, (3) tendência de peso.`;
-```
+4. **Inferência de Objetivo Ajustada** (`src/lib/coach-plan.ts` & `src/lib/coach-plan.test.ts`):
+   - `inferCoachObjective` atualizada para verificar `protein_factor` mantendo fallback retrocompatível com `protein_g`.
 
 ---
 
 ## 4. Backlog priorizado
 
-| # | Item | Arquivos afetados | Esforço | Impacto |
-|---|---|---|---|---|
-| 1 | Passar `protein_factor` no contexto do Coach semanal | `app.coach.tsx`, `nutrition.functions.ts` | XS | 🔴 Alto |
-| 2 | Injetar snapshot "hoje" no Chat | `chat.functions.ts` | XS | 🔴 Alto |
-| 3 | System prompt dinâmico do Coach | `nutrition.functions.ts` | S | 🟡 Médio |
-| 4 | `inferCoachObjective` usar `protein_factor` | `coach-plan.ts`, `coach-plan.test.ts` | S | 🟡 Médio |
-| 5 | Coach semanal ler medidas corporais + extrair `format-measurements.ts` | `app.coach.tsx`, `chat.functions.ts` | M | 🟡 Médio |
-| 6 | `buildCoachPlan` gerado pela IA via structured output | `nutrition.functions.ts`, `coach-plan.ts` | L | 🔴 Alto |
+| # | Item | Arquivos afetados | Esforço | Impacto | Status |
+|---|---|---|---|---|---|
+| 1 | Passar `protein_factor` no contexto do Coach semanal | `app.coach.tsx`, `nutrition.functions.ts` | XS | 🔴 Alto | ✅ Concluído |
+| 2 | Injetar snapshot "hoje" no Chat | `chat.functions.ts` | XS | 🔴 Alto | ✅ Concluído |
+| 3 | System prompt dinâmico do Coach | `nutrition.functions.ts` | S | 🟡 Médio | ✅ Concluído |
+| 4 | `inferCoachObjective` usar `protein_factor` | `coach-plan.ts`, `coach-plan.test.ts` | S | 🟡 Médio | ✅ Concluído |
+| 5 | Coach semanal ler medidas corporais + extrair `format-measurements.ts` | `app.coach.tsx`, `chat.functions.ts` | M | 🟡 Médio | ⏳ Pendente |
+| 6 | `buildCoachPlan` gerado pela IA via structured output | `nutrition.functions.ts`, `coach-plan.ts` | L | 🔴 Alto | ⏳ Pendente |
 
 ---
 
