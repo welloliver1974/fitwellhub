@@ -224,16 +224,26 @@ export function VoiceMealRecorder({
       });
 
       if (res.success) {
-        toast.success(
-          `Refeição salva: ${res.meal_type} (${res.totals.calories} kcal · P${res.totals.protein_g}g)`
-        );
+        const parts: string[] = [];
+        if (res.water_ml && res.water_ml > 0) {
+          parts.push(`💧 ${res.water_ml}ml de água`);
+        }
+        if (res.meals && res.meals.length > 1) {
+          parts.push(`🍽️ ${res.meals.length} refeições (${res.totals.calories} kcal)`);
+        } else if (res.meals && res.meals.length === 1) {
+          parts.push(`🍽️ ${res.meals[0].meal_type} (${res.totals.calories} kcal · P${res.totals.protein_g}g)`);
+        } else if (!res.meals || res.meals.length === 0) {
+          parts.push(`Registrado com sucesso!`);
+        }
+
+        toast.success(parts.join(" + "));
         setOpen(false);
         setText("");
         onSaved?.();
       }
     } catch (e) {
       console.error(e);
-      toast.error(e instanceof Error ? e.message : "Erro ao processar refeição por voz.");
+      toast.error(e instanceof Error ? e.message : "Erro ao processar relato por voz.");
     } finally {
       setProcessing(false);
     }
@@ -250,10 +260,10 @@ export function VoiceMealRecorder({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" /> Registrar Alimentação por Voz
+            <Sparkles className="h-5 w-5 text-primary" /> Registrar Alimentação & Água por Voz
           </DialogTitle>
           <DialogDescription>
-            Fale ou revise o que você comeu. A IA calculará os alimentos e os macros automaticamente.
+            Fale o que você comeu e/ou quanta água bebeu. A IA identifica as refeições, os alimentos e a hidratação automaticamente.
           </DialogDescription>
         </DialogHeader>
 
@@ -261,7 +271,7 @@ export function VoiceMealRecorder({
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1">
               <label className="text-xs font-semibold text-muted-foreground block mb-1">
-                Tipo de Refeição
+                Tipo de Refeição Preferido (Se refeição única)
               </label>
               <Select
                 value={selectedMealType}
@@ -299,7 +309,7 @@ export function VoiceMealRecorder({
               placeholder={
                 transcribing
                   ? "Transcrevendo áudio via IA Whisper..."
-                  : "Ex: No almoço comi 200g de arroz integral, 150g de frango grelhado e 1 salada..."
+                  : "Ex: Bebi 500ml de água e no almoço comi 200g de arroz integral com frango..."
               }
               rows={4}
               className="resize-none"
@@ -307,6 +317,7 @@ export function VoiceMealRecorder({
             />
           </div>
         </div>
+
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
           {recording ? (

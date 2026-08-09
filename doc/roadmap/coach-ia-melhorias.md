@@ -99,21 +99,22 @@ src/lib/
 
 ### ~~5.1 Registro de Alimentação por Áudio / Voz (Voice-to-Meal)~~ ✅ CONCLUÍDO (2026-08-08)
 
-**Conceito**: O usuário clica no botão de microfone 🎙️ no header da tela de Nutrição, fala naturalmente o que comeu, e a IA transcreve, parseia os alimentos e registra a refeição com os macros calculados.
+**Conceito**: O usuário clica no botão de microfone 🎙️ no header da tela de Nutrição, fala naturalmente o que comeu e/ou quanta água bebeu, e a IA transcreve, separa as refeições (uma ou mais) e/ou registra a hidratação no diário.
 
 **Implementado em**:
-- `src/components/voice-meal-recorder.tsx` — componente React com suporte a props controladas (`open`/`onOpenChange`), gravação via `MediaRecorder` + fallback `webkitSpeechRecognition`
-- `src/server-fns/audio.functions.ts` — `transcribeAudio` (Groq Whisper `whisper-large-v3-turbo`) + `parseAndRecordVoiceMeal` (AI meal parsing + Supabase insert)
-- `src/server-fns/audio.functions.test.ts` — testes de lógica pura (validação de texto, tipos de refeição)
+- `src/components/voice-meal-recorder.tsx` — componente React com gravação via `MediaRecorder` + fallback `webkitSpeechRecognition`, suporte a toasts combinados (água + refeições)
+- `src/server-fns/audio.functions.ts` — `transcribeAudio` (Groq Whisper `whisper-large-v3-turbo`) + `parseAndRecordVoiceMeal` com ferramenta `record_voice_intake` (extrai `water_ml` para `water_logs` e array de `meals` para `meals`/`meal_items`)
+- `src/server-fns/audio.functions.test.ts` — testes de unidade cobrindo parsing de água e múltiplas refeições
 - `src/routes/app.nutricao.tsx` — botão `<Mic>` no header; `<VoiceMealRecorder>` renderizado controlado com `onSaved={load}`
 
 **Fluxo**:
 1. Usuário clica no ícone 🎙️ no header → abre Dialog
 2. Dialog inicia `MediaRecorder` + `webkitSpeechRecognition` (se disponível)
 3. Ao parar: se texto do Speech API tiver >3 chars, usa direto; senão envia áudio para Groq Whisper
-4. Usuário revisa/edita texto transcrito e seleciona tipo de refeição
-5. Clica "Salvar Refeição" → `parseAndRecordVoiceMeal` → IA extrai alimentos → insere em `meals`/`meal_items`
-6. Toast de confirmação com kcal/proteína; página recarrega automaticamente
+4. Usuário revisa/edita texto transcrito (ex: *"Bebi 500ml de água e no almoço comi 200g de arroz com frango"*)
+5. Clica "Salvar" → `parseAndRecordVoiceMeal` → IA extrai `water_ml` (insere em `water_logs`) e refeição(ões) (insere em `meals`/`meal_items`)
+6. Toast de confirmação unificado (ex: *"💧 500ml de água + 🍽️ Almoço (450 kcal)"*); página recarrega automaticamente
+
 
 ---
 

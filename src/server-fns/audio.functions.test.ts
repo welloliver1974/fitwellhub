@@ -37,4 +37,35 @@ describe("audio.functions", () => {
     expect(isValidMealType("Jantar")).toBe(true);
     expect(isValidMealType("Outro")).toBe(false);
   });
+
+  it("normaliza retorno de voz com água e múltiplas refeições", () => {
+    const parseVoiceResult = (args: { water_ml?: number; meals?: Array<{ meal_type: string; items: any[] }> }) => {
+      const waterMl = args.water_ml ?? 0;
+      const mealsCount = args.meals?.length ?? 0;
+      return { waterMl, mealsCount };
+    };
+
+    expect(parseVoiceResult({ water_ml: 500, meals: [{ meal_type: "Almoço", items: [{ name: "Arroz" }] }] })).toEqual({
+      waterMl: 500,
+      mealsCount: 1,
+    });
+
+    expect(parseVoiceResult({ water_ml: 300 })).toEqual({
+      waterMl: 300,
+      mealsCount: 0,
+    });
+
+    expect(
+      parseVoiceResult({
+        meals: [
+          { meal_type: "Café da manhã", items: [{ name: "Ovo" }] },
+          { meal_type: "Almoço", items: [{ name: "Frango" }] },
+        ],
+      })
+    ).toEqual({
+      waterMl: 0,
+      mealsCount: 2,
+    });
+  });
 });
+

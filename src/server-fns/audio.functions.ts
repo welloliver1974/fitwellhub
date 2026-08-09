@@ -24,33 +24,46 @@ const audioTranscriptionSchema = z.object({
 const voiceMealTool = {
   type: "function",
   function: {
-    name: "record_voice_meal",
-    description: "Extrai alimentos e macros nutricionais de uma descrição falada de refeição em português",
+    name: "record_voice_intake",
+    description: "Extrai alimentos, refeições (uma ou mais) e/ou consumo de água de um relato falado em português",
     parameters: {
       type: "object",
       properties: {
-        meal_type: {
-          type: "string",
-          enum: ["Café da manhã", "Almoço", "Jantar", "Lanche"],
-          description: "Tipo de refeição inferido pelo contexto ou horário",
+        water_ml: {
+          type: "number",
+          description: "Quantidade total de água consumida relatada em mililitros (ex: 500 para 500ml, 300 para um copo, 1000 para 1 litro). Retorne 0 se não foi mencionada água.",
         },
-        items: {
+        meals: {
           type: "array",
+          description: "Lista de refeições identificadas (uma ou mais). Se o usuário citou café e almoço, separe em objetos distintos.",
           items: {
             type: "object",
             properties: {
-              name: { type: "string", description: "Nome canônico do alimento em português" },
-              grams: { type: "number", description: "Quantidade estimada em gramas" },
-              calories: { type: "number", description: "Calorias estimadas (kcal)" },
-              protein_g: { type: "number", description: "Proteína em gramas" },
-              carbs_g: { type: "number", description: "Carboidratos em gramas" },
-              fat_g: { type: "number", description: "Gorduras em gramas" },
+              meal_type: {
+                type: "string",
+                enum: ["Café da manhã", "Almoço", "Jantar", "Lanche"],
+                description: "Tipo de refeição inferido pelo contexto ou horário",
+              },
+              items: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string", description: "Nome canônico do alimento em português" },
+                    grams: { type: "number", description: "Quantidade estimada em gramas" },
+                    calories: { type: "number", description: "Calorias estimadas (kcal)" },
+                    protein_g: { type: "number", description: "Proteína em gramas" },
+                    carbs_g: { type: "number", description: "Carboidratos em gramas" },
+                    fat_g: { type: "number", description: "Gorduras em gramas" },
+                  },
+                  required: ["name", "calories", "protein_g", "carbs_g", "fat_g"],
+                },
+              },
             },
-            required: ["name", "calories", "protein_g", "carbs_g", "fat_g"],
+            required: ["meal_type", "items"],
           },
         },
       },
-      required: ["meal_type", "items"],
       additionalProperties: false,
     },
   },
@@ -98,7 +111,7 @@ export const transcribeAudio = createServerFn({ method: "POST" })
   });
 
 /**
- * Processa a transcrição ou ditado de texto da refeição, extrai alimentos com IA e registra no Supabase.
+ * Processa a transcrição ou ditado de texto, extrai refeições e/ou água com IA e registra no Supabase.
  */
 export const parseAndRecordVoiceMeal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -121,26 +134,39 @@ export const parseAndRecordVoiceMeal = createServerFn({ method: "POST" })
         {
           role: "system",
           content:
-            "Você é um nutricionista esportivo. Analise o relato falado/ditado do usuário e identifique cada alimento, estimando a porção em gramas e os macros (kcal, proteína, carboidrato, gordura) com base na tabela TACO. Retorne APENAS via chamada da função record_voice_meal.",
+            "Você é um nutricionista esportivo. Analise o relato falado do usuário e identifique se há consumo de água (em ml) e/ou refeições (uma ou mais). Para cada refeição, identifique os alimentos, estimando a porção em gramas e os macros com base na tabela TACO. Retorne APENAS via chamada da função record_voice_intake.",
         },
         {
           role: "user",
-          content: `Relato de alimentação: "${data.text}". Data: ${today}. ${
-            data.meal_type ? `Tipo preferido: ${data.meal_type}` : ""
+          content: `Relato de voz: "${data.text}". Data: ${today}. ${
+            data.meal_type ? `Tipo preferido se for refeição única: ${data.meal_type}` : ""
           }`,
         },
       ],
       tools: [voiceMealTool],
-      toolChoice: { type: "function", function: { name: "record_voice_meal" } },
+      toolChoice: { type: "function", function: { name: "record_voice_intake" } },
     });
 
     const json = res as any;
     const call = json.choices?.[0]?.message?.tool_calls?.[0];
-    if (!call) throw new Error("A IA não conseguiu interpretar os alimentos relatados.");
+    if (!call) throw new Error("A IA não conseguiu interpretar o relato falado.");
 
-    const parsed = JSON.parse(call.function.arguments) as {
-      meal_type: "Café da manhã" | "Almoço" | "Jantar" | "Lanche";
-      items: Array<{
+    const parsedArgs = JSON.parse(call.function.arguments) as {
+      water_ml?: number;
+      meals?: Array<{
+        meal_type: "Café da manhã" | "Almoço" | "Jantar" | "Lanche";
+        items: Array<{
+          name: string;
+          grams?: number;
+          calories: number;
+          protein_g: number;
+          carbs_g: number;
+          fat_g: number;
+        }>;
+      }>;
+      // Retrocompatibilidade se a IA mandar formato legados
+      meal_type?: "Café da manhã" | "Almoço" | "Jantar" | "Lanche";
+      items?: Array<{
         name: string;
         grams?: number;
         calories: number;
@@ -150,57 +176,93 @@ export const parseAndRecordVoiceMeal = createServerFn({ method: "POST" })
       }>;
     };
 
-    const finalMealType = data.meal_type || parsed.meal_type || "Almoço";
-
-    // 1) Reaproveita a refeição existente do tipo ou cria uma nova
-    const { data: existingMeal } = await supabase
-      .from("meals")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("meal_date", today)
-      .eq("meal_type", finalMealType)
-      .maybeSingle();
-
-    let mealId = existingMeal?.id;
-
-    if (!mealId) {
-      const { data: newMeal, error: mealErr } = await supabase
-        .from("meals")
-        .insert({
-          user_id: userId,
-          meal_date: today,
-          meal_type: finalMealType,
-        })
-        .select("id")
-        .single();
-
-      if (mealErr || !newMeal) throw new Error(mealErr?.message || "Erro ao criar refeicao");
-      mealId = newMeal.id;
+    // 1) Registro de Água
+    let loggedWaterMl = 0;
+    if (parsedArgs.water_ml && parsedArgs.water_ml > 0) {
+      loggedWaterMl = Math.round(Number(parsedArgs.water_ml));
+      const { error: waterErr } = await supabase.from("water_logs").insert({
+        user_id: userId,
+        log_date: today,
+        ml: loggedWaterMl,
+      });
+      if (waterErr) console.error("Erro ao registrar água por voz:", waterErr.message);
     }
 
-    // 2) Insere os itens
-    const itemsToInsert = parsed.items.map((i) => ({
-      meal_id: mealId,
-      name: i.name,
-      grams: i.grams ?? 100,
-      calories: Math.round(Number(i.calories || 0)),
-      protein_g: Math.round(Number(i.protein_g || 0) * 10) / 10,
-      carbs_g: Math.round(Number(i.carbs_g || 0) * 10) / 10,
-      fat_g: Math.round(Number(i.fat_g || 0) * 10) / 10,
-    }));
+    // Normaliza array de refeições
+    const rawMeals = parsedArgs.meals || (parsedArgs.items ? [{ meal_type: parsedArgs.meal_type || data.meal_type || "Almoço", items: parsedArgs.items }] : []);
 
-    const { error: itemsErr } = await supabase.from("meal_items").insert(itemsToInsert);
-    if (itemsErr) throw new Error(itemsErr.message);
+    let totalKcal = 0;
+    let totalP = 0;
+    let totalC = 0;
+    let totalF = 0;
+    const processedMeals: Array<{ meal_type: string; items_count: number; calories: number }> = [];
 
-    const totalKcal = itemsToInsert.reduce((a, i) => a + i.calories, 0);
-    const totalP = itemsToInsert.reduce((a, i) => a + i.protein_g, 0);
-    const totalC = itemsToInsert.reduce((a, i) => a + i.carbs_g, 0);
-    const totalF = itemsToInsert.reduce((a, i) => a + i.fat_g, 0);
+    // 2) Insere cada refeição e seus itens
+    for (const m of rawMeals) {
+      if (!m.items || m.items.length === 0) continue;
+
+      const mealType = m.meal_type || data.meal_type || "Almoço";
+
+      const { data: existingMeal } = await supabase
+        .from("meals")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("meal_date", today)
+        .eq("meal_type", mealType)
+        .maybeSingle();
+
+      let mealId = existingMeal?.id;
+
+      if (!mealId) {
+        const { data: newMeal, error: mealErr } = await supabase
+          .from("meals")
+          .insert({
+            user_id: userId,
+            meal_date: today,
+            meal_type: mealType,
+          })
+          .select("id")
+          .single();
+
+        if (mealErr || !newMeal) throw new Error(mealErr?.message || "Erro ao criar refeicao");
+        mealId = newMeal.id;
+      }
+
+      const itemsToInsert = m.items.map((i) => ({
+        meal_id: mealId,
+        name: i.name,
+        grams: i.grams ?? 100,
+        calories: Math.round(Number(i.calories || 0)),
+        protein_g: Math.round(Number(i.protein_g || 0) * 10) / 10,
+        carbs_g: Math.round(Number(i.carbs_g || 0) * 10) / 10,
+        fat_g: Math.round(Number(i.fat_g || 0) * 10) / 10,
+      }));
+
+      const { error: itemsErr } = await supabase.from("meal_items").insert(itemsToInsert);
+      if (itemsErr) throw new Error(itemsErr.message);
+
+      const mKcal = itemsToInsert.reduce((a, i) => a + i.calories, 0);
+      totalKcal += mKcal;
+      totalP += itemsToInsert.reduce((a, i) => a + i.protein_g, 0);
+      totalC += itemsToInsert.reduce((a, i) => a + i.carbs_g, 0);
+      totalF += itemsToInsert.reduce((a, i) => a + i.fat_g, 0);
+
+      processedMeals.push({
+        meal_type: mealType,
+        items_count: itemsToInsert.length,
+        calories: mKcal,
+      });
+    }
+
+    if (loggedWaterMl === 0 && processedMeals.length === 0) {
+      throw new Error("Nenhum alimento ou quantidade de água válida foi identificada no relato.");
+    }
 
     return {
       success: true,
-      meal_type: finalMealType,
-      items: itemsToInsert,
+      water_ml: loggedWaterMl,
+      meals: processedMeals,
+      meal_type: processedMeals[0]?.meal_type || data.meal_type || "Almoço",
       totals: {
         calories: totalKcal,
         protein_g: Math.round(totalP * 10) / 10,
@@ -209,3 +271,4 @@ export const parseAndRecordVoiceMeal = createServerFn({ method: "POST" })
       },
     };
   });
+
