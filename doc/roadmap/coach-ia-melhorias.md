@@ -88,6 +88,8 @@ src/lib/
 | 5 | Coach semanal ler medidas corporais + extrair `format-measurements.ts` | `app.coach.tsx`, `chat.functions.ts` | M | 🟡 Médio | ✅ Concluído |
 | 6 | `buildCoachPlan` gerado pela IA via structured output | `nutrition.functions.ts`, `coach-plan.ts` | L | 🔴 Alto | ✅ Concluído |
 | 5.1 | Registro de Alimentação por Áudio / Voz (Voice-to-Meal) | `voice-meal-recorder.tsx`, `audio.functions.ts`, `app.nutricao.tsx` | M | 🔴 Alto | ✅ Concluído |
+| 5.2 | Checklist Interativo no Plano do Coach | `app.coach.tsx` | S | 🟡 Médio | ✅ Concluído |
+| 5.3 | Sugestão Inteligente por Macros Restantes do Dia | `suggest-meal-dialog.tsx`, `nutrition.functions.ts`, `app.nutricao.tsx` | M | 🔴 Alto | ✅ Concluído |
 | 5.4 | Substituição Inteligente de Exercícios por IA | `workout.functions.ts`, `exercise-substitute-dialog.tsx`, `app.treinos.$id.foco.tsx` | M | 🔴 Alto | ✅ Concluído |
 
 ---
@@ -114,23 +116,25 @@ src/lib/
 
 ---
 
-### 5.2 Checklist Interativo no Plano do Coach 📋
+### ~~5.2 Checklist Interativo no Plano do Coach~~ 📋 ✅ CONCLUÍDO (2026-08-08)
 
-**Conceito**: Permitir que o usuário toque nos itens da checklist semanal do Coach no card (`PlanCard`) para marcar como concluídos no decorrer da semana.
+**Conceito**: Permitir que o usuário toque nos itens da checklist semanal do Coach no card de plano semanal para marcar/desmarcar como concluídos.
 
-**Arquitetura Técnica Proposta**:
-- Tabela `coach_weekly_plans` (com colunas `id`, `user_id`, `plan_json`, `completed_items: TEXT[]`, `week_start`).
-- Persistência ao marcar/desmarcar itens com feedback visual de progresso (ex: *2/3 concluídos*).
+**Implementado em**:
+- `src/routes/app.coach.tsx` — estado `completedChecklist` (persistido via `localStorage` com chave individual por usuário e plano)
+- Checkbox interativo em cada item da lista com efeito de riscado (line-through), contagem `"X de Y concluídos"` e barra de progresso visual
 
 ---
 
-### 5.3 Sugestão Inteligente por Macros Restantes do Dia 🥗
+### ~~5.3 Sugestão Inteligente por Macros Restantes do Dia~~ 🥗 ✅ CONCLUÍDO (2026-08-08)
 
-**Conceito**: Botão *"O que posso comer agora?"* na tela de Nutrição.
+**Conceito**: Botão *"O que posso comer agora?"* (✨) no header da tela de Nutrição (`/app/nutricao`).
 
-**Arquitetura Técnica Proposta**:
-- Calcula: `MacroRestante = MetaDiaria - ConsumidoHoje`.
-- Faz consulta de IA (ou busca na biblioteca/receitas do usuário) filtrando por refeições que se encaixem perfeitamente nas calorias e proteínas restantes.
+**Implementado em**:
+- `src/server-fns/nutrition.functions.ts` — `suggestMealByRemainingMacros` com Structured Output (tool `report_suggested_meals`) gerando 3 refeições/lanches brasileiros equilibrados com porção e gramas dos ingredientes
+- `src/server-fns/suggest-meal.test.ts` — testes unitários para o schema Zod e cálculo de macros restantes
+- `src/components/suggest-meal-dialog.tsx` — Dialog interativo com resumo dos macros restantes atuais, seletor de tipo de refeição (Café, Almoço, Jantar, Lanche), 3 opções detalhadas e botão **"Registrar em [Refeição]"** para inserir diretamente no Supabase
+- `src/routes/app.nutricao.tsx` — botão `<Sparkles>` no header da tela de Nutrição, cálculo dinâmico de `remainingMacros` (`Meta - Consumido`) e reload automático após inserção
 
 ---
 
@@ -150,12 +154,13 @@ src/lib/
 
 ### Como rodar os testes
 ```powershell
-npx vitest run                                                        # todos (116 testes)
+npx vitest run                                                        # todos (118 testes)
 npx vitest run src/lib/coach-plan.test.ts                            # lógica do Coach
 npx vitest run src/lib/format-measurements.test.ts                   # formatação de medidas
 npx vitest run src/components/goals-page.component.test.tsx          # tela de metas
 npx vitest run src/server-fns/audio.functions.test.ts                # audio/voice logging
 npx vitest run src/server-fns/workout.functions.test.ts              # substituição de exercícios
+npx vitest run src/server-fns/suggest-meal.test.ts                   # sugestão por macros restantes
 ```
 
 ### Radix Select em testes jsdom — mocks obrigatórios

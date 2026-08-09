@@ -344,3 +344,158 @@ export const coachAdvice = createServerFn({ method: "POST" })
       plan,
     };
   });
+
+// ---------------------------------------------------------------------------
+// Sugestão de refeição por macros restantes (Item 5.3)
+// ---------------------------------------------------------------------------
+
+const suggestMealInputSchema = z.object({
+  remainingCalories: z.number().max(5000),
+  remainingProtein: z.number().max(500),
+  remainingCarbs: z.number().max(1000),
+  remainingFat: z.number().max(500),
+  preferredMealType: z.string().optional().default("Lanche"),
+});
+
+export const suggestMealOutputSchema = z.object({
+  suggestions: z.array(
+    z.object({
+      title: z.string(),
+      description: z.string(),
+      prepTime: z.string(),
+      totals: z.object({
+        calories: z.number(),
+        protein_g: z.number(),
+        carbs_g: z.number(),
+        fat_g: z.number(),
+      }),
+      items: z.array(
+        z.object({
+          name: z.string(),
+          grams: z.number(),
+          calories: z.number(),
+          protein_g: z.number(),
+          carbs_g: z.number(),
+          fat_g: z.number(),
+        })
+      ),
+    })
+  ),
+});
+
+export type SuggestedMealOption = z.infer<typeof suggestMealOutputSchema>["suggestions"][number];
+
+const SUGGEST_MEAL_TOOL = {
+  type: "function",
+  function: {
+    name: "report_suggested_meals",
+    description:
+      "Retorna exatamente 3 sugestões de refeição/lanche deliciosas e equilibradas que se encaixam no saldo de macros restantes.",
+    parameters: {
+      type: "object",
+      required: ["suggestions"],
+      properties: {
+        suggestions: {
+          type: "array",
+          minItems: 3,
+          maxItems: 3,
+          items: {
+            type: "object",
+            required: ["title", "description", "prepTime", "totals", "items"],
+            properties: {
+              title: { type: "string", description: "Nome atrativo da refeição" },
+              description: { type: "string", description: "Breve resumo/modo de preparo simples (1 frase)" },
+              prepTime: { type: "string", description: "Tempo estimado (ex: '5 min')" },
+              totals: {
+                type: "object",
+                required: ["calories", "protein_g", "carbs_g", "fat_g"],
+                properties: {
+                  calories: { type: "number" },
+                  protein_g: { type: "number" },
+                  carbs_g: { type: "number" },
+                  fat_g: { type: "number" },
+                },
+              },
+              items: {
+                type: "array",
+                description: "Ingredientes com porção em gramas e macros individuais",
+                items: {
+                  type: "object",
+                  required: ["name", "grams", "calories", "protein_g", "carbs_g", "fat_g"],
+                  properties: {
+                    name: { type: "string" },
+                    grams: { type: "number" },
+                    calories: { type: "number" },
+                    protein_g: { type: "number" },
+                    carbs_g: { type: "number" },
+                    fat_g: { type: "number" },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+export const suggestMealByRemainingMacros = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => suggestMealInputSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const settings = await fetchAiSettings(supabase, userId);
+    const provider = resolveAiProvider(settings);
+    const apiKey = resolveAiApiKey(settings, provider);
+    if (!apiKey) throw new Error("Configure uma chave de IA nas configurações.");
+
+    const { remainingCalories, remainingProtein, remainingCarbs, remainingFat, preferredMealType } = data;
+
+    const safeKcal = Math.max(50, Math.round(remainingCalories));
+    const safeP = Math.max(0, Math.round(remainingProtein));
+    const safeC = Math.max(0, Math.round(remainingCarbs));
+    const safeF = Math.max(0, Math.round(remainingFat));
+
+    const prompt = `Você é um nutricionista esportivo prático.
+O usuário possui o seguinte saldo de macros restantes para o dia:
+- Calorias restantes: ~${safeKcal} kcal
+- Proteína restante: ~${safeP} g
+- Carboidrato restante: ~${safeC} g
+- Gordura restante: ~${safeF} g
+- Tipo de refeição sugerido: ${preferredMealType}
+
+Crie exatamente 3 opções de refeições/lanches brasileiras, fáceis de preparar, que se encaixem bem nesse orçamento de macros.
+Cada opção deve ter o total de macros próximo ao saldo restante e listar os ingredientes individuais com gramas exatas.
+Retorne usando a ferramenta report_suggested_meals.`;
+
+    const res = await callAiChatCompletion({
+      provider,
+      apiKey,
+      model: getTextModel(provider, settings),
+      baseUrl: settings.omniroute_base_url,
+      messages: [
+        { role: "system", content: "Você é um nutricionista inteligente." },
+        { role: "user", content: prompt },
+      ],
+      tools: [SUGGEST_MEAL_TOOL],
+      toolChoice: { type: "function", function: { name: "report_suggested_meals" } },
+      temperature: 0.7,
+      maxTokens: 1000,
+    });
+
+    const json = res as any;
+    const call = json.choices?.[0]?.message?.tool_calls?.[0];
+    if (!call?.function?.arguments) {
+      throw new Error("Não foi possível gerar sugestões de refeição.");
+    }
+
+    const args = JSON.parse(call.function.arguments);
+    const parsed = suggestMealOutputSchema.safeParse(args);
+    if (!parsed.success) {
+      throw new Error("Formato de sugestão inválido retornado pela IA.");
+    }
+
+    return parsed.data;
+  });
+

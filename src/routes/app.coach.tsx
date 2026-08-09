@@ -41,6 +41,38 @@ function CoachPage() {
   const [snapshot, setSnapshot] = useState<CoachSnapshot | null>(null);
   const [plan, setPlan] = useState<CoachPlan | null>(null);
   const [objective, setObjective] = useState<CoachObjective>("auto");
+  const [completedChecklist, setCompletedChecklist] = useState<Set<string>>(new Set());
+
+  // Carrega checklist concluída ao definir plano
+  const loadChecklistState = (planTitle: string) => {
+    if (!user) return;
+    const key = `coach-checklist-${user.id}-${planTitle}`;
+    try {
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        setCompletedChecklist(new Set(JSON.parse(saved)));
+      } else {
+        setCompletedChecklist(new Set());
+      }
+    } catch {
+      setCompletedChecklist(new Set());
+    }
+  };
+
+  const toggleChecklistItem = (item: string, planTitle: string) => {
+    if (!user) return;
+    setCompletedChecklist((prev) => {
+      const next = new Set(prev);
+      if (next.has(item)) {
+        next.delete(item);
+      } else {
+        next.add(item);
+      }
+      const key = `coach-checklist-${user.id}-${planTitle}`;
+      localStorage.setItem(key, JSON.stringify(Array.from(next)));
+      return next;
+    });
+  };
 
   const confidenceLabel: Record<CoachSnapshot["confidence"], string> = {
     baixa: "Baixa",
@@ -216,6 +248,9 @@ function CoachPage() {
       setText(res.text);
       setSnapshot(res.snapshot ?? null);
       setPlan(res.plan ?? null);
+      if (res.plan?.title) {
+        loadChecklistState(res.plan.title);
+      }
     } catch (e) {
       console.error(e);
       toast.error(e instanceof Error ? e.message : "Erro");
@@ -338,14 +373,49 @@ function CoachPage() {
             </div>
           </div>
           <div className="mt-4 rounded-2xl border bg-background/60 p-4">
-            <p className="text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground">Checklist da semana</p>
-            <ul className="mt-3 space-y-2 text-sm text-foreground">
-              {plan.checklist.map((item) => (
-                <li key={item} className="flex gap-2 leading-relaxed">
-                  <span className="mt-1 h-2 w-2 rounded-full bg-primary shrink-0" />
-                  <span>{item}</span>
-                </li>
-              ))}
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground">
+                Checklist da semana
+              </p>
+              {plan.checklist.length > 0 && (
+                <span className="text-xs font-semibold text-primary">
+                  {completedChecklist.size} de {plan.checklist.length} concluídos
+                </span>
+              )}
+            </div>
+
+            {plan.checklist.length > 0 && (
+              <div className="w-full bg-secondary h-1.5 rounded-full mb-3 overflow-hidden">
+                <div
+                  className="bg-primary h-full transition-all duration-300 rounded-full"
+                  style={{
+                    width: `${Math.round((completedChecklist.size / plan.checklist.length) * 100)}%`,
+                  }}
+                />
+              </div>
+            )}
+
+            <ul className="space-y-2 text-sm text-foreground">
+              {plan.checklist.map((item) => {
+                const done = completedChecklist.has(item);
+                return (
+                  <li
+                    key={item}
+                    onClick={() => toggleChecklistItem(item, plan.title)}
+                    className="flex items-start gap-2.5 leading-relaxed cursor-pointer group p-1.5 rounded-xl hover:bg-background/80 transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={done}
+                      onChange={() => {}} // controlado pelo onClick da <li>
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer shrink-0"
+                    />
+                    <span className={done ? "line-through text-muted-foreground transition-all" : "transition-all"}>
+                      {item}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           </div>
           <div className="mt-4 text-sm text-muted-foreground">

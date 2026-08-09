@@ -47,6 +47,7 @@ import { toast } from "sonner";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { FoodLibrary } from "@/components/FoodLibrary";
 import { VoiceMealRecorder } from "@/components/voice-meal-recorder";
+import { SuggestMealDialog } from "@/components/suggest-meal-dialog";
 
 export const Route = createFileRoute("/app/nutricao")({
   component: NutricaoPage,
@@ -128,6 +129,13 @@ function NutricaoPage() {
   const [scanOpen, setScanOpen] = useState(false);
   const [scanLoading, setScanLoading] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [userGoals, setUserGoals] = useState<{
+    calories: number;
+    protein_g: number;
+    carbs_g: number;
+    fat_g: number;
+  }>({ calories: 2000, protein_g: 140, carbs_g: 220, fat_g: 65 });
 
   // biblioteca (balcão único no diálogo do "+")
   const [library, setLibrary] = useState<LibraryFood[]>([]);
@@ -295,6 +303,21 @@ function NutricaoPage() {
         fat_g: number;
       }>,
     );
+
+    const { data: g } = await supabase
+      .from("goals")
+      .select("calories,protein_g,carbs_g,fat_g")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (g) {
+      setUserGoals({
+        calories: Number(g.calories ?? 2000),
+        protein_g: Number(g.protein_g ?? 140),
+        carbs_g: Number(g.carbs_g ?? 220),
+        fat_g: Number(g.fat_g ?? 65),
+      });
+    }
 
     await loadLibrary();
   };
@@ -666,6 +689,27 @@ function NutricaoPage() {
     [meals, items],
   );
 
+  const consumed = useMemo(() => {
+    return items.reduce(
+      (acc, item) => ({
+        calories: acc.calories + Number(item.calories || 0),
+        protein_g: acc.protein_g + Number(item.protein_g || 0),
+        carbs_g: acc.carbs_g + Number(item.carbs_g || 0),
+        fat_g: acc.fat_g + Number(item.fat_g || 0),
+      }),
+      { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+    );
+  }, [items]);
+
+  const remainingMacros = useMemo(() => {
+    return {
+      calories: userGoals.calories - consumed.calories,
+      protein_g: userGoals.protein_g - consumed.protein_g,
+      carbs_g: userGoals.carbs_g - consumed.carbs_g,
+      fat_g: userGoals.fat_g - consumed.fat_g,
+    };
+  }, [userGoals, consumed]);
+
   const visibleGroups = grouped.filter((g) => g.items.length > 0);
 
   return (
@@ -676,6 +720,14 @@ function NutricaoPage() {
           <p className="text-sm text-muted-foreground">Diário alimentar de hoje</p>
         </div>
         <div className="flex items-center gap-1">
+          <Button
+            size="icon"
+            variant="ghost"
+            title="O que posso comer agora? (Sugestão IA)"
+            onClick={() => setSuggestOpen(true)}
+          >
+            <Sparkles className="h-5 w-5 text-primary" />
+          </Button>
           <Link to="/app/nutricao-historico">
             <Button size="icon" variant="ghost" title="Visão geral">
               <BarChart3 className="h-5 w-5" />
@@ -1189,6 +1241,16 @@ function NutricaoPage() {
         onOpenChange={setVoiceOpen}
         session={session}
         onSaved={load}
+      />
+
+      <SuggestMealDialog
+        open={suggestOpen}
+        onOpenChange={setSuggestOpen}
+        session={session}
+        user={user}
+        remaining={remainingMacros}
+        ensureMeal={ensureMeal}
+        onMealAdded={load}
       />
     </div>
   );
