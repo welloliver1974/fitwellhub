@@ -87,16 +87,20 @@ O app pode virar menos "painel de dados" e mais "coach de verdade".
 - Análise semanal (`/app/coach`) sempre termina com card "Próxima ação"
 - Plano inclui "O que fazer hoje" e "Checklist da semana"
 
-### 2. 🔄 Parcial - Dar feedback visual mais claro quando a IA está pensando
+### 2. ✅ Concluída (09/08/2026) - Dar feedback visual mais claro quando a IA está pensando
 Se a análise demorar, vale mostrar melhor o estado da requisição.
 
 **O que foi feito:**
 - Chat (`/app/chat`) tem: "pensando…" com spinner
 - Análise semanal tem: "Analisando seus dados…" com spinner
+- **(09/08/2026, forma 1)** Estados granulares: `src/lib/ai-stage.ts` (puro) +
+  `src/lib/use-ai-stage.ts` (hook com timer). O rótulo avança por tempo decorrido:
+  "Carregando seus dados…" (<1s) → "Consultando a IA…" (<4s; <7s com imagem anexada) →
+  "Gerando resposta…". Aplicado no balão do Chat e no botão "Gerar análise" do Coach.
 
-**Ainda pendente:**
-- Estados mais granulares: "carregando dados", "analisando", "gerando resposta"
-- Falha com motivo claro (já tem toast com mensagem de erro)
+**Nota (forma 1):** os rótulos são **estimativas por timer**, não fases reais do
+servidor (isso seria a forma 2, com polling/SSE — descartada por custo). Falha com
+motivo claro já existe (toast com mensagem de erro).
 
 ### 3. 🔄 Parcial - Melhorar a clareza da interface da IA
 A IA pode ficar mais útil se a tela mostrar melhor o que ela está analisando.

@@ -9,6 +9,8 @@ import { Sparkles, Loader2, TrendingDown, TrendingUp } from "lucide-react";
 import { coachAdvice } from "@/server-fns/nutrition.functions";
 import { formatMeasurements } from "@/lib/format-measurements";
 import { suggestGoals } from "@/lib/nutrition-goals";
+import { useAiStage } from "@/lib/use-ai-stage";
+import { AI_STAGE_LABEL } from "@/lib/ai-stage";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/coach")({
@@ -50,6 +52,7 @@ function CoachPage() {
   const [objective, setObjective] = useState<CoachObjective>("auto");
   const [completedChecklist, setCompletedChecklist] = useState<Set<string>>(new Set());
   const [applyingAdjustment, setApplyingAdjustment] = useState(false);
+  const stage = useAiStage(loading);
 
   const handleApplyCalorieAdjustment = async (delta: number) => {
     if (!user || !delta) return;
@@ -370,7 +373,8 @@ function CoachPage() {
       <Button onClick={generate} disabled={loading} className="w-full">
         {loading ? (
           <>
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Analisando seus dados…
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />{" "}
+            {AI_STAGE_LABEL[stage ?? "preparando"]}
           </>
         ) : (
           <>

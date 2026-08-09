@@ -9,6 +9,8 @@ import { sendChat } from "@/server-fns/chat.functions";
 import type { CoachPlan } from "@/lib/coach-plan";
 import { PlanCard } from "@/components/plan-card";
 import { toast } from "sonner";
+import { useAiStage } from "@/lib/use-ai-stage";
+import { AI_STAGE_LABEL } from "@/lib/ai-stage";
 
 export const Route = createFileRoute("/app/chat")({
   component: ChatPage,
@@ -53,6 +55,10 @@ function ChatPage() {
   const [images, setImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
+  // Snapshot de "tinha imagem?" no envio: images é limpo junto com setSending(true),
+  // então o estágio granular precisa saber do payload original durante o loading.
+  const [hadImages, setHadImages] = useState(false);
+  const stage = useAiStage(sending, { hasImages: hadImages });
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -108,9 +114,10 @@ function ChatPage() {
     
     const currentImages = [...images];
     const payload = currentImages.length > 0 ? { message: t, images: currentImages } : { message: t };
-    
+
     setInput("");
     setImages([]);
+    setHadImages(currentImages.length > 0);
     setSending(true);
     // optimistic
     const userMsg = {
@@ -230,7 +237,8 @@ function ChatPage() {
         {sending && (
           <div className="flex justify-start">
             <div className="bg-card border rounded-2xl px-3.5 py-2 text-sm flex items-center gap-2">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> pensando…
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />{" "}
+              {stage ? AI_STAGE_LABEL[stage] : "pensando…"}
             </div>
           </div>
         )}

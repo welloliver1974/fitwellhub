@@ -2,6 +2,15 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [09/08/2026] - Claude Code (Estados granulares de loading no Chat/Coach — UX 2, forma 1)
+- **Problema**: as duas telas de IA tinham um único spinner com **texto fixo** ("pensando…" no Chat, "Analisando seus dados…" no Coach) durante toda a chamada (3–30s conforme o provider) — usuário pode achar que travou.
+- **Decisão do usuário**: **forma 1 (barata, front-only)** — rótulos de fase derivados de **tempo decorrido** (estimativa por timer), **sem tocar no backend**. Forma 2 (polling/SSE com fases reais) descartada por custo.
+- **Nova lib pura `src/lib/ai-stage.ts`**: `aiStageLabel(elapsedMs, { hasImages? })` → `preparando` (<1s) → `consultando` (<4s; <7s se `hasImages`, pois visão é mais lenta) → `gerando`. `AI_STAGE_LABEL` com "Carregando seus dados…" / "Consultando a IA…" / "Gerando resposta…". Testável em node.
+- **Novo hook `src/lib/use-ai-stage.ts`**: mede `Date.now() - startRef` com `setInterval` de 500ms (molde `use-reminders`); retorna `null` quando inativo, reseta ao ativar/re-ativar, `clearInterval` no cleanup/unmount; lê `hasImages` via ref (snapshot). 
+- **`src/routes/app.chat.tsx`**: balão "pensando…" → `AI_STAGE_LABEL[stage]`; novo estado `hadImages` capturado no `send()` (pois `images` é limpo junto com `setSending(true)`).
+- **`src/routes/app.coach.tsx`**: botão "Analisando seus dados…" → `AI_STAGE_LABEL[stage ?? "preparando"]`. Não toca o spinner de `applyingAdjustment`.
+- **Validação**: `TZ=UTC npx vitest run` **156/156** — **+12 testes** (`ai-stage.test.ts` node: bordas 0/999/1000/3999/4000/6999/7000 + `AI_STAGE_LABEL` 3 chaves; `use-ai-stage.test.tsx` jsdom: `renderHook` + `vi.useFakeTimers` com avanço DENTRO de `act()` — sem `act` o estado do intervalo não é aplicado na leitura). `tsc --noEmit` limpo nos tocados (erros pré-existentes de `body_measurements`/`corpo`/`medidas`/`BarcodeScanner` continuam no HEAD, não relacionados). `npm run build` ok. **PENDENTE no usuário**: smoke manual (ver o balão/botão trocando de texto em provider lento).
+
 ## [09/08/2026] - Claude Code (Lembretes inteligentes — proteína, água e calorias: item 7.4)
 - **Escopo**: notificações **proativas e contextuais** (antes só existia lembrete de horário fixo, que não olha os dados). Novo tipo **`🧠 Inteligente` (`reminders.kind = "smart"`)** na página de Lembretes — cria/liga/desliga/remove igual aos tipos fixos. **Sem migration** (kind é TEXT sem CHECK). Dispara `Notification` conforme os registros do DIA, em janelas fixas:
   - 🥩 **Proteína** (`hour >= 16 && proteinGoal > 0 && consumed.calories > 0 && consumed.protein_g/proteinGoal < 0.5`) → mensagem do card "Dica do Coach".
