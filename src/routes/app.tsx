@@ -93,7 +93,7 @@ function AppLayout() {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-5 py-6">
+      <main className="max-w-3xl mx-auto px-3 sm:px-5 py-6">
         <Outlet />
       </main>
 

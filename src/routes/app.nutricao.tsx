@@ -714,66 +714,66 @@ function NutricaoPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-2">
         <div>
           <h1 className="text-3xl font-display font-bold">Nutrição</h1>
           <p className="text-sm text-muted-foreground">Diário alimentar de hoje</p>
         </div>
-        <div className="flex items-center gap-1">
-          <Button
-            size="icon"
-            variant="ghost"
-            title="O que posso comer agora? (Sugestão IA)"
-            onClick={() => setSuggestOpen(true)}
-          >
-            <Sparkles className="h-5 w-5 text-primary" />
-          </Button>
-          <Link to="/app/nutricao-historico">
-            <Button size="icon" variant="ghost" title="Visão geral">
-              <BarChart3 className="h-5 w-5" />
+        <div className="flex flex-wrap items-center justify-end gap-1 shrink-0 max-w-[56%]">
+            <Button
+              size="icon"
+              variant="ghost"
+              title="O que posso comer agora? (Sugestão IA)"
+              onClick={() => setSuggestOpen(true)}
+            >
+              <Sparkles className="h-5 w-5 text-primary" />
             </Button>
-          </Link>
-          <Link to="/app/receitas">
-            <Button size="icon" variant="ghost" title="Receitas">
-              <ChefHat className="h-5 w-5" />
-            </Button>
-          </Link>
-          <Button
-            size="icon"
-            variant="ghost"
-            title="Código de barras"
-            onClick={() => setScanOpen(true)}
-            disabled={scanLoading}
-          >
-            {scanLoading ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <Barcode className="h-5 w-5" />
-            )}
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            title="Registrar por voz"
-            onClick={() => setVoiceOpen(true)}
-          >
-            <Mic className="h-5 w-5" />
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            title="Foto do prato"
-            onClick={() => setPhotoOpen(true)}
-          >
-            <Camera className="h-5 w-5" />
-          </Button>
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button size="icon" variant="ghost" title="Adicionar alimento">
-                <Plus className="h-5 w-5" />
+            <Link to="/app/nutricao-historico">
+              <Button size="icon" variant="ghost" title="Visão geral">
+                <BarChart3 className="h-5 w-5" />
               </Button>
-            </DialogTrigger>
-            <DialogContent className="max-h-[90vh] overflow-y-auto">
+            </Link>
+            <Link to="/app/receitas">
+              <Button size="icon" variant="ghost" title="Receitas">
+                <ChefHat className="h-5 w-5" />
+              </Button>
+            </Link>
+            <Button
+              size="icon"
+              variant="ghost"
+              title="Código de barras"
+              onClick={() => setScanOpen(true)}
+              disabled={scanLoading}
+            >
+              {scanLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Barcode className="h-5 w-5" />
+              )}
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              title="Registrar por voz"
+              onClick={() => setVoiceOpen(true)}
+            >
+              <Mic className="h-5 w-5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              title="Foto do prato"
+              onClick={() => setPhotoOpen(true)}
+            >
+              <Camera className="h-5 w-5" />
+            </Button>
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button size="icon" variant="ghost" title="Adicionar alimento">
+                  <Plus className="h-5 w-5" />
+                </Button>
+              </DialogTrigger>
+            <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-primary" /> Adicionar alimento
@@ -1021,6 +1021,7 @@ function NutricaoPage() {
           </Dialog>
         </div>
       </div>
+      {/* end header section */}
 
       {/* Photo analyze dialog */}
       <Dialog
@@ -1030,7 +1031,7 @@ function NutricaoPage() {
           if (!o) setPhotoItems([]);
         }}
       >
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Camera className="h-4 w-4 text-primary" /> Foto do prato
@@ -1113,7 +1114,7 @@ function NutricaoPage() {
 
       {/* Edit quantity dialog */}
       <Dialog open={!!editItem} onOpenChange={(o) => !o && setEditItem(null)}>
-        <DialogContent>
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Ajustar quantidade</DialogTitle>
           </DialogHeader>
