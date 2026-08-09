@@ -77,7 +77,7 @@ src/lib/
 
 ---
 
-## 4. Backlog priorizado
+## 4. Backlog de Entregas Realizadas
 
 | # | Item | Arquivos afetados | Esforço | Impacto | Status |
 |---|---|---|---|---|---|
@@ -90,12 +90,62 @@ src/lib/
 
 ---
 
-## 5. Contexto técnico para qualquer agente
+## 5. Próximas Funcionalidades / Roadmap Futuro
+
+### 5.1 Registro de Alimentação por Áudio / Voz (Voice-to-Meal) 🎙️ (DESTAQUE)
+
+**Conceito**: O usuário clica em um botão de microfone na tela de Nutrição ou Chat, fala naturalmente o que comeu (ex: *"No almoço comi 200g de arroz integral, 150g de frango grelhado e 1 colher de azeite"*), e a IA transcreve, parseia os alimentos e registra a refeição com os macros calculados.
+
+**Arquitetura Técnica Proposta**:
+1. **Frontend (`src/components/voice-recorder.tsx`)**:
+   - Usa a **Web Audio API** (`navigator.mediaDevices.getUserMedia` + `MediaRecorder`) para gravar um áudio curto em formato WebM/OGG.
+   - Alternativamente, usa `webkitSpeechRecognition` no navegador como fallback sem consumo de API.
+2. **Server Function (`src/server-fns/audio.functions.ts`)**:
+   - Recebe o áudio via base64.
+   - Envia para a API do **Groq Whisper** (`whisper-large-v3-turbo`) ou OpenRouter/fal.ai para transcrição ultra-rápida (< 0.5s).
+3. **Extração de Alimentos e Registro (`src/server-fns/chat.functions.ts`)**:
+   - Reutiliza a função `executeRecordMeal` já existente no chat.
+   - Processa a transcrição e insere os `meal_items` na tabela `meals` do Supabase.
+
+---
+
+### 5.2 Checklist Interativo no Plano do Coach 📋
+
+**Conceito**: Permitir que o usuário toque nos itens da checklist semanal do Coach no card (`PlanCard`) para marcar como concluídos no decorrer da semana.
+
+**Arquitetura Técnica Proposta**:
+- Tabela `coach_weekly_plans` (com colunas `id`, `user_id`, `plan_json`, `completed_items: TEXT[]`, `week_start`).
+- Persistência ao marcar/desmarcar itens com feedback visual de progresso (ex: *2/3 concluídos*).
+
+---
+
+### 5.3 Sugestão Inteligente por Macros Restantes do Dia 🥗
+
+**Conceito**: Botão *"O que posso comer agora?"* na tela de Nutrição.
+
+**Arquitetura Técnica Proposta**:
+- Calcula: `MacroRestante = MetaDiaria - ConsumidoHoje`.
+- Faz consulta de IA (ou busca na biblioteca/receitas do usuário) filtrando por refeições que se encaixem perfeitamente nas calorias e proteínas restantes.
+
+---
+
+### 5.4 Substituição Inteligente de Exercícios por IA 🏋️
+
+**Conceito**: Botão *"Substituir Exercício"* na tela de treino em andamento.
+
+**Arquitetura Técnica Proposta**:
+- O usuário seleciona um exercício (ex: *Puxada Alta*) e indica o motivo (*aparelho ocupado* ou *treinando em casa sem puxador*).
+- A IA sugere 3 alternativas equivalentes (ex: *Barra Fixa* ou *Remada Curvada com Halteres*) mantendo o grupo muscular alvo.
+
+---
+
+## 6. Contexto técnico para qualquer agente
 
 ### Como rodar os testes
 ```powershell
 npx vitest run                                              # todos
 npx vitest run src/lib/coach-plan.test.ts                  # lógica do Coach
+npx vitest run src/lib/format-measurements.test.ts        # formatação de medidas
 npx vitest run src/components/goals-page.component.test.tsx # tela de metas
 ```
 
@@ -137,3 +187,4 @@ user_id         UUID     -- primary key / unique constraint
 - **Strings para IA**: evitar acentos em prompts hardcoded (alguns providers cortam UTF-8)
 - **Testes de componente**: `*.component.test.tsx`; testes de lib pura: `*.test.ts`
 - **Auth**: todas as server functions usam `.middleware([requireSupabaseAuth])`
+
