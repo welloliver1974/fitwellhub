@@ -202,3 +202,18 @@ user_id         UUID     -- primary key / unique constraint
 - **Testes de componente**: `*.component.test.tsx`; testes de lib pura: `*.test.ts`
 - **Auth**: todas as server functions usam `.middleware([requireSupabaseAuth])`
 
+---
+
+## 7. Oportunidades Futuras de Melhorias (Próxima Fase) 💡
+
+Como todas as tarefas do plano inicial foram concluídas com sucesso, registramos aqui as principais ideias de evolução do app para consultas futuras:
+
+| # | Ideia | Descrição | Esforço | Impacto |
+|---|---|---|---|---|
+| **7.1** | **Scanner de Rótulo por IA (Vision OCR)** | Tirar foto da tabela de informação nutricional no verso da embalagem para preenchimento automático | M | 🔴 Alto |
+| **7.2** | **Progressão Inteligente de Cargas** | Sugestão automática de incremento de carga no treino quando a IA detectar estagnação nas séries anteriores | M | 🔴 Alto |
+| **7.3** | **Gerador de Cardápio Semanal PDF** | Gerar um menu de refeições de 7 dias alinhado às metas de macros e exportável para PDF ou lista de compras | L | 🟡 Médio |
+| **7.4** | **Notificações / Alertas Inteligentes** | Alertas no app quando o usuário estiver longe da meta de proteína no final da tarde ou sem registrar água | S | 🟡 Médio |
+| **7.5** | **Integração com Wearables (Apple Health / Google Fit)** | Sincronização automática de passos diários, gasto calórico ativo e batimentos cardíacos | L | 🔴 Alto |
+
+
