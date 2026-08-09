@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Sparkles, Loader2 } from "lucide-react";
 import { coachAdvice } from "@/server-fns/nutrition.functions";
+import { formatMeasurements } from "@/lib/format-measurements";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/coach")({
@@ -63,6 +64,7 @@ function CoachPage() {
         { data: workouts },
         { data: weights },
         { data: water },
+        { data: measurements },
       ] = await Promise.all([
         supabase
           .from("goals")
@@ -92,6 +94,12 @@ function CoachPage() {
           .select("ml,log_date")
           .eq("user_id", user.id)
           .gte("log_date", start),
+        supabase
+          .from("body_measurements")
+          .select("log_date,label,value_cm")
+          .eq("user_id", user.id)
+          .gte("log_date", start)
+          .order("log_date"),
       ]);
 
       const mealIds = (meals ?? []).map((m) => m.id);
@@ -155,12 +163,21 @@ function CoachPage() {
           `- ${d}: ${Math.round(t.kcal)} kcal · P${Math.round(t.p)} C${Math.round(t.c)} G${Math.round(t.f)} · água ${Math.round(t.water)}ml`,
       );
 
+      const measurementsText = formatMeasurements(
+        (measurements ?? []).map((m) => ({
+          log_date: m.log_date as string,
+          label: m.label as string,
+          value_cm: Number(m.value_cm),
+        }))
+      );
+
       const summary = [
         `Metas: ${goals?.calories ?? 2000} kcal · P ${goals?.protein_g ?? 140}g · C ${goals?.carbs_g ?? 220}g · G ${goals?.fat_g ?? 65}g`,
         `Estratégia de proteína: ${goals?.protein_factor ?? 2.0} g/kg`,
         `Treinos na semana: ${(workouts ?? []).length} (${(workouts ?? []).map((w) => w.name).join(", ") || "nenhum"})`,
         `Pesos: ${(weights ?? []).map((w) => `${w.log_date}=${w.weight_kg}kg`).join(", ") || "sem registros"}`,
         `Água: ${(water ?? []).length} registros`,
+        `Evolução de medidas corporais:\n${measurementsText}`,
         `Diário (últimos 7 dias):`,
         ...lines,
       ].join("\n");

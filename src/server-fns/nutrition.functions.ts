@@ -10,7 +10,7 @@ import {
   resolveAiProvider,
   resolveVisionProvider,
 } from "@/server-fns/ai-settings.functions";
-import { buildCoachPlan } from "@/lib/coach-plan";
+import { buildCoachPlan, inferCoachObjective } from "@/lib/coach-plan";
 
 const inputSchema = z.object({
   query: z.string().trim().min(1).max(200),
@@ -202,23 +202,114 @@ export const coachAdvice = createServerFn({ method: "POST" })
       ? `O objetivo atual do usuario e: **${data.objective}**.`
       : "Infira o objetivo do usuario com base nas metas caloricas e estrategia de proteina.";
 
-    const res = await callAiChatCompletion({
-      provider,
-      apiKey,
-      model: getTextModel(provider, settings),
-      baseUrl: settings.omniroute_base_url,
-      messages: [
-        {
-          role: "system",
-          content:
-            `Voce e um coach pessoal e planejador de treino e nutricao. ${objectiveContext} Analise os dados da ultima semana do usuario e retorne 3-5 insights curtos, praticos e motivadores em portugues. Sempre conecte os achados a um plano da proxima semana, com foco em treino, nutricao e acompanhamento. Considere a estrategia de proteina em g/kg ao avaliar a dieta. Use markdown simples (negrito e listas). Seja direto, sem cliches.`,
-        },
-        { role: "user", content: data.summary },
-      ],
-    });
+    const fallbackObjective = data.objective ?? inferCoachObjective(data.goals);
+    const fallbackPlan = buildCoachPlan(data.stats ?? {}, data.goals, data.objective);
 
-    const json = res as any;
-    const text = (json.choices?.[0]?.message?.content as string) ?? "";
+    const coachPlanTool = {
+      type: "function",
+      function: {
+        name: "report_coach_analysis",
+        description: "Reporta a analise completa da semana e o plano personalizado para a proxima semana.",
+        parameters: {
+          type: "object",
+          properties: {
+            insightText: {
+              type: "string",
+              description: "3 a 5 insights curtos, praticos e motivadores em markdown sobre a semana passada.",
+            },
+            focus: {
+              type: "string",
+              description: "Foco principal da proxima semana em ate 6 palavras.",
+            },
+            todaySummary: {
+              type: "string",
+              description: "Resumo em 1 frase acionavel do que fazer hoje.",
+            },
+            trainingGoal: {
+              type: "string",
+              description: "Meta curta e pratica para os treinos da semana.",
+            },
+            nutritionGoal: {
+              type: "string",
+              description: "Meta curta e pratica para a nutricao da semana.",
+            },
+            trackingGoal: {
+              type: "string",
+              description: "Meta curta e pratica para o acompanhamento (pesagem, agua).",
+            },
+            nextAction: {
+              type: "string",
+              description: "Proxima acao mais importante do usuario.",
+            },
+            checklist: {
+              type: "array",
+              items: { type: "string" },
+              description: "Lista com exatamente 3 itens acionaveis de checklist para a semana.",
+            },
+          },
+          required: [
+            "insightText",
+            "focus",
+            "todaySummary",
+            "trainingGoal",
+            "nutritionGoal",
+            "trackingGoal",
+            "nextAction",
+            "checklist",
+          ],
+          additionalProperties: false,
+        },
+      },
+    };
+
+    let text = "";
+    let plan = fallbackPlan;
+
+    try {
+      const res = await callAiChatCompletion({
+        provider,
+        apiKey,
+        model: getTextModel(provider, settings),
+        baseUrl: settings.omniroute_base_url,
+        messages: [
+          {
+            role: "system",
+            content:
+              `Voce e um coach pessoal e planejador de treino e nutricao. ${objectiveContext} Analise os dados da ultima semana do usuario e gere a analise semanal acompanhada de um plano altamente personalizado usando a funcao report_coach_analysis. Use markdown simples nos insights. Seja direto, prático e motivador.`,
+          },
+          { role: "user", content: data.summary },
+        ],
+        tools: [coachPlanTool],
+        toolChoice: { type: "function", function: { name: "report_coach_analysis" } },
+      });
+
+      const json = res as any;
+      const call = json.choices?.[0]?.message?.tool_calls?.[0];
+      if (call?.function?.arguments) {
+        const args = JSON.parse(call.function.arguments);
+        text = args.insightText ?? "";
+        plan = {
+          title: "Plano da proxima semana",
+          objective: fallbackObjective,
+          focus: args.focus ?? fallbackPlan.focus,
+          todaySummary: args.todaySummary ?? fallbackPlan.todaySummary,
+          trainingGoal: args.trainingGoal ?? fallbackPlan.trainingGoal,
+          nutritionGoal: args.nutritionGoal ?? fallbackPlan.nutritionGoal,
+          trackingGoal: args.trackingGoal ?? fallbackPlan.trackingGoal,
+          nextAction: args.nextAction ?? fallbackPlan.nextAction,
+          checklist:
+            Array.isArray(args.checklist) && args.checklist.length > 0
+              ? args.checklist
+              : fallbackPlan.checklist,
+        };
+      } else {
+        text = (json.choices?.[0]?.message?.content as string) ?? "";
+      }
+    } catch {
+      // Fallback determinístico se a chamada de IA com tools falhar
+      text = "";
+    }
+
     const workoutCount = data.stats?.workoutCount ?? 0;
     const mealCount = data.stats?.mealCount ?? 0;
     const weightCount = data.stats?.weightCount ?? 0;
@@ -227,13 +318,14 @@ export const coachAdvice = createServerFn({ method: "POST" })
 
     const confidence = score >= 12 ? "alta" : score >= 6 ? "media" : "baixa";
     const nextAction =
-      workoutCount === 0
+      plan.nextAction ||
+      (workoutCount === 0
         ? "Registre pelo menos um treino na proxima semana para melhorar a leitura do Coach."
         : mealCount === 0
           ? "Registre refeicoes com mais frequencia para cruzar melhor treino e nutricao."
           : weightCount === 0
             ? "Adicione ao menos um peso recente para o Coach comparar com sua evolucao."
-            : "Mantenha a rotina atual e volte a analisar a semana na proxima atualizacao.";
+            : "Mantenha a rotina atual e volte a analisar a semana na proxima atualizacao.");
 
     const sources = [
       `${mealCount} refeicoes na semana`,
@@ -249,6 +341,6 @@ export const coachAdvice = createServerFn({ method: "POST" })
         nextAction,
         sources,
       },
-      plan: buildCoachPlan(data.stats ?? {}, data.goals ?? {}, data.objective),
+      plan,
     };
   });

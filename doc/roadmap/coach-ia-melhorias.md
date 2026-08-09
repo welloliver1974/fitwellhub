@@ -85,8 +85,8 @@ src/lib/
 | 2 | Injetar snapshot "hoje" no Chat | `chat.functions.ts` | XS | 🔴 Alto | ✅ Concluído |
 | 3 | System prompt dinâmico do Coach | `nutrition.functions.ts` | S | 🟡 Médio | ✅ Concluído |
 | 4 | `inferCoachObjective` usar `protein_factor` | `coach-plan.ts`, `coach-plan.test.ts` | S | 🟡 Médio | ✅ Concluído |
-| 5 | Coach semanal ler medidas corporais + extrair `format-measurements.ts` | `app.coach.tsx`, `chat.functions.ts` | M | 🟡 Médio | ⏳ Pendente |
-| 6 | `buildCoachPlan` gerado pela IA via structured output | `nutrition.functions.ts`, `coach-plan.ts` | L | 🔴 Alto | ⏳ Pendente |
+| 5 | Coach semanal ler medidas corporais + extrair `format-measurements.ts` | `app.coach.tsx`, `chat.functions.ts` | M | 🟡 Médio | ✅ Concluído |
+| 6 | `buildCoachPlan` gerado pela IA via structured output | `nutrition.functions.ts`, `coach-plan.ts` | L | 🔴 Alto | ✅ Concluído |
 
 ---
 

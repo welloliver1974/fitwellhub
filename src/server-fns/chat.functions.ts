@@ -19,6 +19,7 @@ import {
   nextActionFromStats,
   type CoachPlan,
 } from "@/lib/coach-plan";
+import { formatMeasurements } from "@/lib/format-measurements";
 
 const inputSchema = z.object({
   message: z.string().trim().max(2000).optional().default(""),
@@ -124,30 +125,7 @@ export async function fetchUserContext(
   }
 
   // 3. Format Body Measurements evolution
-  let measurementsText = "Sem registros de medidas recentes.";
-  if (measurements && measurements.length > 0) {
-    const sortedMeasurements = [...measurements].reverse();
-    const groups = new Map<string, any[]>();
-    for (const m of sortedMeasurements) {
-      if (!groups.has(m.label)) groups.set(m.label, []);
-      groups.get(m.label)!.push(m);
-    }
-    
-    const lines = [];
-    for (const [label, entries] of groups.entries()) {
-      if (entries.length === 1) {
-        const item = entries[0];
-        lines.push(`- ${label}: ${item.value_cm}cm (em ${item.log_date})`);
-      } else {
-        const first = entries[0];
-        const last = entries[entries.length - 1];
-        const diff = last.value_cm - first.value_cm;
-        const diffStr = diff > 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1);
-        lines.push(`- ${label}: de ${first.value_cm}cm em ${first.log_date} para ${last.value_cm}cm em ${last.log_date} (Evolução: ${diffStr}cm)`);
-      }
-    }
-    measurementsText = lines.join("\n");
-  }
+  const measurementsText = formatMeasurements(measurements);
 
   // 4. Format Workout Sessions history
   let workoutsText = "Sem treinos concluídos recentemente.";
