@@ -41,6 +41,13 @@ import {
   Mic,
 } from "lucide-react";
 import { lookupNutrition, analyzePhoto } from "@/server-fns/nutrition.functions";
+import { calculateTdee } from "@/server-fns/corpo.functions";
+import {
+  DEFAULT_PROTEIN_FACTOR,
+  matchesSuggestion,
+  shouldAutoUpdateGoal,
+  suggestGoals,
+} from "@/lib/nutrition-goals";
 import { parseFoodWeight, scaleMacros, rescaleMacros } from "@/lib/food-utils";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
@@ -304,20 +311,48 @@ function NutricaoPage() {
       }>,
     );
 
-    const { data: g } = await supabase
-      .from("goals")
-      .select("calories,protein_g,carbs_g,fat_g")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const [{ data: g }, tdeeRes] = await Promise.all([
+      supabase
+        .from("goals")
+        .select("calories,protein_g,carbs_g,fat_g,goal_auto,protein_factor")
+        .eq("user_id", user.id)
+        .maybeSingle(),
+      calculateTdee({
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      }).catch(() => null),
+    ]);
 
-    if (g) {
-      setUserGoals({
-        calories: Number(g.calories ?? 2000),
-        protein_g: Number(g.protein_g ?? 140),
-        carbs_g: Number(g.carbs_g ?? 220),
-        fat_g: Number(g.fat_g ?? 65),
-      });
+    const defaults = { calories: 2000, protein_g: 140, carbs_g: 220, fat_g: 65 };
+    let nextGoals = g
+      ? {
+          calories: Number(g.calories ?? 2000),
+          protein_g: Number(g.protein_g ?? 140),
+          carbs_g: Number(g.carbs_g ?? 220),
+          fat_g: Number(g.fat_g ?? 65),
+        }
+      : defaults;
+
+    if (tdeeRes && tdeeRes.tdee != null && tdeeRes.weight != null) {
+      const proteinFactor = g?.protein_factor ?? DEFAULT_PROTEIN_FACTOR;
+      const suggested = suggestGoals(tdeeRes.tdee, tdeeRes.weight, proteinFactor);
+      const auto = shouldAutoUpdateGoal(g, g?.goal_auto);
+      if (auto) {
+        nextGoals = {
+          calories: suggested.calories,
+          protein_g: suggested.protein_g,
+          carbs_g: suggested.carbs_g,
+          fat_g: suggested.fat_g,
+        };
+        if (!matchesSuggestion(g, tdeeRes.tdee, tdeeRes.weight, proteinFactor)) {
+          await supabase.from("goals").upsert(
+            { user_id: user.id, ...suggested, goal_auto: true, protein_factor: proteinFactor },
+            { onConflict: "user_id" },
+          );
+        }
+      }
     }
+
+    setUserGoals(nextGoals);
 
     await loadLibrary();
   };
@@ -1140,6 +1175,73 @@ function NutricaoPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Resumo Nutricional do Dia */}
+      <Card className="p-4 sm:p-5 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-xs uppercase tracking-wide font-semibold text-muted-foreground">
+              Consumo Diário
+            </p>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <span className="text-2xl sm:text-3xl font-display font-extrabold text-foreground">
+                {Math.round(consumed.calories)}
+              </span>
+              <span className="text-xs sm:text-sm text-muted-foreground">
+                / {userGoals.calories} kcal
+              </span>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-xs uppercase tracking-wide font-semibold text-muted-foreground">
+              Restantes
+            </p>
+            <p
+              className={`text-lg sm:text-xl font-display font-bold mt-0.5 ${
+                remainingMacros.calories < 0 ? "text-destructive" : "text-primary"
+              }`}
+            >
+              {remainingMacros.calories < 0
+                ? `${Math.round(remainingMacros.calories)} kcal (Excedido)`
+                : `${Math.round(remainingMacros.calories)} kcal`}
+            </p>
+          </div>
+        </div>
+
+        {/* Barra de Progresso de Calorias */}
+        <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+          <div
+            className={`h-full transition-all duration-300 ${
+              remainingMacros.calories < 0 ? "bg-destructive" : "bg-primary"
+            }`}
+            style={{
+              width: `${Math.min(100, Math.max(0, (consumed.calories / userGoals.calories) * 100))}%`,
+            }}
+          />
+        </div>
+
+        {/* Breakdown de Macros */}
+        <div className="grid grid-cols-3 gap-2 text-center text-xs pt-1">
+          <div className="rounded-xl bg-secondary/50 p-2">
+            <span className="block text-muted-foreground text-[10px]">Proteína</span>
+            <span className="font-bold text-foreground">
+              {Math.round(consumed.protein_g)} / {userGoals.protein_g}g
+            </span>
+          </div>
+          <div className="rounded-xl bg-secondary/50 p-2">
+            <span className="block text-muted-foreground text-[10px]">Carbo</span>
+            <span className="font-bold text-foreground">
+              {Math.round(consumed.carbs_g)} / {userGoals.carbs_g}g
+            </span>
+          </div>
+          <div className="rounded-xl bg-secondary/50 p-2">
+            <span className="block text-muted-foreground text-[10px]">Gordura</span>
+            <span className="font-bold text-foreground">
+              {Math.round(consumed.fat_g)} / {userGoals.fat_g}g
+            </span>
+          </div>
+        </div>
+      </Card>
 
       {visibleGroups.length === 0 ? (
         <Card className="p-10 text-center">

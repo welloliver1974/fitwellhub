@@ -125,27 +125,45 @@ export function SuggestMealDialog({
               <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 Saldo Restante Hoje
               </span>
-              <span className="text-xs font-extrabold text-primary">
-                {Math.max(0, Math.round(remaining.calories))} kcal
+              <span
+                className={`text-xs font-extrabold ${
+                  remaining.calories < 0 ? "text-destructive" : "text-primary"
+                }`}
+              >
+                {remaining.calories < 0
+                  ? `${Math.round(remaining.calories)} kcal (Excedido)`
+                  : `${Math.round(remaining.calories)} kcal`}
               </span>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center text-xs">
               <div className="rounded-xl bg-secondary/60 p-2">
                 <span className="block text-muted-foreground text-[10px]">Proteína</span>
-                <span className="font-bold text-foreground">
-                  {Math.max(0, Math.round(remaining.protein_g))}g
+                <span
+                  className={`font-bold ${
+                    remaining.protein_g < 0 ? "text-destructive" : "text-foreground"
+                  }`}
+                >
+                  {Math.round(remaining.protein_g)}g
                 </span>
               </div>
               <div className="rounded-xl bg-secondary/60 p-2">
                 <span className="block text-muted-foreground text-[10px]">Carbo</span>
-                <span className="font-bold text-foreground">
-                  {Math.max(0, Math.round(remaining.carbs_g))}g
+                <span
+                  className={`font-bold ${
+                    remaining.carbs_g < 0 ? "text-destructive" : "text-foreground"
+                  }`}
+                >
+                  {Math.round(remaining.carbs_g)}g
                 </span>
               </div>
               <div className="rounded-xl bg-secondary/60 p-2">
                 <span className="block text-muted-foreground text-[10px]">Gordura</span>
-                <span className="font-bold text-foreground">
-                  {Math.max(0, Math.round(remaining.fat_g))}g
+                <span
+                  className={`font-bold ${
+                    remaining.fat_g < 0 ? "text-destructive" : "text-foreground"
+                  }`}
+                >
+                  {Math.round(remaining.fat_g)}g
                 </span>
               </div>
             </div>
