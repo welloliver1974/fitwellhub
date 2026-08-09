@@ -2,6 +2,15 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [09/08/2026] - Claude Code (BUG: média/TDEE/metas não voltavam após apagar treino — sessões órfãs)
+- **Ocorrência**: usuário testou "finalizar treino" e registrou sessões sem querer; apagou o treino na tela de Treinos, mas a **média de treinos/semana subiu de 4 para 5** e **não voltava** — as metas ficaram no nível de "5 treinos/semana".
+- **Causa raiz — dois schemas de treino**: o planejamento vive em `workouts/exercises/sets` (tela de Treinos), mas a **sessão concluída** vive em `workout_sessions/workout_session_sets`. A média/TDEE (`corpo.functions.ts:80-96`) conta só **`workout_sessions`** (últimos 28 dias ÷ 4 → `sessionsPerWeek` → fator de atividade 1.55→1.725 → TDEE → meta `goal_auto`). Ao apagar o treino, o `remove()` apagava só `workouts` — e o FK `workout_sessions.workout_id → workouts` é **`ON DELETE SET NULL`** (migration `20260603000000`), então as sessões ficavam **órfãs** e continuavam a inflar a média. Não havia **nenhum** `delete` de `workout_sessions` na UI → impossível corrigir sem SQL.
+- **Fix — código puro (sem migration)**: 
+  - `app.treinos.index.tsx` `remove()`: agora exclui também as `workout_sessions` cujo `workout_id` é o do treino (com aviso no `confirm` e a contagem); `workout_session_sets` caem em cascata pela FK `session_id ON DELETE CASCADE`.
+  - Nova seção **"Treinos concluídos"** na tela de Treinos: lista as **últimas 30 `workout_sessions`** (nome + data/hora local SP via `formatSessionWhen`) com botão de excluir + `confirm` — permite limpar sessões de teste **já órfãs** (workout apagado) pela UI, sem SQL. RLS existente é `FOR ALL` → permite o delete como usuário.
+  - Depois de excluir uma sessão, a média/TDEE/meta **recalculam sozinhas** no próximo load (cálculo é server-side, sem cache).
+- **Validação**: `tsc --noEmit` limpo no arquivo; `TZ=UTC npx vitest run` **156/156** (nenhum teste existente tocado). **PENDENTE no usuário**: na tela de Treinos → seção "Treinos concluídos" → excluir as sessões de teste (as de hoje aparecem no topo) e conferir que a média/metas voltam.
+
 ## [09/08/2026] - Claude Code (Estados granulares de loading no Chat/Coach — UX 2, forma 1)
 - **Problema**: as duas telas de IA tinham um único spinner com **texto fixo** ("pensando…" no Chat, "Analisando seus dados…" no Coach) durante toda a chamada (3–30s conforme o provider) — usuário pode achar que travou.
 - **Decisão do usuário**: **forma 1 (barata, front-only)** — rótulos de fase derivados de **tempo decorrido** (estimativa por timer), **sem tocar no backend**. Forma 2 (polling/SSE com fases reais) descartada por custo.

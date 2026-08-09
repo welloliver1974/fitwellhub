@@ -14,7 +14,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, ChevronRight, Dumbbell, Trash2, Copy, Layers, PencilLine } from "lucide-react";
+import { Plus, ChevronRight, Dumbbell, Trash2, Copy, Layers, PencilLine, History } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/treinos/")({
@@ -22,6 +22,18 @@ export const Route = createFileRoute("/app/treinos/")({
 });
 
 type Workout = { id: string; name: string; workout_date: string };
+type Session = { id: string; name: string; completed_at: string };
+
+// Instant UTC (completed_at) em data+hora local SP — fuso fixo do app.
+function formatSessionWhen(iso: string): string {
+  return new Date(iso).toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 function WorkoutsPage() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
@@ -29,6 +41,7 @@ function WorkoutsPage() {
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [sessions, setSessions] = useState<Session[]>([]);
 
   const load = async () => {
     const { data } = await supabase
@@ -38,8 +51,17 @@ function WorkoutsPage() {
       .limit(50);
     setWorkouts(data ?? []);
   };
+  const loadSessions = async () => {
+    const { data } = await supabase
+      .from("workout_sessions")
+      .select("id,name,completed_at")
+      .order("completed_at", { ascending: false })
+      .limit(30);
+    setSessions(data ?? []);
+  };
   useEffect(() => {
     load();
+    loadSessions();
   }, []);
 
   const create = async () => {
@@ -61,15 +83,36 @@ function WorkoutsPage() {
   const remove = async (id: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!confirm("Excluir este treino e todos os exercícios?")) return;
+    // Sessões concluídas ligadas: o FK workout_id é ON DELETE SET NULL, então o
+    // app NÃO as remove ao apagar o treino — sessões órfãs continuariam a inflar
+    // a média de treinos/semana e a meta. Excluir junto aqui.
+    const { data: sess } = await supabase
+      .from("workout_sessions")
+      .select("id")
+      .eq("workout_id", id);
+    const sessIds = (sess ?? []).map((s) => s.id);
+    if (!confirm(
+      sessIds.length > 0
+        ? `Excluir este treino, os exercícios e ${sessIds.length} sessão(ões) concluída(s) do histórico?`
+        : "Excluir este treino e todos os exercícios?"
+    )) return;
+    // workout_session_sets são removidas em cascata pela FK (session_id).
+    if (sessIds.length) {
+      const { error: sessErr } = await supabase
+        .from("workout_sessions")
+        .delete()
+        .in("id", sessIds);
+      if (sessErr) return toast.error(sessErr.message);
+    }
     const { data: exs } = await supabase.from("exercises").select("id").eq("workout_id", id);
     const exIds = (exs ?? []).map((x) => x.id);
     if (exIds.length) await supabase.from("sets").delete().in("exercise_id", exIds);
     await supabase.from("exercises").delete().eq("workout_id", id);
     const { error } = await supabase.from("workouts").delete().eq("id", id);
     if (error) return toast.error(error.message);
-    toast.success("Treino excluído");
+    toast.success(sessIds.length ? "Treino e sessões excluídos" : "Treino excluído");
     load();
+    loadSessions();
   };
 
   const duplicate = async (w: Workout, e: React.MouseEvent) => {
@@ -164,6 +207,17 @@ function WorkoutsPage() {
   const cancelEdit = () => {
     setEditingId(null);
     setEditName("");
+  };
+
+  const removeSession = async (sid: string) => {
+    if (!confirm("Excluir esta sessão concluída do histórico? A média de treinos/semana e a meta recalcularão.")) return;
+    const { error } = await supabase
+      .from("workout_sessions")
+      .delete()
+      .eq("id", sid);
+    if (error) return toast.error(error.message);
+    toast.success("Sessão excluída do histórico");
+    loadSessions();
   };
 
   return (
@@ -267,6 +321,37 @@ function WorkoutsPage() {
               </Card>
             </Link>
           ))}
+        </div>
+      )}
+
+      {sessions.length > 0 && (
+        <div className="space-y-2 border-t pt-4">
+          <div className="flex items-center gap-2">
+            <History className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-lg font-semibold">Treinos concluídos</h2>
+          </div>
+          <p className="text-xs text-muted-foreground text-pretty">
+            Sessões do histórico alimentam a média de treinos/semana e a meta. Para limpar um
+            registro de teste, use o botão de excluir ao lado — a base de treinos não é afetada.
+          </p>
+          <div className="space-y-2">
+            {sessions.map((s) => (
+              <Card key={s.id} className="p-3 flex items-center justify-between">
+                <div className="min-w-0">
+                  <p className="font-medium truncate">{s.name}</p>
+                  <p className="text-xs text-muted-foreground">{formatSessionWhen(s.completed_at)}</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => removeSession(s.id)}
+                  title="Excluir sessão do histórico"
+                >
+                  <Trash2 className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </Card>
+            ))}
+          </div>
         </div>
       )}
     </div>
