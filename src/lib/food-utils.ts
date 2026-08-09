@@ -67,3 +67,39 @@ export function rescaleMacros(prev: MacroState, refGrams: number, newGrams: numb
     fat_g: scale1(prev.fat_g),
   };
 }
+
+// Normaliza a leitura da IA de uma tabela nutricional (foto do rótulo): kcal
+// INTEIRO, P/C/G a 1 casa (idem scaleMacros/rescaleMacros); serving_g ausente/
+// inválida -> 100 (convenção "por 100g"); macros ausentes/inválidos -> 0; nome
+// ausente -> "". Sem imports — testável em node.
+export function normalizeLabelMacros(raw: {
+  name?: string | null;
+  serving_g?: number | null;
+  calories?: number | null;
+  protein_g?: number | null;
+  carbs_g?: number | null;
+  fat_g?: number | null;
+}): {
+  name: string;
+  serving_g: number;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+} {
+  // Campo numérico: inválido (null/NaN/negativo/zero) vira 0.
+  const toNum = (v: number | null | undefined) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  };
+  const serving = Math.round(toNum(raw.serving_g));
+
+  return {
+    name: raw.name?.trim() ?? "",
+    serving_g: serving > 0 ? serving : 100,
+    calories: Math.round(toNum(raw.calories)),
+    protein_g: Math.round(toNum(raw.protein_g) * 10) / 10,
+    carbs_g: Math.round(toNum(raw.carbs_g) * 10) / 10,
+    fat_g: Math.round(toNum(raw.fat_g) * 10) / 10,
+  };
+}

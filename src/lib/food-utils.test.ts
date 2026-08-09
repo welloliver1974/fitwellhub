@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseFoodWeight, rescaleMacros, scaleMacros } from "@/lib/food-utils";
+import { normalizeLabelMacros, parseFoodWeight, rescaleMacros, scaleMacros } from "@/lib/food-utils";
 
 describe("parseFoodWeight", () => {
   it("parseia gramas e unidades", () => {
@@ -99,5 +99,46 @@ describe("rescaleMacros", () => {
   it("devolve prev inalterado quando newGrams ou refGrams <= 0", () => {
     expect(rescaleMacros(prev, 100, 0)).toEqual(prev);
     expect(rescaleMacros(prev, 0, 100)).toEqual(prev);
+  });
+});
+
+describe("normalizeLabelMacros", () => {
+  it("arredonda kcal para inteiro e P/C/G para 1 casa", () => {
+    const r = normalizeLabelMacros({
+      name: "Biscoito",
+      serving_g: 30,
+      calories: 145.6,
+      protein_g: 4.34,
+      carbs_g: 20.05,
+      fat_g: 5,
+    });
+    expect(r.calories).toBe(146);
+    expect(r.protein_g).toBe(4.3);
+    expect(r.carbs_g).toBe(20.1); // Math.round(20.05*10)/10
+    expect(r.fat_g).toBe(5);
+  });
+
+  it("serving_g ausente ou inválida cai para 100 (convenção por 100g)", () => {
+    expect(normalizeLabelMacros({ serving_g: null as any, calories: 10 }).serving_g).toBe(100);
+    expect(normalizeLabelMacros({ serving_g: 0, calories: 10 }).serving_g).toBe(100);
+    expect(normalizeLabelMacros({ serving_g: -30, calories: 10 }).serving_g).toBe(100);
+  });
+
+  it("mantém serving_g declarada", () => {
+    expect(normalizeLabelMacros({ serving_g: 30, calories: 10 }).serving_g).toBe(30);
+    expect(normalizeLabelMacros({ serving_g: 30.4, calories: 10 }).serving_g).toBe(30);
+  });
+
+  it("campos ausentes/inválidos viram 0", () => {
+    const r = normalizeLabelMacros({ serving_g: 30, protein_g: null as any });
+    expect(r.protein_g).toBe(0);
+    expect(r.carbs_g).toBe(0);
+    expect(r.fat_g).toBe(0);
+    expect(r.calories).toBe(0);
+  });
+
+  it("name ausente vira vazio e trim aparou espaços", () => {
+    expect(normalizeLabelMacros({ serving_g: 30, calories: 1 }).name).toBe("");
+    expect(normalizeLabelMacros({ name: "  X  ", serving_g: 30, calories: 1 }).name).toBe("X");
   });
 });

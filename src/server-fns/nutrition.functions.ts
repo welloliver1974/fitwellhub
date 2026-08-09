@@ -11,6 +11,7 @@ import {
   resolveVisionProvider,
 } from "@/server-fns/ai-settings.functions";
 import { buildCoachPlan, inferCoachObjective } from "@/lib/coach-plan";
+import { normalizeLabelMacros } from "@/lib/food-utils";
 
 const inputSchema = z.object({
   query: z.string().trim().min(1).max(200),
@@ -164,6 +165,84 @@ export const analyzePhoto = createServerFn({ method: "POST" })
         fat_g: number;
       }>;
     };
+  });
+
+// Leitura da tabela "Informacao Nutricional" de uma embalagem pela foto.
+// name aceita null (produto sem nome visivel); os macros numericos sao
+// obrigatorios para o safeParse, normalizados depois em normalizeLabelMacros.
+export const labelSchema = z.object({
+  name: z.string().nullable().optional(),
+  serving_g: z.number(),
+  calories: z.number(),
+  protein_g: z.number(),
+  carbs_g: z.number(),
+  fat_g: z.number(),
+});
+
+const labelParamsSchema = {
+  type: "object",
+  properties: {
+    name: { type: "string", description: "Nome do produto visivel na embalagem, ou null" },
+    serving_g: { type: "number", description: "Porcao declarada em gramas (ex.: Porcao de 30g)" },
+    calories: { type: "number", description: "kcal POR PORCAO" },
+    protein_g: { type: "number" },
+    carbs_g: { type: "number" },
+    fat_g: { type: "number" },
+  },
+  required: ["name", "serving_g", "calories", "protein_g", "carbs_g", "fat_g"],
+  additionalProperties: false,
+};
+
+export const analyzeLabel = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => photoSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const settings = await fetchAiSettings(supabase, userId);
+    const photoProvider = resolveVisionProvider(settings);
+    const apiKey = resolveAiApiKey(settings, photoProvider);
+    if (!apiKey) throw new Error("Configure uma chave de IA nas configuracoes.");
+    const photoModel = getVisionModel(photoProvider, settings);
+
+    const res = await callAiChatCompletion({
+      provider: photoProvider,
+      apiKey,
+      model: photoModel,
+      baseUrl: photoProvider === "omniroute" ? settings.omniroute_base_url : undefined,
+      maxTokens: 512,
+      messages: [
+        {
+          role: "system",
+          content:
+            "Voce e um nutricionista. Leia a tabela 'Informacao Nutricional' da embalagem na foto. name = nome visivel do produto (ou null se nao houver). serving_g = porcao declarada em gramas (ex.: 'Porcao de 30g'). calories/protein_g/carbs_g/fat_g = valores POR PORCAO. Se a tabela so mostrar valores por 100g, use serving_g=100 e os valores por 100g. Se algum campo nao estiver visivel, use null. Retorne APENAS a tool call.",
+        },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Leia a tabela nutricional desta embalagem." },
+            { type: "image_url", image_url: { url: data.imageBase64 } },
+          ],
+        },
+      ],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "report_label",
+            description: "Reporta os macros lidos da tabela nutricional da embalagem",
+            parameters: labelParamsSchema,
+          },
+        },
+      ],
+      toolChoice: { type: "function", function: { name: "report_label" } },
+    });
+
+    const json = res as any;
+    const call = json.choices?.[0]?.message?.tool_calls?.[0];
+    if (!call) throw new Error("IA nao retornou a leitura do rotulo (refaca a foto)");
+    const parsed = labelSchema.safeParse(JSON.parse(call.function.arguments));
+    if (!parsed.success) throw new Error("Leitura do rotulo em formato inesperado (refaca a foto)");
+    return normalizeLabelMacros(parsed.data);
   });
 
 const coachSchema = z.object({

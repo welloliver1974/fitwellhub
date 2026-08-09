@@ -42,9 +42,10 @@ import {
   TrendingDown,
   TrendingUp,
   Minus,
+  ScanText,
   Zap,
 } from "lucide-react";
-import { lookupNutrition, analyzePhoto } from "@/server-fns/nutrition.functions";
+import { lookupNutrition, analyzePhoto, analyzeLabel } from "@/server-fns/nutrition.functions";
 import { calculateTdee } from "@/server-fns/corpo.functions";
 import {
   DEFAULT_PROTEIN_FACTOR,
@@ -53,6 +54,7 @@ import {
   suggestGoals,
 } from "@/lib/nutrition-goals";
 import { parseFoodWeight, scaleMacros, rescaleMacros } from "@/lib/food-utils";
+import { resizeImageFileToDataUrl } from "@/lib/image-utils";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
@@ -140,6 +142,10 @@ function NutricaoPage() {
 
   const [scanOpen, setScanOpen] = useState(false);
   const [scanLoading, setScanLoading] = useState(false);
+  // foto do rótulo — lê a tabela "Informação Nutricional" da embalagem e
+  // popula o form principal (editável), paralelo ao fluxo da foto do prato
+  const [labelOpen, setLabelOpen] = useState(false);
+  const [labelLoading, setLabelLoading] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
@@ -248,6 +254,53 @@ function NutricaoPage() {
       toast("Preencha o nome e os macros manualmente");
     } finally {
       setScanLoading(false);
+    }
+  };
+
+  // Foto do rótulo: lê a tabela "Informação Nutricional" da embalagem e popula o
+  // form principal (editável) — diferente da foto do prato, que grava direto em
+  // meal_items. O usuário revisa macros e porção antes de "Adicionar".
+  const onPickLabel = async (file: File) => {
+    setLabelOpen(false);
+    setOpen(false);
+    setLabelLoading(true);
+    setQuery("");
+    setGrams(100);
+    setManual(false);
+    setMCal("");
+    setMProt("");
+    setMCarb("");
+    setMFat("");
+    setBarcodePortionLabel("");
+    setBarcodePortionSource("");
+    setRefGrams(null);
+    try {
+      const dataUrl = await resizeImageFileToDataUrl(file);
+      const macros = await analyzeLabel({
+        headers: session?.access_token
+          ? { Authorization: `Bearer ${session.access_token}` }
+          : undefined,
+        data: { imageBase64: dataUrl },
+      });
+      setQuery(macros.name);
+      setGrams(macros.serving_g);
+      setBarcodePortionLabel(`Porção do rótulo: ${macros.serving_g}g`);
+      setBarcodePortionSource("ai");
+      setManual(true);
+      setMCal(macros.calories);
+      setMProt(macros.protein_g);
+      setMCarb(macros.carbs_g);
+      setMFat(macros.fat_g);
+      // macros correspondem à porção do rótulo → mudar "Porção (g)" reescala proporcional
+      setRefGrams(macros.serving_g);
+      setOpen(true);
+      toast.success(macros.name ? `${macros.name} (do rótulo)` : "Rótulo lido — revise e edite");
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Erro ao ler o rótulo");
+      setLabelOpen(true);
+    } finally {
+      setLabelLoading(false);
     }
   };
 
@@ -581,38 +634,7 @@ function NutricaoPage() {
     setPhotoLoading(true);
     setPhotoItems([]);
     try {
-      const dataUrl: string = await new Promise((resolve, reject) => {
-        const img = new Image();
-        const r = new FileReader();
-        r.onload = (e) => {
-          img.onload = () => {
-            const canvas = document.createElement("canvas");
-            let width = img.width;
-            let height = img.height;
-            const maxSize = 800; // Resize to max 800px to save tokens and bandwidth
-
-            if (width > height && width > maxSize) {
-              height = Math.round((height * maxSize) / width);
-              width = maxSize;
-            } else if (height > maxSize) {
-              width = Math.round((width * maxSize) / height);
-              height = maxSize;
-            }
-
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext("2d");
-            if (!ctx) return reject(new Error("Canvas não suportado"));
-            ctx.drawImage(img, 0, 0, width, height);
-            
-            // Compress with JPEG at 70% quality
-            resolve(canvas.toDataURL("image/jpeg", 0.7));
-          };
-          img.src = e.target?.result as string;
-        };
-        r.onerror = reject;
-        r.readAsDataURL(file);
-      });
+      const dataUrl = await resizeImageFileToDataUrl(file);
       const res = await analyzePhoto({
         headers: session?.access_token
           ? { Authorization: `Bearer ${session.access_token}` }
@@ -838,6 +860,19 @@ function NutricaoPage() {
               onClick={() => setPhotoOpen(true)}
             >
               <Camera className="h-5 w-5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              title="Foto do rótulo"
+              onClick={() => setLabelOpen(true)}
+              disabled={labelLoading}
+            >
+              {labelLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <ScanText className="h-5 w-5" />
+              )}
             </Button>
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
@@ -1208,6 +1243,44 @@ function NutricaoPage() {
                 </Button>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Label analyze dialog */}
+      <Dialog open={labelOpen} onOpenChange={setLabelOpen}>
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ScanText className="h-4 w-4 text-primary" /> Foto do rótulo
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground text-pretty">
+              Fotografe a tabela "Informação Nutricional" da embalagem. Os macros lidos abrem no
+              formulário para você revisar e editar antes de adicionar.
+            </p>
+          </DialogHeader>
+          <div className="space-y-3">
+            <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-xl p-6 cursor-pointer hover:bg-secondary/30 transition-colors">
+              {labelLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <ScanText className="h-5 w-5 text-muted-foreground" />
+              )}
+              <span className="text-sm text-muted-foreground">
+                {labelLoading ? "Lendo rótulo…" : "Fotografar ou enviar imagem"}
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                disabled={labelLoading}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) onPickLabel(f);
+                }}
+              />
+            </label>
           </div>
         </DialogContent>
       </Dialog>
