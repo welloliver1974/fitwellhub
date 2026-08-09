@@ -35,7 +35,7 @@ CREATE TRIGGER on_auth_user_created
 -- Goals
 CREATE TABLE IF NOT EXISTS public.goals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
   calories NUMERIC NOT NULL DEFAULT 2000,
   protein_g NUMERIC NOT NULL DEFAULT 140,
   carbs_g NUMERIC NOT NULL DEFAULT 220,

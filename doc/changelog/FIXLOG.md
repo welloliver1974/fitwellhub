@@ -1394,3 +1394,22 @@ O usuário registrou **um** café da manhã e o card de calorias do dia mostrou 
 - ✅ `TZ=UTC npx vitest run` → **78 testes verdes** (75 + 3 novos em `nutrition-day-detail.component.test.tsx` com o padrão `vi.hoisted` de supabase mock + useAuth)
 - ✅ `tsc --noEmit` sem erros novos nos arquivos tocados (62 pré-existentes — baseline)
 - ✅ `npm run build` validado (client + SSR)
+
+## Sessão: 09/08/2026 — Metas diárias não salvavam (ON CONFLICT (user_id) sem constraint no banco real)
+
+### 🎯 O que o usuário perguntou
+"Ao salvar a estratégia de proteína (conservador/moderado/padrão treino) em Metas diárias, aparece: `there is no unique or exclusion constraint matching the ON CONFLICT specification`."
+
+### 🔍 Causa raiz
+A tabela `goals` **do banco real** foi criada pelo `schema_completo.sql` com **PK artificial `id`** e `user_id` **sem constraint única**. Mas o app salva com `supabase.from("goals").upsert(payload, { onConflict: "user_id" })` — em **5 lugares**: home (`app.index.tsx`, auto-sync `goal_auto`), página de Metas (`goals-page.tsx`), Nutrição (`app.nutricao.tsx` auto-sync) e Coach (`app.coach.tsx`, ajuste de calorias). O Postgres só aceita `ON CONFLICT (user_id)` se houver `UNIQUE` em `user_id`. A tabela `ai_settings` tem `user_id` como PK (por isso lá o upsert funciona e o erro aparecia só em `goals`).
+
+### 🛠️ Correção
+1. **Nova migration `supabase/migrations/20260809000000_goals_user_id_unique.sql`** (SQL puro, código TS intocado):
+   - **Dedupe** — se houver mais de uma linha por `user_id`, mantém a mais recente: `DELETE … WHERE ctid IN (SELECT ctid FROM ranked WHERE rn>1)` com `ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY updated_at DESC, ctid DESC)`.
+   - **`CREATE UNIQUE INDEX goals_user_id_key ON public.goals(user_id)`** — é isso que o `ON CONFLICT` precisa. `IF NOT EXISTS` protege banco que já tenha `user_id` como PK.
+2. **`supabase/schema_completo.sql`**: `user_id UUID NOT NULL UNIQUE REFERENCES …` — recriar o banco à mão não reimporta o bug.
+
+### ✅ Estado final
+- ✅ Migration aplicada pelo usuário no **Supabase SQL Editor** → salvar a estratégia de proteção voltou a funcionar.
+- ✅ Sem mudanças de TS/testes (só SQL).
+- A partir daqui, o home volta a sincronizar a meta automaticamente sem erro silencioso.
