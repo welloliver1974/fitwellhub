@@ -449,6 +449,22 @@ export function FoodLibrary({
                   value={addGrams}
                   onChange={(e) => setAddGrams(e.target.value === "" ? "" : Number(e.target.value))}
                 />
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {[50, 100, 150, 200, 250, 300].map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setAddGrams(g)}
+                      className={`rounded-full px-2.5 py-0.5 text-xs border transition-colors ${
+                        addGrams === g
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-secondary text-secondary-foreground border-border hover:bg-secondary/80"
+                      }`}
+                    >
+                      {g}g
+                    </button>
+                  ))}
+                </div>
               </div>
               {preview && (
                 <p className="text-xs text-muted-foreground">
@@ -505,6 +521,22 @@ export function FoodLibrary({
                 value={fGrams}
                 onChange={(e) => setFGrams(e.target.value === "" ? "" : Number(e.target.value))}
               />
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {[50, 100, 150, 200, 250, 300].map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => setFGrams(g)}
+                    className={`rounded-full px-2.5 py-0.5 text-xs border transition-colors ${
+                      fGrams === g
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-secondary text-secondary-foreground border-border hover:bg-secondary/80"
+                    }`}
+                  >
+                    {g}g
+                  </button>
+                ))}
+              </div>
               <p className="text-xs text-muted-foreground mt-1">
                 Macros abaixo valem para essa porção. Ao adicionar, você poderá mudar a quantidade.
               </p>

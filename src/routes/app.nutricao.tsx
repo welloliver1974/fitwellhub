@@ -1011,6 +1011,36 @@ function NutricaoPage() {
                       }
                     }}
                   />
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {[50, 100, 150, 200, 250, 300].map((g) => (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => {
+                          setGrams(g);
+                          if (refGrams !== null && g > 0) {
+                            const scaled = rescaleMacros(
+                              { calories: mCal, protein_g: mProt, carbs_g: mCarb, fat_g: mFat },
+                              refGrams,
+                              g,
+                            );
+                            setMCal(scaled.calories);
+                            setMProt(scaled.protein_g);
+                            setMCarb(scaled.carbs_g);
+                            setMFat(scaled.fat_g);
+                            setRefGrams(g);
+                          }
+                        }}
+                        className={`rounded-full px-2.5 py-0.5 text-xs border transition-colors ${
+                          grams === g
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-secondary text-secondary-foreground border-border hover:bg-secondary/80"
+                        }`}
+                      >
+                        {g}g
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div className="flex items-center justify-between pt-1">
                   <Label
@@ -1201,6 +1231,22 @@ function NutricaoPage() {
                   onChange={(e) => setEditGrams(e.target.value === "" ? "" : Number(e.target.value))}
                   autoFocus
                 />
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {[50, 100, 150, 200, 250, 300].map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setEditGrams(g)}
+                      className={`rounded-full px-2.5 py-0.5 text-xs border transition-colors ${
+                        editGrams === g
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-secondary text-secondary-foreground border-border hover:bg-secondary/80"
+                      }`}
+                    >
+                      {g}g
+                    </button>
+                  ))}
+                </div>
               </div>
               <p className="text-xs text-muted-foreground">
                 Macros serão recalculados proporcionalmente.
