@@ -58,7 +58,7 @@ export async function fetchUserContext(
     { data: measurements },
     { data: workoutsData },
     ] = await Promise.all([
-    supabase.from("goals").select("calories,protein_g,carbs_g,fat_g").eq("user_id", userId).maybeSingle(),
+    supabase.from("goals").select("calories,protein_g,carbs_g,fat_g,protein_factor").eq("user_id", userId).maybeSingle(),
     supabase.from("meals").select("id,meal_date").eq("user_id", userId).gte("meal_date", weekAgo),
     supabase.from("water_logs").select("ml,log_date").eq("user_id", userId).gte("log_date", weekAgo),
     supabase.from("body_weights").select("weight_kg,log_date").eq("user_id", userId).order("log_date", { ascending: false }).limit(5),
@@ -101,6 +101,21 @@ export async function fetchUserContext(
   const dailyTotalsText = Object.entries(dailyTotals)
     .map(([d, t]) => `${d}: ${Math.round(t.kcal)}kcal (P:${Math.round(t.p)}g, C:${Math.round(t.c)}g, G:${Math.round(t.f)}g)`)
     .join(", ");
+
+  // Totais consumidos hoje
+  const todayTotals = dailyTotals[today] ?? { kcal: 0, p: 0, c: 0, f: 0 };
+  const todayWater = (water ?? [])
+    .filter((w: any) => w.log_date === today)
+    .reduce((sum: number, w: any) => sum + Number(w.ml), 0);
+  const targetKcal = goals?.calories ?? 2000;
+  const pctKcal = targetKcal > 0 ? Math.round((todayTotals.kcal / targetKcal) * 100) : 0;
+
+  const todaySnapshot = `Consumido Hoje (${today}):
+  - Calorias: ${Math.round(todayTotals.kcal)} / ${targetKcal} kcal (${pctKcal}%)
+  - Proteínas: ${Math.round(todayTotals.p)} / ${goals?.protein_g ?? 140}g
+  - Carboidratos: ${Math.round(todayTotals.c)} / ${goals?.carbs_g ?? 220}g
+  - Gorduras: ${Math.round(todayTotals.f)} / ${goals?.fat_g ?? 65}g
+  - Água: ${Math.round(todayWater)}ml`;
 
   // 2. Format Body Weight history
   let weightsText = "Sem registros de peso recentes.";
@@ -159,8 +174,10 @@ export async function fetchUserContext(
   }
 
   // 5. Generate integrated context string
-  const ctxText = `Hoje: ${today}
-Metas Diárias: Calórias: ${goals?.calories ?? 2000}kcal, Proteínas: ${goals?.protein_g ?? 140}g, Carboidratos: ${goals?.carbs_g ?? 220}g, Gorduras: ${goals?.fat_g ?? 65}g
+  const ctxText = `Data atual: ${today}
+Metas Diárias: Calórias: ${goals?.calories ?? 2000}kcal, Proteínas: ${goals?.protein_g ?? 140}g (Estratégia: ${goals?.protein_factor ?? 2.0} g/kg), Carboidratos: ${goals?.carbs_g ?? 220}g, Gorduras: ${goals?.fat_g ?? 65}g
+
+${todaySnapshot}
 
 Últimos 7 dias de nutrição:
 ${dailyTotalsText || "Nenhuma refeição registrada."}

@@ -1,4 +1,4 @@
-﻿import { createServerFn } from "@tanstack/react-start";
+import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
@@ -175,6 +175,7 @@ const coachSchema = z.object({
       protein_g: z.number().nonnegative().optional(),
       carbs_g: z.number().nonnegative().optional(),
       fat_g: z.number().nonnegative().optional(),
+      protein_factor: z.number().nonnegative().optional(),
     })
     .optional(),
   stats: z
@@ -197,6 +198,10 @@ export const coachAdvice = createServerFn({ method: "POST" })
     const apiKey = resolveAiApiKey(settings, provider);
     if (!apiKey) throw new Error("Configure uma chave de IA nas configuracoes.");
 
+    const objectiveContext = data.objective
+      ? `O objetivo atual do usuario e: **${data.objective}**.`
+      : "Infira o objetivo do usuario com base nas metas caloricas e estrategia de proteina.";
+
     const res = await callAiChatCompletion({
       provider,
       apiKey,
@@ -206,7 +211,7 @@ export const coachAdvice = createServerFn({ method: "POST" })
         {
           role: "system",
           content:
-            "Voce e um coach pessoal e planejador de treino e nutricao. Analise os dados da ultima semana do usuario e retorne 3-5 insights curtos, praticos e motivadores em portugues. Sempre conecte os achados a um plano da proxima semana, com foco em treino, nutricao e acompanhamento. Use markdown simples (negrito e listas). Seja direto, sem clichês.",
+            `Voce e um coach pessoal e planejador de treino e nutricao. ${objectiveContext} Analise os dados da ultima semana do usuario e retorne 3-5 insights curtos, praticos e motivadores em portugues. Sempre conecte os achados a um plano da proxima semana, com foco em treino, nutricao e acompanhamento. Considere a estrategia de proteina em g/kg ao avaliar a dieta. Use markdown simples (negrito e listas). Seja direto, sem cliches.`,
         },
         { role: "user", content: data.summary },
       ],

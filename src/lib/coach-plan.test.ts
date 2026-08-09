@@ -28,6 +28,11 @@ describe("inferCoachObjective", () => {
   it("com caloria baixa mas proteina abaixo do corte, vai para Recomposicao corporal", () => {
     expect(inferCoachObjective({ calories: 1800, protein_g: 100 })).toBe("Recomposicao corporal");
   });
+
+  it("respeita protein_factor quando presente", () => {
+    expect(inferCoachObjective({ calories: 1800, protein_factor: 1.6 })).toBe("Emagrecimento");
+    expect(inferCoachObjective({ calories: 2500, protein_factor: 2.2 })).toBe("Hipertrofia");
+  });
 });
 
 describe("buildCoachPlan", () => {

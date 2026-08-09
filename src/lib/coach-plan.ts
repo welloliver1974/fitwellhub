@@ -14,6 +14,7 @@ export type CoachGoals = {
   protein_g?: number;
   carbs_g?: number;
   fat_g?: number;
+  protein_factor?: number;
 };
 
 export type CoachStats = {
@@ -38,9 +39,13 @@ export type CoachPlan = {
 export function inferCoachObjective(goals?: CoachGoals): CoachObjective {
   const calories = goals?.calories ?? 0;
   const protein = goals?.protein_g ?? 0;
+  const factor = goals?.protein_factor;
 
-  if (calories <= 1900 && protein >= 120) return "Emagrecimento";
-  if (calories >= 2300 && protein >= 150) return "Hipertrofia";
+  const hasHighProtein = factor !== undefined ? factor >= 2.0 : protein >= 150;
+  const hasModerateProtein = factor !== undefined ? factor >= 1.6 : protein >= 120;
+
+  if (calories <= 1900 && hasModerateProtein) return "Emagrecimento";
+  if (calories >= 2300 && hasHighProtein) return "Hipertrofia";
   if (calories > 0 && calories < 2300) return "Recomposicao corporal";
   return "Manutencao";
 }

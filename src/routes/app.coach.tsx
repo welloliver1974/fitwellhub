@@ -66,7 +66,7 @@ function CoachPage() {
       ] = await Promise.all([
         supabase
           .from("goals")
-          .select("calories,protein_g,carbs_g,fat_g")
+          .select("calories,protein_g,carbs_g,fat_g,protein_factor")
           .eq("user_id", user.id)
           .maybeSingle(),
         supabase
@@ -157,6 +157,7 @@ function CoachPage() {
 
       const summary = [
         `Metas: ${goals?.calories ?? 2000} kcal · P ${goals?.protein_g ?? 140}g · C ${goals?.carbs_g ?? 220}g · G ${goals?.fat_g ?? 65}g`,
+        `Estratégia de proteína: ${goals?.protein_factor ?? 2.0} g/kg`,
         `Treinos na semana: ${(workouts ?? []).length} (${(workouts ?? []).map((w) => w.name).join(", ") || "nenhum"})`,
         `Pesos: ${(weights ?? []).map((w) => `${w.log_date}=${w.weight_kg}kg`).join(", ") || "sem registros"}`,
         `Água: ${(water ?? []).length} registros`,
@@ -185,6 +186,7 @@ function CoachPage() {
             protein_g: Number(goals?.protein_g ?? 0),
             carbs_g: Number(goals?.carbs_g ?? 0),
             fat_g: Number(goals?.fat_g ?? 0),
+            protein_factor: Number(goals?.protein_factor ?? 2.0),
           },
           stats: {
             mealCount: totalMeals,
