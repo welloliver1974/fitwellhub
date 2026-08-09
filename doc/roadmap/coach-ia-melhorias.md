@@ -91,6 +91,7 @@ src/lib/
 | 5.2 | Checklist Interativo no Plano do Coach | `app.coach.tsx` | S | 🟡 Médio | ✅ Concluído |
 | 5.3 | Sugestão Inteligente por Macros Restantes do Dia | `suggest-meal-dialog.tsx`, `nutrition.functions.ts`, `app.nutricao.tsx` | M | 🔴 Alto | ✅ Concluído |
 | 5.4 | Substituição Inteligente de Exercícios por IA | `workout.functions.ts`, `exercise-substitute-dialog.tsx`, `app.treinos.$id.foco.tsx` | M | 🔴 Alto | ✅ Concluído |
+| 5.5 | Responsividade e Ajustes Mobile (360-390px) | `styles.css`, `app.nutricao.tsx`, `dialog.tsx`, `app.tsx` | XS | 🔴 Alto | ✅ Concluído |
 
 ---
 
@@ -147,6 +148,18 @@ src/lib/
 - `src/server-fns/workout.functions.test.ts` — testes unitários para o schema Zod e validações
 - `src/components/exercise-substitute-dialog.tsx` — Dialog interativo com seletor de motivos (presets + campo livre), estado de carregamento e cards detalhados das alternativas
 - `src/routes/app.treinos.$id.foco.tsx` — botão `<Shuffle>` no header da tela de foco com substituição local (`nameOverrides` em estado), preservando intacto o template original do treino
+
+---
+
+### ~~5.5 Ajustes de Responsividade e UX Mobile~~📱 ✅ CONCLUÍDO (2026-08-08)
+
+**Conceito**: Eliminação de scroll lateral/overflow horizontal em telas mobile de 360px a 390px.
+
+**Implementado em**:
+- `src/styles.css` — Regra global `html, body { max-width: 100vw; overflow-x: hidden; }`
+- `src/routes/app.nutricao.tsx` — Header com toolbar flex-wrap e contenção proporcional `max-w-[56%]` para ícones de ação
+- `src/components/ui/dialog.tsx` — Atualização da classe base `DialogContent` para `w-[calc(100vw-2rem)] sm:w-full max-w-lg`
+- `src/routes/app.tsx` — Redução do padding horizontal do container principal para `px-3 sm:px-5`
 
 ---
 
