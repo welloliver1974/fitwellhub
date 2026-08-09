@@ -38,6 +38,7 @@ import {
   Heart,
   Barcode,
   Library,
+  Mic,
 } from "lucide-react";
 import { lookupNutrition, analyzePhoto } from "@/server-fns/nutrition.functions";
 import { parseFoodWeight, scaleMacros, rescaleMacros } from "@/lib/food-utils";
@@ -45,6 +46,7 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { FoodLibrary } from "@/components/FoodLibrary";
+import { VoiceMealRecorder } from "@/components/voice-meal-recorder";
 
 export const Route = createFileRoute("/app/nutricao")({
   component: NutricaoPage,
@@ -125,6 +127,7 @@ function NutricaoPage() {
 
   const [scanOpen, setScanOpen] = useState(false);
   const [scanLoading, setScanLoading] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
 
   // biblioteca (balcão único no diálogo do "+")
   const [library, setLibrary] = useState<LibraryFood[]>([]);
@@ -699,6 +702,14 @@ function NutricaoPage() {
           <Button
             size="icon"
             variant="ghost"
+            title="Registrar por voz"
+            onClick={() => setVoiceOpen(true)}
+          >
+            <Mic className="h-5 w-5" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
             title="Foto do prato"
             onClick={() => setPhotoOpen(true)}
           >
@@ -1171,6 +1182,13 @@ function NutricaoPage() {
         existingMealTypes={meals.map((m) => m.meal_type)}
         ensureMeal={ensureMeal}
         onItemAdded={load}
+      />
+
+      <VoiceMealRecorder
+        open={voiceOpen}
+        onOpenChange={setVoiceOpen}
+        session={session}
+        onSaved={load}
       />
     </div>
   );
