@@ -29,6 +29,7 @@ const KINDS = [
   { v: "meal", label: "🍽️ Refeição" },
   { v: "workout", label: "💪 Treino" },
   { v: "weight", label: "⚖️ Peso" },
+  { v: "smart", label: "🧠 Inteligente" },
 ];
 const DAYS = ["D", "S", "T", "Q", "Q", "S", "S"];
 
@@ -70,7 +71,9 @@ export function RemindersPage() {
     const { error } = await supabase.from("reminders").insert({
       user_id: user.id,
       kind,
-      time_of_day: time,
+      // kind "smart" ignora o horário (janelas internas por gatilho); a coluna é
+      // NOT NULL, então vai um sentinela que nunca aparece no UI.
+      time_of_day: kind === "smart" ? "16:00" : time,
       days_of_week: days,
       enabled: true,
     });
@@ -134,10 +137,19 @@ export function RemindersPage() {
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label className="text-xs">Horário</Label>
-            <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
-          </div>
+          {kind === "smart" ? (
+            <div className="col-span-2">
+              <p className="text-xs text-muted-foreground">
+                Horário inteligente — dispara no fim da tarde/à noite conforme seus registros do
+                dia.
+              </p>
+            </div>
+          ) : (
+            <div>
+              <Label className="text-xs">Horário</Label>
+              <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+            </div>
+          )}
         </div>
         <div>
           <Label className="text-xs">Dias</Label>
@@ -172,7 +184,8 @@ export function RemindersPage() {
                 <div className="min-w-0">
                   <p className="font-medium truncate">{k?.label ?? r.kind}</p>
                   <p className="text-xs text-muted-foreground">
-                    {r.time_of_day.slice(0, 5)} · {r.days_of_week.map((d) => DAYS[d]).join(" ")}
+                    {r.kind === "smart" ? "Horário inteligente · " : `${r.time_of_day.slice(0, 5)} · `}
+                    {r.days_of_week.map((d) => DAYS[d]).join(" ")}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">

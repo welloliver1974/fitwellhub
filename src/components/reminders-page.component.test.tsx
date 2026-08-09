@@ -5,6 +5,15 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RemindersPage } from "@/components/reminders-page";
 
+// Radix Select em jsdom precisa de pointer capture + scrollIntoView ao abrir o
+// dropdown (mesmo mock do goals-page.component.test.tsx).
+if (typeof window !== "undefined") {
+  window.HTMLElement.prototype.hasPointerCapture = () => false;
+  window.HTMLElement.prototype.setPointerCapture = () => {};
+  window.HTMLElement.prototype.releasePointerCapture = () => {};
+  window.HTMLElement.prototype.scrollIntoView = () => {};
+}
+
 // Teste de INTEGRAÇÃO: renderiza a página de Lembretes com um supabase "fake"
 // chainable (vi.hoisted, sem import externo) + useAuth mock. Fluxo real de CRUD.
 
@@ -186,5 +195,68 @@ describe("RemindersPage — integração (supabase mock)", () => {
     await waitFor(() => {
       expect(mock.deleteCalls.some((c) => c.table === "reminders")).toBe(true);
     });
+  });
+
+  // Abre o Select de tipo e escolhe uma opção (helper local — o Select inicia em água).
+  const pickKind = async (user: ReturnType<typeof userEvent.setup>, label: string) => {
+    await user.click(screen.getByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: label }));
+  };
+
+  it("adiciona lembrete inteligente (kind smart) com time_of_day sentinela", async () => {
+    mock.setSelect("reminders", []);
+    const user = userEvent.setup();
+    render(<RemindersPage />);
+    await screen.findByText("Novo lembrete");
+
+    await pickKind(user, "🧠 Inteligente");
+    await user.click(screen.getByRole("button", { name: /Adicionar/ }));
+
+    await waitFor(() => {
+      const ins = mock.insertCalls.find((c) => c.table === "reminders");
+      expect(ins).toBeTruthy();
+      expect(ins!.payload).toMatchObject({
+        user_id: "u1",
+        kind: "smart",
+        time_of_day: "16:00",
+        days_of_week: [1, 2, 3, 4, 5],
+        enabled: true,
+      });
+    });
+  });
+
+  it("tipo inteligente esconde o horário manual e mostra o hint", async () => {
+    mock.setSelect("reminders", []);
+    const user = userEvent.setup();
+    render(<RemindersPage />);
+    await screen.findByText("Novo lembrete");
+
+    // Antes: input de horário presente.
+    expect(screen.getByDisplayValue("09:00")).toBeInTheDocument();
+
+    await pickKind(user, "🧠 Inteligente");
+    expect(screen.queryByDisplayValue("09:00")).not.toBeInTheDocument();
+    expect(screen.getByText(/Horário inteligente/)).toBeInTheDocument();
+
+    // Voltando para Água, o input reaparece.
+    await pickKind(user, "💧 Água");
+    expect(screen.getByDisplayValue("09:00")).toBeInTheDocument();
+  });
+
+  it("lista renderiza lembrete inteligente sem expor o time sentinela", async () => {
+    mock.setSelect("reminders", [
+      {
+        id: "s1",
+        kind: "smart",
+        time_of_day: "16:00:00",
+        days_of_week: [1, 2, 3, 4, 5],
+        enabled: true,
+      },
+    ]);
+    render(<RemindersPage />);
+
+    expect(await screen.findByText("🧠 Inteligente")).toBeInTheDocument();
+    expect(screen.getByText(/Horário inteligente/)).toBeInTheDocument();
+    expect(screen.queryByText(/^16:00/)).toBeNull();
   });
 });

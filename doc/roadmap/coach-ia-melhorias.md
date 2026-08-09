@@ -274,7 +274,7 @@ Como todas as tarefas do plano inicial foram concluídas com sucesso, registramo
 | **7.1** | **Scanner de Rótulo por IA (Vision OCR)** | Tirar foto da tabela de informação nutricional no verso da embalagem para preenchimento automático | M | 🔴 Alto |
 | **7.2** | **Progressão Inteligente de Cargas** | Sugestão automática de incremento de carga no treino quando a IA detectar estagnação nas séries anteriores | M | 🔴 Alto |
 | **7.3** | **Gerador de Cardápio Semanal PDF** | Gerar um menu de refeições de 7 dias alinhado às metas de macros e exportável para PDF ou lista de compras | L | 🟡 Médio |
-| **7.4** | **Notificações / Alertas Inteligentes** | Alertas no app quando o usuário estiver longe da meta de proteína no final da tarde ou sem registrar água | S | 🟡 Médio |
+| **7.4** | **Notificações / Alertas Inteligentes** | Alertas no app quando o usuário estiver longe da meta de proteína no final da tarde ou sem registrar água | S | 🟡 Médio | ✅ Concluída (09/08/2026) — novo tipo `🧠 Inteligente` nos Lembretes dispara conforme os registros do dia (proteína <50% às 16h+, saldo calórico ≤200 antes do jantar, sem água às 20h+) |
 | **7.5** | **Integração com Wearables (Apple Health / Google Fit)** | Sincronização automática de passos diários, gasto calórico ativo e batimentos cardíacos | L | 🔴 Alto |
 
 

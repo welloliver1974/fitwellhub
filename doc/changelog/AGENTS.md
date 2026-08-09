@@ -2,6 +2,18 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [09/08/2026] - Claude Code (Lembretes inteligentes — proteína, água e calorias: item 7.4)
+- **Escopo**: notificações **proativas e contextuais** (antes só existia lembrete de horário fixo, que não olha os dados). Novo tipo **`🧠 Inteligente` (`reminders.kind = "smart"`)** na página de Lembretes — cria/liga/desliga/remove igual aos tipos fixos. **Sem migration** (kind é TEXT sem CHECK). Dispara `Notification` conforme os registros do DIA, em janelas fixas:
+  - 🥩 **Proteína** (`hour >= 16 && proteinGoal > 0 && consumed.calories > 0 && consumed.protein_g/proteinGoal < 0.5`) → mensagem do card "Dica do Coach".
+  - 🔥 **Calorias restantes** (`hour < 20 && consumed.calories > 0 && 0 < remainingCalories <= 200`) → mensagem do card.
+  - 💧 **Água** (`hour >= 20 && waterMl === 0`) → "Você ainda não registrou água hoje…".
+- **Nova lib pura `src/lib/smart-alerts.ts`** (`evaluateSmartAlerts`): espelha as condições do card do Coach (`app.nutricao.tsx:1384-1430`) + gatilho novo de água; ordem fixa protein→calories→water. Testável em node.
+- **`src/lib/use-reminders.tsx`**: tick particiona `smart`/fixas; o bloco smart só busca dados do dia com `hour >= 16` (economia: 3–4 queries/30s só nessa janela), com **early-skip** quando os 3 gatilhos já dispararam (localStorage `smart-<key>-<getLocalDate(now)>` — **dedupe por gatilho/dia**, não por row), `guard !active` após os awaits (item tem awaits; o loop fixo não tinha). Horário usa `now.getHours()` (client-local, consistente com o relógio dos lembretes).
+- **`src/components/reminders-page.tsx`**: `KINDS` += smart; quando smart → esconde o `<Input type="time">` e mostra hint "Horário inteligente…"; `add()` grava `time_of_day: "16:00"` (NOT NULL) como sentinela que **nunca aparece** no UI (lista mostra "Horário inteligente · <dias>").
+- **Decisão intencional**: com o gate das 16h, o alerta de **calorias não dispara antes das 16h**, mesmo quando o card do Coach o mostraria (posicionamento "fim da tarde"; diferença pequena e documentada).
+- **Validação**: `npx vitest run` — **17 novos testes** de `smart-alerts` (bordas de hora 15/16/19/20/21/23/12, ratio 0.5, consumed 0, proteinGoal 0, remCal 0/1/200/201/-50, água 0 vs 500, ordenação) + **3 testes** novos em `reminders-page.component.test.tsx` (insert smart com sentinela, esconde horário/hint, lista sem expor 16:00) — **8/8** no arquivo; existentes seguem verdes. `tsc --noEmit` limpo nos tocados. **PENDENTE no usuário**: smoke manual no celular (criar lembrete 🧠 Inteligente, permitir notificação, validar disparos).
+- **Relacionado**: os gatilhos reutilizam o card "Dica do Coach" (item 5 do `doc/plans/MELHORIAS_NUTRICAO_E_COACH.md`); lembretes fixos intactos.
+
 ## [09/08/2026] - Claude Code (BUG: metas não salvavam — `ON CONFLICT (user_id)` sem constraint no banco real)
 - **Ocorrência**: ao salvar a estratégia de proteína (conservador/moderado/padrão treino) na página de Metas, o app quebrava com `there is no unique or exclusion constraint matching the ON CONFLICT specification`.
 - **Causa raiz**: a tabela `goals` **do banco real** (criada pelo `schema_completo.sql`) tem **PK artificial `id`** e **`user_id` SEM constraint única** — mas o app grava com `upsert(payload, { onConflict: "user_id" })` em **5 lugares** (home auto-sync `goal_auto`, página de Metas, Nutrição auto-sync, Coach ajuste de calorias). O Postgres exige `UNIQUE` em `user_id` para o `ON CONFLICT` funcionar. (`ai_settings` não quebra: o `user_id` É a PK lá.)
