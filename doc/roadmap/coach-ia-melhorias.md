@@ -132,13 +132,15 @@ src/lib/
 
 ---
 
-### 5.4 Substituição Inteligente de Exercícios por IA 🏋️
+### ~~5.4 Substituição Inteligente de Exercícios por IA~~ 🏋️ ✅ CONCLUÍDO (2026-08-08)
 
-**Conceito**: Botão *"Substituir Exercício"* na tela de treino em andamento.
+**Conceito**: Durante um treino no modo foco (`/app/treinos/$id/foco`), o usuário clica no botão "Substituir exercício" (🔀) ao lado do nome do exercício. A IA sugere 3 alternativas equivalentes no mesmo grupo muscular, considerando o motivo (ex: *aparelho ocupado*, *treinando em casa*, *desconforto/dor*).
 
-**Arquitetura Técnica Proposta**:
-- O usuário seleciona um exercício (ex: *Puxada Alta*) e indica o motivo (*aparelho ocupado* ou *treinando em casa sem puxador*).
-- A IA sugere 3 alternativas equivalentes (ex: *Barra Fixa* ou *Remada Curvada com Halteres*) mantendo o grupo muscular alvo.
+**Implementado em**:
+- `src/server-fns/workout.functions.ts` — `suggestExerciseSubstitute` com Structured Output (tool `suggest_substitutes`) retornando 3 sugestões com nome, músculos, motivo/descrição e dica de execução (💡)
+- `src/server-fns/workout.functions.test.ts` — testes unitários para o schema Zod e validações
+- `src/components/exercise-substitute-dialog.tsx` — Dialog interativo com seletor de motivos (presets + campo livre), estado de carregamento e cards detalhados das alternativas
+- `src/routes/app.treinos.$id.foco.tsx` — botão `<Shuffle>` no header da tela de foco com substituição local (`nameOverrides` em estado), preservando intacto o template original do treino
 
 ---
 
@@ -146,11 +148,12 @@ src/lib/
 
 ### Como rodar os testes
 ```powershell
-npx vitest run                                                        # todos (111 testes)
+npx vitest run                                                        # todos (116 testes)
 npx vitest run src/lib/coach-plan.test.ts                            # lógica do Coach
 npx vitest run src/lib/format-measurements.test.ts                   # formatação de medidas
 npx vitest run src/components/goals-page.component.test.tsx          # tela de metas
 npx vitest run src/server-fns/audio.functions.test.ts                # audio/voice logging
+npx vitest run src/server-fns/workout.functions.test.ts              # substituição de exercícios
 ```
 
 ### Radix Select em testes jsdom — mocks obrigatórios

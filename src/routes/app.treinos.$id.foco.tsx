@@ -4,9 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, X, Plus, Check, Timer, Pause, Play, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Plus, Check, Timer, Pause, Play, Loader2, Shuffle } from "lucide-react";
 import { cn, playBeep } from "@/lib/utils";
 import { toast } from "sonner";
+import { ExerciseSubstituteDialog } from "@/components/exercise-substitute-dialog";
 
 export const Route = createFileRoute("/app/treinos/$id/foco")({
   component: FocusMode,
@@ -24,7 +25,7 @@ type WorkoutSet = {
 
 function FocusMode() {
   const { id } = Route.useParams();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const navigate = useNavigate();
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [sets, setSets] = useState<WorkoutSet[]>([]);
@@ -40,6 +41,11 @@ function FocusMode() {
   const [startedAt, setStartedAt] = useState<string | null>(null);
   const [isFinishing, setIsFinishing] = useState(false);
   const [workoutName, setWorkoutName] = useState("");
+
+  // Substituição de exercício por IA (apenas local — não altera o template)
+  const [substituteOpen, setSubstituteOpen] = useState(false);
+  /** Mapa de exerciseId → nome substituído temporariamente nesta sessão */
+  const [nameOverrides, setNameOverrides] = useState<Record<string, string>>({});
 
   // Auxiliar para salvar rascunho no localStorage
   const saveDraft = (
@@ -171,6 +177,8 @@ function FocusMode() {
   }, [id]);
 
   const ex = exercises[idx];
+  /** Nome exibido do exercício atual — pode ter sido substituído localmente */
+  const exDisplayName = ex ? (nameOverrides[ex.id] ?? ex.name) : "";
   const exSets = ex ? sets.filter((s) => s.exercise_id === ex.id) : [];
 
   const addSet = async () => {
@@ -299,7 +307,17 @@ function FocusMode() {
       </header>
 
       <div className="flex-1 overflow-y-auto px-5 py-6 flex flex-col items-center">
-        <h1 className="text-3xl font-display font-bold text-center">{ex.name}</h1>
+        <h1 className="text-3xl font-display font-bold text-center">{exDisplayName}</h1>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mx-auto flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary mt-1"
+          onClick={() => setSubstituteOpen(true)}
+          title="Substituir exercício por IA"
+        >
+          <Shuffle className="h-3.5 w-3.5" />
+          Substituir exercício
+        </Button>
 
         <div className="my-8 text-center">
           <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Descanso</p>
@@ -405,6 +423,17 @@ function FocusMode() {
           </Button>
         )}
       </footer>
+      {ex && (
+        <ExerciseSubstituteDialog
+          open={substituteOpen}
+          onOpenChange={setSubstituteOpen}
+          exerciseName={exDisplayName}
+          session={session}
+          onSelect={(newName) =>
+            setNameOverrides((prev) => ({ ...prev, [ex.id]: newName }))
+          }
+        />
+      )}
     </div>
   );
 }
