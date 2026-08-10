@@ -1413,3 +1413,44 @@ A tabela `goals` **do banco real** foi criada pelo `schema_completo.sql` com **P
 - ✅ Migration aplicada pelo usuário no **Supabase SQL Editor** → salvar a estratégia de proteção voltou a funcionar.
 - ✅ Sem mudanças de TS/testes (só SQL).
 - A partir daqui, o home volta a sincronizar a meta automaticamente sem erro silencioso.
+
+---
+
+## Sessão: 10/08/2026 — Relógio de descanso (treinos) não fica mais fixo ao rolar
+
+### 🎯 Funcionalidade trabalhada
+`src/styles.css` → regra global `html, body` de prevenção de overflow horizontal (introduzida no commit `448f33f`, 08/08/2026)
+
+### 🔍 Problema relatado
+O usuário notou que o **timer de descanso** em `src/routes/app.treinos.$id.tsx:614` (`sticky top-[57px] z-20`) parou de ficar "grudado" na tela ao rolar os exercícios para baixo. O mesmo valia para o cabeçalho do app (`src/routes/app.tsx:60`, `sticky top-0 z-10`).
+
+### 🐞 Causa raiz
+O índice `git log -S "sticky top-[57px]"` provou que o timer **sempre foi sticky** (desde `0fb044a`, "add daily workout report") — o código da tela não mudou. O que quebrou foi o commit **`448f33f`** ("prevencao de overflow horizontal"), que adicionou em `src/styles.css`:
+
+```css
+html, body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+```
+
+**Por que `overflow-x: hidden` quebra `position: sticky`:** conforme a spec de CSS Overflow, quando um dos eixos é `hidden` o outro (`overflow-y`) **computa para `auto`**. Isso promove o `html`/`body` a **container de rolagem (scrollport)**. O sticky então se ancora no scrollport do `body` — que nunca rola (o conteúdo está na página principal) — em vez do viewport real. Resultado: o elemento nunca "gruda". É o bug clássico de "adicionei `overflow-x: hidden` para evitar scroll horizontal e o sticky parou".
+
+### 🛠️ Solução aplicada
+Em `src/styles.css`, trocado `overflow-x: hidden` por **`overflow-x: clip`** (mantendo `max-width: 100vw` e o comentário explicativo):
+
+```css
+html, body {
+  max-width: 100vw;
+  overflow-x: clip;
+}
+```
+
+- `overflow: clip` recorta o transbordamento horizontal **sem criar scrollport** — o `position: sticky` volta a se ancorar no viewport e o timer/header "grudam" de novo, com a prevenção de overflow preservada.
+- **Fallback em navegadores antigos** (sem suporte a `clip`, ~pré-2022): o valor é ignorado → `overflow-x: visible` → o overflow horizontal volta a existir, mas o sticky também volta. Degradação aceitável para PWA mobile.
+- Nenhuma outra mudança na cadeia de ancestrais (layout `app.tsx` e `main` estão sem `overflow`) — fix isolado e mínimo.
+
+### ✅ Estado final
+- ✅ Timer de descanso e header voltam a ficar fixos ao rolar
+- ✅ Prevenção de overflow horizontal no mobile preservada
+- ✅ Mudança só em CSS (sem testes/Vitest afetados; sem type-check a fazer)

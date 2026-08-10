@@ -2,6 +2,17 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [10/08/2026] - Claude Code (BUG: relógio de descanso dos treinos deixou de ficar fixo ao rolar)
+- **Ocorrência**: o usuário notou que o **timer de descanso** (`app.treinos.$id.tsx:614`, `sticky top-[57px] z-20`) parou de ficar "grudado" na tela ao rolar os exercícios. O header do app (`app.tsx:60`, `sticky top-0`) presumivelmente também perdeu o efeito.
+- **Causa raiz**: o timer **sempre foi sticky** (`git log -S` → desde `0fb044a`, "add daily workout report"). Quem quebrou foi o commit **`448f33f`** (08/08, "prevencao de overflow horizontal"), que adicionou em `src/styles.css`:
+  ```css
+  html, body { max-width: 100vw; overflow-x: hidden; }
+  ```
+  **Por que quebra sticky:** na spec de CSS Overflow, com `overflow-x: hidden` o `overflow-y` computa para `auto` → `html`/`body` viram **container de rolagem**; o sticky passa a se ancorar no scrollport do body (que nunca rola) em vez do viewport. É o bug clássico de "overflow-x:hidden matou o sticky".
+- **Fix (só CSS, `src/styles.css`)**: `overflow-x: hidden` → **`overflow-x: clip`** — recorta o overflow horizontal **sem criar scrollport**, então o sticky volta a ancorar no viewport. **`clip` não computa o outro eixo para `auto`** (diferente de `hidden`). Navegador antigo sem suporte a `clip` → overflow retorna a `visible` (sticky volta na mesma) — degradação aceitável.
+- **Validação**: mudança isolada em CSS (nenhum TS/teste tocado; build não aplicável a CSS puro). **PENDENTE no usuário**: smoke no celular — abrir um treino longo, rolar e conferir que o relógio de descanso fica fixo abaixo do header.
+- **Relacionado**: lição que se aplica a qualquer outra prevenção de overflow futuro — **preferir `overflow: clip` sobre `hidden` quando a página contém elementos `position: sticky`**.
+
 ## [10/08/2026] - Claude Code ("Salvar na biblioteca" fecha lacunas + "Exportar diário" em JSON)
 - **Pedido**: (1) evitar re-analisar todo dia um alimento frequente ("salvar na biblioteca"), (2) exportar/backup do diário — usuário escolheu **JSON** ("não quero perder nada").
 - **Descoberta**: o botão **"Salvar na biblioteca" no form de adicionar JÁ EXISTIA** (`saveToLibrary`, `app.nutricao.tsx:520-550`, botão `1140-1147`) — dedupe por nome + insert em `food_library` (`category: "Outros"`), cobrindo barcode/rótulo/manual. O trabalho virou **fechar lacunas**, não criar do zero.
