@@ -160,16 +160,20 @@ function FocusMode() {
         console.error("Erro ao carregar rascunho em modo foco:", err);
       }
     } else {
-      const newStart = new Date().toISOString();
-      setStartedAt(newStart);
+      setStartedAt(null);
       const initialValues: Record<string, { reps: number; weight_kg: number }> = {};
       loadedSets.forEach((s) => {
         initialValues[s.id] = { reps: s.reps, weight_kg: Number(s.weight_kg) };
       });
       setSetValues(initialValues);
       setCompletedSets(new Set());
-      saveDraft(new Set(), initialValues, newStart);
     }
+  };
+
+  const startWorkout = () => {
+    const now = new Date().toISOString();
+    setStartedAt(now);
+    saveDraft(completedSets, setValues, now);
   };
 
   useEffect(() => {
@@ -292,18 +296,26 @@ function FocusMode() {
 
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col">
-      <header className="flex items-center justify-between px-5 py-4 border-b">
+      <header className="flex items-center justify-between gap-2 px-4 py-3 border-b">
         <Button
           variant="ghost"
           size="icon"
+          className="shrink-0 h-9 w-9"
           onClick={() => navigate({ to: "/app/treinos/$id", params: { id } })}
         >
           <X className="h-5 w-5" />
         </Button>
-        <p className="text-xs text-muted-foreground font-semibold">
+        <p className="text-xs text-muted-foreground font-semibold truncate text-center flex-1 px-1">
           {idx + 1} / {exercises.length} — {workoutName}
         </p>
-        <div className="w-9" />
+        {startedAt == null ? (
+          <Button size="sm" onClick={startWorkout} className="gap-1.5 shrink-0 rounded-full font-medium px-3">
+            <Play className="h-3.5 w-3.5" />
+            Iniciar
+          </Button>
+        ) : (
+          <div className="w-9 shrink-0" />
+        )}
       </header>
 
       <div className="flex-1 overflow-y-auto px-5 py-6 flex flex-col items-center">

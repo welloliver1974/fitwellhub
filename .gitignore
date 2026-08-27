@@ -33,3 +33,4 @@ dist-ssr
 
 .env
 .claude/
+.playwright-mcp/

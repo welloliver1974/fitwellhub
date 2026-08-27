@@ -72,7 +72,7 @@ function WorkoutsPage() {
     if (!user) return;
     const { error } = await supabase
       .from("workouts")
-      .insert({ name: name.trim(), user_id: user.id });
+      .insert({ name: name.trim(), user_id: user.id, workout_date: getLocalDate() });
     if (error) return toast.error(error.message);
     setName("");
     setOpen(false);

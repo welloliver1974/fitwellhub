@@ -181,8 +181,7 @@ function WorkoutDetail() {
   const resetWorkout = () => {
     if (confirm("Deseja realmente reiniciar o treino? O progresso desta sessão ativa será limpo.")) {
       localStorage.removeItem(`active-session-${id}`);
-      const newStart = new Date().toISOString();
-      setStartedAt(newStart);
+      setStartedAt(null);
       setCompletedSets(new Set());
       const initialValues: Record<string, { reps: number; weight_kg: number }> = {};
       sets.forEach((s) => {
@@ -192,6 +191,13 @@ function WorkoutDetail() {
       setElapsedTime(0);
       toast.success("Treino reiniciado");
     }
+  };
+
+  const startWorkout = () => {
+    const now = new Date().toISOString();
+    setStartedAt(now);
+    setElapsedTime(0);
+    saveDraft(completedSets, setValues, now);
   };
 
   const load = async () => {
@@ -244,15 +250,14 @@ function WorkoutDetail() {
         console.error("Erro ao carregar rascunho:", err);
       }
     } else {
-      const newStart = new Date().toISOString();
-      setStartedAt(newStart);
+      setStartedAt(null);
       const initialValues: Record<string, { reps: number; weight_kg: number }> = {};
       loadedSets.forEach((s) => {
         initialValues[s.id] = { reps: s.reps, weight_kg: Number(s.weight_kg) };
       });
       setSetValues(initialValues);
       setCompletedSets(new Set());
-      saveDraft(new Set(), initialValues, newStart);
+      setElapsedTime(0);
     }
 
     // Carregar melhor/última série por nome de exercício do histórico
@@ -594,19 +599,31 @@ function WorkoutDetail() {
           <span className="text-[10px] text-muted-foreground">{completedSets.size} de {sets.length} séries</span>
         </Card>
         <Card className="p-3.5 flex items-center justify-between bg-card/50 backdrop-blur-sm border">
-          <div>
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold block">Duração</span>
-            <span className="text-lg font-display font-bold tabular-nums text-foreground">{formatTime(elapsedTime)}</span>
-          </div>
-          <Button 
-            variant="outline" 
-            size="icon" 
-            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-            onClick={resetWorkout}
-            title="Reiniciar treino"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-          </Button>
+          {startedAt == null ? (
+            <Button
+              onClick={startWorkout}
+              className="w-full rounded-full font-semibold gap-1.5 h-10 px-2 text-sm shadow-sm"
+            >
+              <Play className="h-4 w-4 shrink-0" />
+              <span>Iniciar treino</span>
+            </Button>
+          ) : (
+            <>
+              <div>
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold block">Duração</span>
+                <span className="text-lg font-display font-bold tabular-nums text-foreground">{formatTime(elapsedTime)}</span>
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                onClick={resetWorkout}
+                title="Reiniciar treino"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          )}
         </Card>
       </div>
 
