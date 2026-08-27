@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, X, Plus, Check, Timer, Pause, Play, Loader2, Shuffle } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Plus, Check, Timer, Pause, Play, Loader2, Shuffle, TrendingUp } from "lucide-react";
 import { cn, playBeep } from "@/lib/utils";
 import { toast } from "sonner";
 import { ExerciseSubstituteDialog } from "@/components/exercise-substitute-dialog";
@@ -29,6 +29,7 @@ function FocusMode() {
   const navigate = useNavigate();
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [sets, setSets] = useState<WorkoutSet[]>([]);
+  const [history, setHistory] = useState<Record<string, { reps: number; weight_kg: number; date: string }>>({});
   const [idx, setIdx] = useState(0);
   const [restSec, setRestSec] = useState(0);
   const [restRunning, setRestRunning] = useState(false);
@@ -70,6 +71,9 @@ function FocusMode() {
         next.delete(setId);
       } else {
         next.add(setId);
+        if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+          try { navigator.vibrate(40); } catch {}
+        }
         setRestSec(restPreset); // Auto inicia o timer de descanso
         setRestRunning(true);
       }
@@ -99,6 +103,10 @@ function FocusMode() {
           if (s <= 1) {
             setRestRunning(false);
             playBeep();
+            if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+              try { navigator.vibrate([100, 50, 100]); } catch {}
+            }
+            toast.success("Descanso terminado");
             return 0;
           }
           return s - 1;
@@ -167,6 +175,39 @@ function FocusMode() {
       });
       setSetValues(initialValues);
       setCompletedSets(new Set());
+    }
+
+    // Carregar melhor/última série por nome de exercício do histórico
+    if (user && (ex ?? []).length) {
+      const names = Array.from(new Set((ex ?? []).map((e) => e.name)));
+      const { data: prev } = await supabase
+        .from("exercises")
+        .select("id,name,workout_id,workouts!inner(workout_date)")
+        .eq("user_id", user.id)
+        .in("name", names)
+        .neq("workout_id", id);
+      const prevIds = (prev ?? []).map((p) => p.id);
+      if (prevIds.length) {
+        const { data: prevSets } = await supabase
+          .from("sets")
+          .select("exercise_id,reps,weight_kg")
+          .in("exercise_id", prevIds);
+        const exMap: Record<string, { name: string; date: string }> = {};
+        (prev ?? []).forEach((p) => {
+          exMap[p.id] = { name: p.name, date: (p.workouts as any)?.workout_date };
+        });
+        const best: Record<string, { reps: number; weight_kg: number; date: string }> = {};
+        (prevSets ?? []).forEach((s) => {
+          const meta = exMap[s.exercise_id];
+          if (!meta) return;
+          const cur = best[meta.name];
+          const w = Number(s.weight_kg);
+          if (!cur || w > cur.weight_kg || (w === cur.weight_kg && Number(s.reps) > cur.reps)) {
+            best[meta.name] = { reps: Number(s.reps), weight_kg: w, date: meta.date };
+          }
+        });
+        setHistory(best);
+      } else setHistory({});
     }
   };
 
@@ -330,6 +371,13 @@ function FocusMode() {
           <Shuffle className="h-3.5 w-3.5" />
           Substituir exercício
         </Button>
+
+        {history[exDisplayName] && (
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary/80 text-secondary-foreground text-xs font-medium mt-2 shadow-xs">
+            <TrendingUp className="h-3.5 w-3.5 text-primary shrink-0" />
+            <span>Melhor carga: <strong>{history[exDisplayName].weight_kg} kg</strong> × {history[exDisplayName].reps} reps</span>
+          </div>
+        )}
 
         <div className="my-8 text-center">
           <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Descanso</p>

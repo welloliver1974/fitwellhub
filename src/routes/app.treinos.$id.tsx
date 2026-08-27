@@ -116,6 +116,9 @@ function WorkoutDetail() {
         next.delete(setId);
       } else {
         next.add(setId);
+        if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+          try { navigator.vibrate(40); } catch {}
+        }
         startRest(restPreset); // Auto inicia o timer de descanso ao marcar
       }
       if (startedAt) saveDraft(next, setValues, startedAt);
@@ -144,6 +147,9 @@ function WorkoutDetail() {
           if (s <= 1) {
             setRestRunning(false);
             playBeep();
+            if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+              try { navigator.vibrate([100, 50, 100]); } catch {}
+            }
             toast.success("Descanso terminado");
             return 0;
           }

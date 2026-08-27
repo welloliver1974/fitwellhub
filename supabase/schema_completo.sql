@@ -41,6 +41,8 @@ CREATE TABLE IF NOT EXISTS public.goals (
   carbs_g NUMERIC NOT NULL DEFAULT 220,
   fat_g NUMERIC NOT NULL DEFAULT 65,
   water_ml INTEGER NOT NULL DEFAULT 2000,
+  goal_auto BOOLEAN NOT NULL DEFAULT false,
+  protein_factor NUMERIC NOT NULL DEFAULT 2.0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -255,3 +257,95 @@ CREATE TABLE IF NOT EXISTS public.metas (
 );
 ALTER TABLE public.metas ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "own metas all" ON public.metas FOR ALL USING (auth.uid()=user_id) WITH CHECK (auth.uid()=user_id);
+
+-- Workout Sessions & History
+CREATE TABLE IF NOT EXISTS public.workout_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  workout_id UUID REFERENCES public.workouts(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  completed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE public.workout_sessions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "own workout_sessions all" ON public.workout_sessions FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE INDEX IF NOT EXISTS idx_workout_sessions_user_completed ON public.workout_sessions(user_id, completed_at);
+
+CREATE TABLE IF NOT EXISTS public.workout_session_sets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES public.workout_sessions(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  exercise_name TEXT NOT NULL,
+  set_number INTEGER NOT NULL,
+  reps INTEGER NOT NULL DEFAULT 0,
+  weight_kg NUMERIC NOT NULL DEFAULT 0,
+  completed BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE public.workout_session_sets ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "own workout_session_sets all" ON public.workout_session_sets FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE INDEX IF NOT EXISTS idx_workout_session_sets_session ON public.workout_session_sets(session_id);
+
+-- Exercise Catalog
+CREATE TABLE IF NOT EXISTS public.exercise_catalog (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE,
+  category TEXT NOT NULL DEFAULT 'Geral',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE public.exercise_catalog ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "read exercise_catalog" ON public.exercise_catalog FOR SELECT USING (true);
+
+-- AI Settings
+CREATE TABLE IF NOT EXISTS public.ai_settings (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL DEFAULT 'groq',
+  groq_api_key TEXT,
+  openrouter_api_key TEXT,
+  omniroute_api_key TEXT,
+  omniroute_base_url TEXT,
+  photo_provider TEXT,
+  photo_model TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE public.ai_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "own ai_settings all" ON public.ai_settings FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- Bioimpedance Logs
+CREATE TABLE IF NOT EXISTS public.bioimpedance_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  log_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  weight_kg NUMERIC(5,2),
+  body_fat_pct NUMERIC(4,1),
+  muscle_mass_kg NUMERIC(5,2),
+  bone_mass_kg NUMERIC(4,2),
+  body_water_pct NUMERIC(4,1),
+  visceral_fat NUMERIC(4,1),
+  bmr_machine INTEGER,
+  metabolic_age INTEGER,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE public.bioimpedance_logs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "own bioimpedance_logs all" ON public.bioimpedance_logs FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE INDEX IF NOT EXISTS idx_bioimpedance_logs_user_date ON public.bioimpedance_logs(user_id, log_date);
+
+-- Food Library
+CREATE TABLE IF NOT EXISTS public.food_library (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  category TEXT DEFAULT 'Outros',
+  grams NUMERIC NOT NULL DEFAULT 100,
+  calories NUMERIC NOT NULL DEFAULT 0,
+  protein_g NUMERIC NOT NULL DEFAULT 0,
+  carbs_g NUMERIC NOT NULL DEFAULT 0,
+  fat_g NUMERIC NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE public.food_library ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "own food_library all" ON public.food_library FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE INDEX IF NOT EXISTS idx_food_library_user_name ON public.food_library(user_id, name);
+

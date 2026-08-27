@@ -32,6 +32,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      body_measurements: {
+        Row: {
+          created_at: string;
+          id: string;
+          label: string;
+          log_date: string;
+          user_id: string;
+          value_cm: number;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          label: string;
+          log_date?: string;
+          user_id: string;
+          value_cm: number;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          label?: string;
+          log_date?: string;
+          user_id?: string;
+          value_cm?: number;
+        };
+        Relationships: [];
+      };
       bioimpedance_logs: {
         Row: {
           id: string;

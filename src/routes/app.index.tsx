@@ -53,7 +53,7 @@ type Goals = {
 };
 type Totals = { calories: number; protein_g: number; carbs_g: number; fat_g: number };
 
-const WATER_GOAL_ML = 2500;
+const BASE_WATER_GOAL_ML = 2500;
 const CUP_ML = 250;
 
 function TodayPage() {
@@ -63,6 +63,7 @@ function TodayPage() {
   const [waterMl, setWaterMl] = useState(0);
   const [lastWeight, setLastWeight] = useState<number | null>(null);
   const [todayWorkout, setTodayWorkout] = useState<{ id: string; name: string } | null>(null);
+  const [hasCompletedWorkoutToday, setHasCompletedWorkoutToday] = useState(false);
   const [weightOpen, setWeightOpen] = useState(false);
   const [weightInput, setWeightInput] = useState("");
   const [loading, setLoading] = useState(true);
@@ -84,6 +85,7 @@ function TodayPage() {
       .limit(1);
 
     if (completedToday && completedToday[0]) {
+      setHasCompletedWorkoutToday(true);
       // workout_id é nullable — se existir, linka para o template original
       if (completedToday[0].workout_id) {
         return {
@@ -92,6 +94,8 @@ function TodayPage() {
         };
       }
       // se não tiver template vinculado, vai pro fallback
+    } else {
+      setHasCompletedWorkoutToday(false);
     }
 
     // 2. Fallback: sugere o último treino criado como template
@@ -227,6 +231,7 @@ function TodayPage() {
     month: "long",
   });
   const cups = Math.round(waterMl / CUP_ML);
+  const waterGoalMl = hasCompletedWorkoutToday ? BASE_WATER_GOAL_ML + 500 : BASE_WATER_GOAL_ML;
 
   return (
     <div className="space-y-5">
@@ -298,11 +303,18 @@ function TodayPage() {
           <div className="flex items-center gap-2">
             <GlassWater className="h-5 w-5 text-primary" />
             <div>
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Água</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Água</p>
+                {hasCompletedWorkoutToday && (
+                  <span className="text-[10px] bg-primary/10 text-primary font-medium px-1.5 py-0.5 rounded-full">
+                    +500ml treino
+                  </span>
+                )}
+              </div>
               <p className="text-xl font-display font-bold">
                 {(waterMl / 1000).toFixed(2)} L{" "}
                 <span className="text-xs text-muted-foreground font-normal">
-                  / {(WATER_GOAL_ML / 1000).toFixed(1)} L
+                  / {(waterGoalMl / 1000).toFixed(1)} L
                 </span>
               </p>
             </div>
@@ -322,7 +334,7 @@ function TodayPage() {
             </Button>
           </div>
         </div>
-        <Progress value={Math.min(100, (waterMl / WATER_GOAL_ML) * 100)} className="h-1.5" />
+        <Progress value={Math.min(100, (waterMl / waterGoalMl) * 100)} className="h-1.5" />
         <p className="text-[10px] text-muted-foreground mt-2">Cada copo = {CUP_ML} ml</p>
       </div>
 

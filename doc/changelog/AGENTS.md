@@ -2,15 +2,23 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
-## [27/08/2026] - Antigravity (Início explícito de treino + data de treino no insert + ajuste mobile Samsung A56)
+## [27/08/2026] - Antigravity (Início explícito de treino + ajuste mobile A56 + Haptic Feedback + Carga anterior no Modo Foco + Meta de água adaptativa + Tipos e Schema)
 - **Mudanças realizadas**:
   - **Início explícito de treino (`app.treinos.$id.tsx` e `app.treinos.$id.foco.tsx`)**: O cronômetro do treino não inicia mais automaticamente ao abrir a tela. `startedAt` inicia como `null` e a contagem/gravação de rascunho de início é disparada pelo botão "Iniciar treino" / "Iniciar". Ao reiniciar a sessão (`resetWorkout`), o `startedAt` é zerado.
-  - **Criação de treino (`app.treinos.index.tsx`)**: O insert da tabela `workouts` passa a registrar `workout_date: getLocalDate()` (data no fuso de São Paulo).
   - **Responsividade Mobile (otimização para Samsung Galaxy A56 e similares)**:
     - No card de duração em 2 colunas (`app.treinos.$id.tsx`), o botão "Iniciar treino" foi dimensionado com `h-10 px-2 text-sm gap-1.5` para encaixar perfeitamente nos ~130px da coluna sem estourar nem quebrar o layout da grade.
     - No header do Modo Foco (`app.treinos.$id.foco.tsx`), o título central ganhou `flex-1 text-center truncate px-1` e os botões ganharam `shrink-0`, impedindo deslocamentos da barra superior com nomes longos de treino.
-  - **Documentação e Manutenção**: Adicionado runbook técnico `doc/plans/auditoria-tecnica-2026-08-11.md` referenciado no `doc/INDEX.md`, e `.playwright-mcp/` adicionado ao `.gitignore`.
-- **Validação**: Compilação de produção com Vite (client + SSR) validada com sucesso total (`exit code 0`).
+  - **Haptic Feedback (Vibração Tátil) no Celular**:
+    - Vibração sutil ao marcar séries concluídas (`navigator.vibrate(40)`).
+    - Vibração dupla ao término do cronômetro de descanso (`navigator.vibrate([100, 50, 100])`) no treino normal e no Modo Foco.
+  - **Histórico de Cargas no Modo Foco (`app.treinos.$id.foco.tsx`)**:
+    - O Modo Foco agora consulta o histórico de cargas e exibe um badge com a melhor carga registrada do exercício atual (ex: *"Melhor carga: 20 kg × 10 reps"*).
+  - **Meta de Água Adaptativa (`app.index.tsx`)**:
+    - A meta de hidratação no Dashboard passa a aumentar dinamicamente em +500ml (2.5L → 3.0L) quando o usuário conclui um treino no dia, exibindo o badge visual `+500ml treino`.
+  - **Tipagem Supabase & Schema SQL**:
+    - Adicionada a tabela `body_measurements` em `src/integrations/supabase/types.ts` (`Row`, `Insert`, `Update`).
+    - Atualizado `supabase/schema_completo.sql` com as 24 tabelas atuais (incluindo `workout_sessions`, `workout_session_sets`, `exercise_catalog`, `ai_settings`, `bioimpedance_logs`, `food_library`) e colunas recentes de `goals`.
+- **Validação**: Testes unitários (133/133) e compilação de produção com Vite (client + SSR) passaram com 100% de sucesso (`exit code 0`).
 
 ## [10/08/2026] - Claude Code (BUG: relógio de descanso dos treinos deixou de ficar fixo ao rolar)
 - **Ocorrência**: o usuário notou que o **timer de descanso** (`app.treinos.$id.tsx:614`, `sticky top-[57px] z-20`) parou de ficar "grudado" na tela ao rolar os exercícios. O header do app (`app.tsx:60`, `sticky top-0`) presumivelmente também perdeu o efeito.
