@@ -1484,3 +1484,39 @@ html, body {
   - `src/lib/rest-timer-service.test.ts` (3 testes)
   - `src/lib/google-fit-utils.test.ts` (3 testes)
 - Suíte completa do Vitest: **23 arquivos de teste e 180 testes verdes** (100% de aprovação).
+
+---
+
+## Sessão: 10/09/2026 — Correção de Acesso à Página Hoje (/app)
+
+### 🎯 Problema relatado pelo usuário
+"somente pagina hoje nao entra"
+
+### 🔍 Causa Raiz
+Após a introdução dos cards de Daily Briefing e Passos (Google Fit):
+1. **Chamadas de Server Functions não autenticadas no mount:**
+   - No TanStack Start, server functions protegidas pelo middleware `requireSupabaseAuth` exigem o header `Authorization: Bearer <token>`.
+   - `StepsCard` chamava `getGoogleFitStatus()` e `fetchGoogleFitDailyData()` sem passar o token. O servidor retornava `Response 401 Unauthorized`, que no TanStack Start dispara a barreira de erro de rota (`ErrorBoundary`), impedindo a página Hoje de abrir.
+   - `DailyBriefingCard` também chamava `getDailyBriefing` sem passar headers de autenticação na inicialização.
+2. **Potencial Hydration Mismatch no SSR:**
+   - `DailyBriefingCard` tentava ler `localStorage` no inicializador do `useState`, gerando HTML no SSR diferente do client e risco de colapso de hidratação.
+3. **Ausência de try/catch defensivo no `load()` da página Hoje:**
+   - Em `TodayPage` (`app.index.tsx`), a função `calculateTdee` em `Promise.all` não possuía `.catch()`. Se `session` estivesse carregando ou o token estivesse ausente, a promise inteira rejeitava sem chamar `setLoading(false)`, deixando a página presa em "Carregando...".
+
+### 🛠️ Solução Implementada
+1. **Componente de Isolamento Defensivo (`src/components/safe-boundary.tsx`):**
+   - Criado `SafeBoundary` com `componentDidCatch` envolvendo tanto o `<DailyBriefingCard />` quanto o `<StepsCard />`. Qualquer erro inesperado em widgets acessórios é silenciado e nunca compromete a renderização do dashboard principal (Calorias, Macros, Água, Treino).
+2. **Resiliência do `DailyBriefingCard` (`src/components/daily-briefing-card.tsx`):**
+   - Eliminação de risco de hydration mismatch: estado inicial começa limpo e o `useEffect` resgata o cache local ou gera instantaneamente o briefing determinístico via `generateDeterministicBriefing(...)` (0ms, offline-first).
+   - Envio seguro de `Authorization: Bearer ${session.access_token}` apenas quando o usuário clica para atualizar.
+3. **Resiliência do `StepsCard` (`src/components/steps-card.tsx`):**
+   - Consulta direta de dados e integração via cliente Supabase autenticado (`daily_steps_logs` e `user_integrations`), exatamente como as demais tabelas do app (`water_logs`, `meals`, `goals`).
+   - Eliminação de chamadas desnecessárias de server functions no mount da página.
+   - Lançamento manual gravando no banco e em cache local com fallback imediato.
+4. **Proteção Total em `TodayPage` (`src/routes/app.index.tsx`):**
+   - `load()` totalmente blindado com `try / catch / finally`, garantindo que `setLoading(false)` é invocado incondicionalmente.
+   - Chamada a `calculateTdee` condicionada a `session?.access_token` e com `.catch(() => null)`.
+
+### ✅ Validação
+- `npm run build`: Compilação de Client e SSR bem-sucedidas (código 0).
+- `npx vitest run`: 180 testes passando (23 arquivos de teste).

@@ -2,10 +2,15 @@ import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth-context";
 import { getLocalDate } from "@/lib/utils";
-import { getPeriodOfDay, type BriefingResult, type DayPeriod } from "@/lib/briefing-utils";
+import {
+  generateDeterministicBriefing,
+  getPeriodOfDay,
+  type BriefingResult,
+} from "@/lib/briefing-utils";
 import { getDailyBriefing } from "@/server-fns/briefing.functions";
-import { Sun, Flame, Moon, Sparkles, RotateCw, ArrowRight, Bot } from "lucide-react";
+import { Sun, Flame, Moon, RotateCw, ArrowRight, Bot } from "lucide-react";
 import { toast } from "sonner";
 
 interface DailyBriefingCardProps {
@@ -31,25 +36,52 @@ export function DailyBriefingCard({
   waterMl,
   waterGoal,
 }: DailyBriefingCardProps) {
+  const { session } = useAuth();
   const today = getLocalDate();
   const period = getPeriodOfDay();
   const cacheKey = `fitwell-briefing-${userId || "guest"}-${today}-${period}`;
 
-  const [briefing, setBriefing] = useState<BriefingResult | null>(() => {
-    if (typeof window === "undefined") return null;
+  // Inicializa nulo para evitar qualquer risco de hydration mismatch no SSR
+  const [briefing, setBriefing] = useState<BriefingResult | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // 1. Tentar ler do cache local
     try {
       const cached = localStorage.getItem(cacheKey);
-      return cached ? JSON.parse(cached) : null;
-    } catch {
-      return null;
-    }
-  });
-  const [loading, setLoading] = useState(!briefing);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && parsed.title) {
+          setBriefing(parsed);
+          return;
+        }
+      }
+    } catch {}
+
+    // 2. Se não estiver no cache, gerar instantaneamente o briefing determinístico
+    const fallback = generateDeterministicBriefing({
+      period,
+      workoutName,
+      hasWorkoutToday,
+      caloriesConsumed,
+      caloriesGoal,
+      proteinConsumed,
+      proteinGoal,
+      waterMl,
+      waterGoal,
+    });
+    setBriefing(fallback);
+  }, [cacheKey, workoutName, hasWorkoutToday, caloriesConsumed, proteinConsumed, waterMl]);
 
   const fetchBriefing = async (force = false) => {
     if (!force && briefing) return;
     setLoading(true);
+
     try {
+      const headers = session?.access_token
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : undefined;
+
       const res = await getDailyBriefing({
         data: {
           period,
@@ -62,39 +94,38 @@ export function DailyBriefingCard({
           waterMl,
           waterGoal,
         },
+        headers,
       });
-      setBriefing(res);
-      try {
-        localStorage.setItem(cacheKey, JSON.stringify(res));
-      } catch {}
+
+      if (res && res.title) {
+        setBriefing(res);
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify(res));
+        } catch {}
+        if (force) toast.success("Briefing do Coach atualizado!");
+      }
     } catch (err: any) {
-      console.warn("Erro ao carregar daily briefing:", err);
-      toast.error("Não foi possível atualizar o briefing da IA");
+      console.warn("Daily briefing via IA não pôde ser atualizado, mantendo dados de hoje:", err);
+      // Garante fallback sempre ativo sem quebrar a UI
+      const fallback = generateDeterministicBriefing({
+        period,
+        workoutName,
+        hasWorkoutToday,
+        caloriesConsumed,
+        caloriesGoal,
+        proteinConsumed,
+        proteinGoal,
+        waterMl,
+        waterGoal,
+      });
+      setBriefing(fallback);
+      if (force) toast.info("Briefing mantido com base nos seus dados de hoje");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (!briefing) {
-      fetchBriefing(false);
-    }
-  }, [cacheKey]);
-
   const PeriodIcon = period === "manha" ? Sun : period === "tarde" ? Flame : Moon;
-
-  if (loading && !briefing) {
-    return (
-      <Card className="p-4 bg-gradient-to-br from-card via-card to-primary/5 border-primary/20 shadow-xs animate-pulse">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="h-4 w-4 rounded-full bg-primary/20" />
-          <div className="h-3 w-28 rounded bg-muted" />
-        </div>
-        <div className="h-5 w-48 rounded bg-muted mb-2" />
-        <div className="h-4 w-full rounded bg-muted/70" />
-      </Card>
-    );
-  }
 
   if (!briefing) return null;
 

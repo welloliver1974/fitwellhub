@@ -40,6 +40,7 @@ import { toast } from "sonner";
 import { Heatmap } from "@/components/Heatmap";
 import { DailyBriefingCard } from "@/components/daily-briefing-card";
 import { StepsCard } from "@/components/steps-card";
+import { SafeBoundary } from "@/components/safe-boundary";
 
 export const Route = createFileRoute("/app/")({
   component: TodayPage,
@@ -112,86 +113,97 @@ function TodayPage() {
 
   const load = async () => {
     if (!user) return;
-    const [{ data: g }, { data: meals }, { data: water }, { data: weight }, tdeeRes] =
-      await Promise.all([
-        supabase
-          .from("goals")
-          .select("calories,protein_g,carbs_g,fat_g,goal_auto,protein_factor")
-          .eq("user_id", user.id)
-          .maybeSingle(),
-        supabase.from("meals").select("id").eq("user_id", user.id).eq("meal_date", today),
-        supabase.from("water_logs").select("ml").eq("user_id", user.id).eq("log_date", today),
-        supabase
-          .from("body_weights")
-          .select("weight_kg")
-          .eq("user_id", user.id)
-          .order("log_date", { ascending: false })
-          .limit(1),
-        calculateTdee({
-          headers: { Authorization: `Bearer ${session?.access_token}` },
-        }),
-      ]);
+    try {
+      const [{ data: g }, { data: meals }, { data: water }, { data: weight }, tdeeRes] =
+        await Promise.all([
+          supabase
+            .from("goals")
+            .select("calories,protein_g,carbs_g,fat_g,goal_auto,protein_factor")
+            .eq("user_id", user.id)
+            .maybeSingle(),
+          supabase.from("meals").select("id").eq("user_id", user.id).eq("meal_date", today),
+          supabase.from("water_logs").select("ml").eq("user_id", user.id).eq("log_date", today),
+          supabase
+            .from("body_weights")
+            .select("weight_kg")
+            .eq("user_id", user.id)
+            .order("log_date", { ascending: false })
+            .limit(1),
+          session?.access_token
+            ? calculateTdee({
+                headers: { Authorization: `Bearer ${session.access_token}` },
+              }).catch((err) => {
+                console.warn("Aviso ao calcular TDEE:", err);
+                return null;
+              })
+            : Promise.resolve(null),
+        ]);
 
-    const defaults: Goals = { calories: 2000, protein_g: 140, carbs_g: 220, fat_g: 65 };
-    let nextGoals = g ?? defaults;
-    let source: "suggested" | "custom" | "dataMissing" = "custom";
+      const defaults: Goals = { calories: 2000, protein_g: 140, carbs_g: 220, fat_g: 65 };
+      let nextGoals = g ?? defaults;
+      let source: "suggested" | "custom" | "dataMissing" = "custom";
 
-    if (tdeeRes && tdeeRes.tdee != null && tdeeRes.weight != null) {
-      const proteinFactor = g?.protein_factor ?? DEFAULT_PROTEIN_FACTOR;
-      const suggested = suggestGoals(tdeeRes.tdee, tdeeRes.weight, proteinFactor);
-      // Sincroniza automaticamente quando: não há meta salva, ela ainda é o
-      // padrão do signup, ou veio de auto-seed (goal_auto=true). Meta editada
-      // à mão (goal_auto=false) nunca é sobrescrita pela sugestão.
-      const auto = shouldAutoUpdateGoal(g, g?.goal_auto);
-      if (auto && !matchesSuggestion(g, tdeeRes.tdee, tdeeRes.weight, proteinFactor)) {
-        await supabase
-          .from("goals")
-          .upsert(
-            { user_id: user.id, ...suggested, goal_auto: true, protein_factor: proteinFactor },
-            { onConflict: "user_id" },
-          );
+      if (tdeeRes && tdeeRes.tdee != null && tdeeRes.weight != null) {
+        const proteinFactor = g?.protein_factor ?? DEFAULT_PROTEIN_FACTOR;
+        const suggested = suggestGoals(tdeeRes.tdee, tdeeRes.weight, proteinFactor);
+        const auto = shouldAutoUpdateGoal(g, g?.goal_auto);
+        if (auto && !matchesSuggestion(g, tdeeRes.tdee, tdeeRes.weight, proteinFactor)) {
+          await supabase
+            .from("goals")
+            .upsert(
+              { user_id: user.id, ...suggested, goal_auto: true, protein_factor: proteinFactor },
+              { onConflict: "user_id" },
+            );
+        }
+        if (auto) nextGoals = suggested;
+        source = matchesSuggestion(nextGoals, tdeeRes.tdee, tdeeRes.weight, proteinFactor)
+          ? "suggested"
+          : "custom";
+        setTdeeGoal({ bmr: tdeeRes.bmr ?? 0, activityFactor: tdeeRes.activityFactor ?? 1.2 });
+      } else {
+        source = "dataMissing";
+        setTdeeGoal(null);
       }
-      if (auto) nextGoals = suggested;
-      source = matchesSuggestion(nextGoals, tdeeRes.tdee, tdeeRes.weight, proteinFactor)
-        ? "suggested"
-        : "custom";
-      setTdeeGoal({ bmr: tdeeRes.bmr ?? 0, activityFactor: tdeeRes.activityFactor ?? 1.2 });
-    } else {
-      source = "dataMissing";
-      setTdeeGoal(null);
-    }
 
-    setGoals(nextGoals);
-    setGoalSource(source);
-    setWaterMl((water ?? []).reduce((a, w) => a + (w.ml || 0), 0));
-    setLastWeight(weight && weight[0] ? Number(weight[0].weight_kg) : null);
-    setTodayWorkout(await findTodayWorkout(user.id));
+      setGoals(nextGoals);
+      setGoalSource(source);
+      setWaterMl((water ?? []).reduce((a, w) => a + (w.ml || 0), 0));
+      setLastWeight(weight && weight[0] ? Number(weight[0].weight_kg) : null);
+      setTodayWorkout(await findTodayWorkout(user.id));
 
-    const ids = (meals ?? []).map((m) => m.id);
-    if (ids.length) {
-      const { data: items } = await supabase
-        .from("meal_items")
-        .select("calories,protein_g,carbs_g,fat_g")
-        .in("meal_id", ids);
-      const t = (items ?? []).reduce(
-        (a, i) => ({
-          calories: a.calories + Number(i.calories || 0),
-          protein_g: a.protein_g + Number(i.protein_g || 0),
-          carbs_g: a.carbs_g + Number(i.carbs_g || 0),
-          fat_g: a.fat_g + Number(i.fat_g || 0),
-        }),
-        { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
-      );
-      setTotals(t);
-    } else {
-      setTotals({ calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
+      const ids = (meals ?? []).map((m) => m.id);
+      if (ids.length) {
+        const { data: items } = await supabase
+          .from("meal_items")
+          .select("calories,protein_g,carbs_g,fat_g")
+          .in("meal_id", ids);
+        const t = (items ?? []).reduce(
+          (a, i) => ({
+            calories: a.calories + Number(i.calories || 0),
+            protein_g: a.protein_g + Number(i.protein_g || 0),
+            carbs_g: a.carbs_g + Number(i.carbs_g || 0),
+            fat_g: a.fat_g + Number(i.fat_g || 0),
+          }),
+          { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+        );
+        setTotals(t);
+      } else {
+        setTotals({ calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
+      }
+    } catch (err) {
+      console.error("Erro ao carregar dados da página Hoje:", err);
+      // Garante metas de fallback mesmo em caso de erro no Supabase
+      if (!goals) {
+        setGoals({ calories: 2000, protein_g: 140, carbs_g: 220, fat_g: 65 });
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
     load(); /* eslint-disable-next-line */
-  }, [user]);
+  }, [user, session]);
 
   const addWater = async (delta: number) => {
     if (!user) return;
@@ -249,18 +261,20 @@ function TodayPage() {
         </Link>
       </div>
 
-      {/* Daily Briefing do Coach IA */}
-      <DailyBriefingCard
-        userId={user?.id}
-        workoutName={todayWorkout?.name}
-        hasWorkoutToday={hasCompletedWorkoutToday}
-        caloriesConsumed={totals.calories}
-        caloriesGoal={goals.calories}
-        proteinConsumed={totals.protein_g}
-        proteinGoal={goals.protein_g}
-        waterMl={waterMl}
-        waterGoal={waterGoalMl}
-      />
+      {/* Daily Briefing do Coach IA com isolamento de erro defensivo */}
+      <SafeBoundary name="DailyBriefingCard">
+        <DailyBriefingCard
+          userId={user?.id}
+          workoutName={todayWorkout?.name}
+          hasWorkoutToday={hasCompletedWorkoutToday}
+          caloriesConsumed={totals.calories}
+          caloriesGoal={goals.calories}
+          proteinConsumed={totals.protein_g}
+          proteinGoal={goals.protein_g}
+          waterMl={waterMl}
+          waterGoal={waterGoalMl}
+        />
+      </SafeBoundary>
 
       <div className="rounded-2xl border bg-card p-6">
         <div className="flex items-baseline justify-between">
@@ -313,8 +327,10 @@ function TodayPage() {
         />
       </div>
 
-      {/* Card de Passos & Gasto Ativo (Samsung Watch / Google Fit) */}
-      <StepsCard userId={user?.id} dailyStepGoal={10000} />
+      {/* Card de Passos & Gasto Ativo com isolamento de erro defensivo */}
+      <SafeBoundary name="StepsCard">
+        <StepsCard userId={user?.id} dailyStepGoal={10000} />
+      </SafeBoundary>
 
       <div className="rounded-2xl border bg-card p-5">
         <div className="flex items-center justify-between mb-3">

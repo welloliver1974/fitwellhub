@@ -1,4 +1,8 @@
 import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth-context";
+import { getLocalDate } from "@/lib/utils";
+import { estimateActiveCaloriesFromSteps } from "@/lib/google-fit-utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -13,11 +17,9 @@ import {
 } from "@/components/ui/dialog";
 import {
   fetchGoogleFitDailyData,
-  saveManualSteps,
-  getGoogleFitStatus,
   getGoogleFitAuthUrl,
 } from "@/server-fns/google-fit.functions";
-import { Footprints, Flame, Watch, RotateCw, Pencil, Check, ExternalLink } from "lucide-react";
+import { Footprints, Flame, Watch, RotateCw, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 interface StepsCardProps {
@@ -31,77 +33,160 @@ export function StepsCard({
   dailyStepGoal = 10000,
   onActiveCaloriesChange,
 }: StepsCardProps) {
+  const { user, session } = useAuth();
+  const currentUserId = userId || user?.id;
+
   const [steps, setSteps] = useState(0);
   const [activeCalories, setActiveCalories] = useState(0);
   const [distanceMeters, setDistanceMeters] = useState(0);
   const [connected, setConnected] = useState(false);
-  const [hasClientConfigured, setHasClientConfigured] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [hasClientConfigured, setHasClientConfigured] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualInput, setManualInput] = useState("");
 
-  const loadData = async (isSync = false) => {
+  const loadLocalData = async (isSync = false) => {
     if (isSync) setSyncing(true);
+
     try {
-      const [status, metrics] = await Promise.all([
-        getGoogleFitStatus(),
-        fetchGoogleFitDailyData(),
-      ]);
+      const today = getLocalDate();
 
-      setConnected(status.connected);
-      setHasClientConfigured(status.hasClientConfigured);
-      setSteps(metrics.steps);
-      setActiveCalories(metrics.activeCalories);
-      setDistanceMeters(metrics.distanceMeters);
+      // 1. Ler passos diretamente de daily_steps_logs do Supabase
+      if (currentUserId) {
+        try {
+          const { data: stepLog, error: stepErr } = await supabase
+            .from("daily_steps_logs")
+            .select("steps, active_calories")
+            .eq("user_id", currentUserId)
+            .eq("log_date", today)
+            .maybeSingle();
 
-      if (onActiveCaloriesChange) {
-        onActiveCaloriesChange(metrics.activeCalories);
+          if (!stepErr && stepLog && stepLog.steps != null) {
+            const st = stepLog.steps;
+            const cal = stepLog.active_calories ?? estimateActiveCaloriesFromSteps(st);
+            setSteps(st);
+            setActiveCalories(cal);
+            setDistanceMeters(Math.round(st * 0.75));
+            if (onActiveCaloriesChange) onActiveCaloriesChange(cal);
+          } else {
+            // Fallback de cache local caso o usuário tenha lançado offline
+            try {
+              const cached = localStorage.getItem(`fitwell-steps-${currentUserId}-${today}`);
+              if (cached) {
+                const parsed = JSON.parse(cached);
+                setSteps(parsed.steps || 0);
+                setActiveCalories(parsed.activeCalories || 0);
+                setDistanceMeters(Math.round((parsed.steps || 0) * 0.75));
+              }
+            } catch {}
+          }
+        } catch (dbErr) {
+          console.warn("Aviso ao buscar daily_steps_logs:", dbErr);
+        }
+
+        // 2. Verificar se o Google Fit / Samsung Watch está vinculado
+        try {
+          const { data: integration } = await supabase
+            .from("user_integrations")
+            .select("updated_at, access_token")
+            .eq("user_id", currentUserId)
+            .eq("provider", "google_fit")
+            .maybeSingle();
+
+          if (integration && integration.access_token) {
+            setConnected(true);
+          }
+        } catch {}
       }
 
-      if (isSync) {
-        toast.success(
-          status.connected
-            ? "Passos sincronizados com o Google Fit!"
-            : "Dados de passos atualizados!"
-        );
+      // 3. Se for uma sincronização explícita e houver sessão, chamar o Google Fit
+      if (isSync && session?.access_token) {
+        try {
+          const metrics = await fetchGoogleFitDailyData({
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          });
+
+          if (metrics && typeof metrics.steps === "number") {
+            setSteps(metrics.steps);
+            setActiveCalories(metrics.activeCalories);
+            setDistanceMeters(metrics.distanceMeters);
+            if (onActiveCaloriesChange) onActiveCaloriesChange(metrics.activeCalories);
+            toast.success("Passos sincronizados com o Google Fit!");
+          }
+        } catch (syncErr: any) {
+          console.warn("Sincronização remota com Google Fit falhou:", syncErr);
+          toast.info("Dados locais mantidos");
+        }
       }
     } catch (err: any) {
       console.warn("Erro ao carregar dados de passos:", err);
-      if (isSync) toast.error("Não foi possível sincronizar agora");
     } finally {
-      setLoading(false);
       setSyncing(false);
     }
   };
 
   useEffect(() => {
-    loadData();
-  }, [userId]);
+    loadLocalData(false);
+  }, [currentUserId]);
 
   const handleManualSave = async () => {
     const val = parseInt(manualInput.replace(/\D/g, ""), 10);
     if (isNaN(val) || val < 0) return;
 
-    try {
-      const res = await saveManualSteps({ data: val });
-      setSteps(res.steps);
-      setActiveCalories(res.activeCalories);
-      setDistanceMeters(Math.round(res.steps * 0.75));
-      if (onActiveCaloriesChange) onActiveCaloriesChange(res.activeCalories);
-      setManualOpen(false);
-      setManualInput("");
-      toast.success("Passos registrados com sucesso!");
-    } catch (err: any) {
-      toast.error("Erro ao salvar passos: " + err?.message);
+    const today = getLocalDate();
+    const active = estimateActiveCaloriesFromSteps(val);
+    const dist = Math.round(val * 0.75);
+
+    setSteps(val);
+    setActiveCalories(active);
+    setDistanceMeters(dist);
+    if (onActiveCaloriesChange) onActiveCaloriesChange(active);
+
+    if (currentUserId) {
+      try {
+        await supabase.from("daily_steps_logs").upsert(
+          {
+            user_id: currentUserId,
+            log_date: today,
+            steps: val,
+            active_calories: active,
+            source: "manual",
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,log_date" }
+        );
+      } catch (err) {
+        console.warn("Erro ao salvar manual steps no Supabase:", err);
+      }
+
+      try {
+        localStorage.setItem(
+          `fitwell-steps-${currentUserId}-${today}`,
+          JSON.stringify({ steps: val, activeCalories: active })
+        );
+      } catch {}
     }
+
+    setManualOpen(false);
+    setManualInput("");
+    toast.success("Passos registrados com sucesso!");
   };
 
   const handleConnectGoogle = async () => {
     try {
       const redirectUri = `${window.location.origin}/app/ia`;
-      const authUrl = await getGoogleFitAuthUrl({ data: redirectUri });
-      window.location.href = authUrl;
+      const headers = session?.access_token
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : undefined;
+
+      const authUrl = await getGoogleFitAuthUrl({
+        data: redirectUri,
+        headers,
+      });
+
+      if (authUrl) {
+        window.location.href = authUrl;
+      }
     } catch (err: any) {
       toast.error(err?.message || "Não foi possível iniciar a conexão com o Google");
     }
@@ -140,7 +225,7 @@ export function StepsCard({
             variant="ghost"
             size="icon"
             className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            onClick={() => loadData(true)}
+            onClick={() => loadLocalData(true)}
             disabled={syncing}
             title="Sincronizar passos"
           >
