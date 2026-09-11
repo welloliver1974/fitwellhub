@@ -745,6 +745,72 @@ export type Database = {
           }
         ];
       };
+      user_integrations: {
+        Row: {
+          id: string;
+          user_id: string;
+          provider: string;
+          access_token: string | null;
+          refresh_token: string | null;
+          expires_at: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          provider: string;
+          access_token?: string | null;
+          refresh_token?: string | null;
+          expires_at?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          provider?: string;
+          access_token?: string | null;
+          refresh_token?: string | null;
+          expires_at?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      daily_steps_logs: {
+        Row: {
+          id: string;
+          user_id: string;
+          log_date: string;
+          steps: number;
+          active_calories: number | null;
+          source: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          log_date?: string;
+          steps?: number;
+          active_calories?: number | null;
+          source?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          log_date?: string;
+          steps?: number;
+          active_calories?: number | null;
+          source?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;

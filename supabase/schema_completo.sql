@@ -349,3 +349,34 @@ ALTER TABLE public.food_library ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "own food_library all" ON public.food_library FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE INDEX IF NOT EXISTS idx_food_library_user_name ON public.food_library(user_id, name);
 
+-- User Integrations (Google Fit / Wearables)
+CREATE TABLE IF NOT EXISTS public.user_integrations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL,
+  access_token TEXT,
+  refresh_token TEXT,
+  expires_at BIGINT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(user_id, provider)
+);
+ALTER TABLE public.user_integrations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "own user_integrations all" ON public.user_integrations FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- Daily Steps Logs (Passos diários e calorias ativas de wearables / manual)
+CREATE TABLE IF NOT EXISTS public.daily_steps_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  log_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  steps INTEGER NOT NULL DEFAULT 0,
+  active_calories NUMERIC DEFAULT 0,
+  source TEXT DEFAULT 'manual',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(user_id, log_date)
+);
+ALTER TABLE public.daily_steps_logs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "own daily_steps_logs all" ON public.daily_steps_logs FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE INDEX IF NOT EXISTS idx_daily_steps_logs_user_date ON public.daily_steps_logs(user_id, log_date);
+

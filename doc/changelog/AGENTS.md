@@ -2,6 +2,28 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [10/09/2026] - Antigravity (Daily Briefing do Coach IA + Timer em Background + Integração Samsung Watch via Google Fit)
+- **Mudanças realizadas**:
+  - **Daily Briefing do Coach IA no Topo da Home (`app.index.tsx` + `daily-briefing-card.tsx` + `briefing.functions.ts` + `briefing-utils.ts`)**:
+    - Adicionado card inteligente e dinâmico recepcionando o usuário no topo da tela com mensagens personalizadas por período (manhã, tarde e noite).
+    - Cache local em `localStorage` chaveado por `userId + date + period`: a IA é consultada apenas uma vez por turno, garantindo carregamento instantâneo (0ms) e economia de tokens.
+    - Fallback determinístico offline automático em TypeScript puro para quando não houver internet ou chave de IA.
+  - **Timer de Descanso com Alerta em Segundo Plano (`rest-timer-service.ts` + `app.treinos.$id.foco.tsx` + `sw.js`)**:
+    - Substituição do timer baseado em `setInterval` puro por cálculo com `targetTimestamp` absoluto — o relógio não atrasa nem trava com tela apagada ou app em segundo plano.
+    - Suporte a **Web Notifications API** e Service Worker: alerta nativo do sistema com som e vibração tátil ao término do descanso, mostrando o nome do próximo exercício.
+    - Ao clicar na notificação, o Service Worker reabre/foca imediatamente a tela do treino em foco.
+  - **Integração Samsung Galaxy Watch via Google Fit REST API (`google-fit-utils.ts` + `google-fit.functions.ts` + `steps-card.tsx` + `app.ia.tsx`)**:
+    - Conexão OAuth 2.0 com a API oficial do Google Fitness, aproveitando a sincronização já ativa do Samsung Health para Google Fit.
+    - Agregação de passos diários (`com.google.step_count.delta`), calorias ativas (`com.google.calories.expended`) e distância.
+    - Novo componente `StepsCard` na Home com progresso da meta diária, calorias queimadas e modal de lançamento manual como fallback imediato.
+    - Seção de configuração e conexão Google Fit na tela de configurações (`app.ia.tsx`).
+  - **Tabelas e Schemas SQL (`types.ts` + `schema_completo.sql`)**:
+    - Adicionadas as tabelas `user_integrations` e `daily_steps_logs` no Supabase e em `src/integrations/supabase/types.ts`.
+  - **Roadmap & Planejamento (`doc/roadmap/plano-novas-funcionalidades.md`)**:
+    - Criado e catalogado documento completo com 9 oportunidades futuras e atualizado status das opções 3, 7 e 9 para concluídas.
+- **Validação**:
+  - Testes unitários com Vitest: **23 arquivos de teste e 180 testes verdes** (100% de aprovação).
+
 ## [27/08/2026] - Antigravity (Início explícito de treino + ajuste mobile A56 + Haptic Feedback + Carga anterior no Modo Foco + Meta de água adaptativa + Tipos e Schema)
 - **Mudanças realizadas**:
   - **Início explícito de treino (`app.treinos.$id.tsx` e `app.treinos.$id.foco.tsx`)**: O cronômetro do treino não inicia mais automaticamente ao abrir a tela. `startedAt` inicia como `null` e a contagem/gravação de rascunho de início é disparada pelo botão "Iniciar treino" / "Iniciar". Ao reiniciar a sessão (`resetWorkout`), o `startedAt` é zerado.

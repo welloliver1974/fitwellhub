@@ -38,6 +38,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Heatmap } from "@/components/Heatmap";
+import { DailyBriefingCard } from "@/components/daily-briefing-card";
+import { StepsCard } from "@/components/steps-card";
 
 export const Route = createFileRoute("/app/")({
   component: TodayPage,
@@ -247,6 +249,19 @@ function TodayPage() {
         </Link>
       </div>
 
+      {/* Daily Briefing do Coach IA */}
+      <DailyBriefingCard
+        userId={user?.id}
+        workoutName={todayWorkout?.name}
+        hasWorkoutToday={hasCompletedWorkoutToday}
+        caloriesConsumed={totals.calories}
+        caloriesGoal={goals.calories}
+        proteinConsumed={totals.protein_g}
+        proteinGoal={goals.protein_g}
+        waterMl={waterMl}
+        waterGoal={waterGoalMl}
+      />
+
       <div className="rounded-2xl border bg-card p-6">
         <div className="flex items-baseline justify-between">
           <div>
@@ -297,6 +312,9 @@ function TodayPage() {
           goal={goals.fat_g}
         />
       </div>
+
+      {/* Card de Passos & Gasto Ativo (Samsung Watch / Google Fit) */}
+      <StepsCard userId={user?.id} dailyStepGoal={10000} />
 
       <div className="rounded-2xl border bg-card p-5">
         <div className="flex items-center justify-between mb-3">

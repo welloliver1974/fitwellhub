@@ -9,6 +9,13 @@ import { cn, playBeep } from "@/lib/utils";
 import { toast } from "sonner";
 import { ExerciseSubstituteDialog } from "@/components/exercise-substitute-dialog";
 
+import {
+  calculateRemainingSeconds,
+  requestRestNotificationPermission,
+  triggerRestCompletedAlert,
+} from "@/lib/rest-timer-service";
+import { Bell, BellRing } from "lucide-react";
+
 export const Route = createFileRoute("/app/treinos/$id/foco")({
   component: FocusMode,
 });
@@ -34,6 +41,8 @@ function FocusMode() {
   const [restSec, setRestSec] = useState(0);
   const [restRunning, setRestRunning] = useState(false);
   const [restPreset, setRestPreset] = useState(60);
+  const [restTargetTime, setRestTargetTime] = useState<number | null>(null);
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission>("default");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Estados da sessão de treino ativa (mesmo rascunho da tela normal)
@@ -64,6 +73,41 @@ function FocusMode() {
     );
   };
 
+  const startRestTimer = (seconds: number) => {
+    const target = Date.now() + seconds * 1000;
+    setRestTargetTime(target);
+    setRestSec(seconds);
+    setRestRunning(true);
+  };
+
+  const pauseRestTimer = () => {
+    setRestRunning(false);
+    setRestTargetTime(null);
+  };
+
+  const resumeRestTimer = () => {
+    if (restSec <= 0) return;
+    const target = Date.now() + restSec * 1000;
+    setRestTargetTime(target);
+    setRestRunning(true);
+  };
+
+  const enableNotifications = async () => {
+    const res = await requestRestNotificationPermission();
+    setNotifPermission(res);
+    if (res === "granted") {
+      toast.success("Avisos com tela bloqueada ativados!");
+    } else {
+      toast.error("Permissão de notificação negada no navegador.");
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setNotifPermission(Notification.permission);
+    }
+  }, []);
+
   const toggleCompleted = (setId: string) => {
     setCompletedSets((prev) => {
       const next = new Set(prev);
@@ -74,8 +118,7 @@ function FocusMode() {
         if (typeof navigator !== "undefined" && "vibrate" in navigator) {
           try { navigator.vibrate(40); } catch {}
         }
-        setRestSec(restPreset); // Auto inicia o timer de descanso
-        setRestRunning(true);
+        startRestTimer(restPreset); // Auto inicia o timer com tempo absoluto
       }
       if (startedAt) saveDraft(next, setValues, startedAt);
       return next;
@@ -96,27 +139,47 @@ function FocusMode() {
     });
   };
 
+  // Timer com cálculo por target timestamp absoluto
   useEffect(() => {
-    if (restRunning && restSec > 0) {
-      intervalRef.current = setInterval(() => {
-        setRestSec((s) => {
-          if (s <= 1) {
-            setRestRunning(false);
-            playBeep();
-            if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-              try { navigator.vibrate([100, 50, 100]); } catch {}
-            }
-            toast.success("Descanso terminado");
-            return 0;
-          }
-          return s - 1;
-        });
-      }, 1000);
+    if (restRunning && restTargetTime) {
+      const tick = () => {
+        const remaining = calculateRemainingSeconds(restTargetTime);
+        setRestSec(remaining);
+        if (remaining <= 0) {
+          setRestRunning(false);
+          setRestTargetTime(null);
+          const currentExName = nameOverrides[exercises[idx]?.id] || exercises[idx]?.name;
+          triggerRestCompletedAlert({ exerciseName: currentExName, workoutId: id });
+          toast.success("Descanso terminado!");
+        }
+      };
+
+      tick();
+      intervalRef.current = setInterval(tick, 500);
     }
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [restRunning]);
+  }, [restRunning, restTargetTime, exercises, idx, id, nameOverrides]);
+
+  // Ao voltar para a aba ou desbloquear o aparelho, recalcula imediatamente
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible" && restRunning && restTargetTime) {
+        const remaining = calculateRemainingSeconds(restTargetTime);
+        setRestSec(remaining);
+        if (remaining <= 0) {
+          setRestRunning(false);
+          setRestTargetTime(null);
+          const currentExName = nameOverrides[exercises[idx]?.id] || exercises[idx]?.name;
+          triggerRestCompletedAlert({ exerciseName: currentExName, workoutId: id });
+          toast.success("Descanso terminado!");
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [restRunning, restTargetTime, exercises, idx, id, nameOverrides]);
 
   const load = async () => {
     const { data: w } = await supabase
@@ -387,7 +450,7 @@ function FocusMode() {
               .padStart(2, "0")}
             :{(restSec % 60).toString().padStart(2, "0")}
           </p>
-          <div className="flex justify-center gap-2 mt-4">
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
             {[60, 90, 120, 180].map((s) => (
               <Button
                 key={s}
@@ -395,8 +458,7 @@ function FocusMode() {
                 size="sm"
                 onClick={() => {
                   setRestPreset(s);
-                  setRestSec(s);
-                  setRestRunning(true);
+                  startRestTimer(s);
                 }}
               >
                 {s}s
@@ -404,14 +466,33 @@ function FocusMode() {
             ))}
             {restSec > 0 &&
               (restRunning ? (
-                <Button size="icon" variant="ghost" onClick={() => setRestRunning(false)}>
+                <Button size="icon" variant="ghost" onClick={pauseRestTimer} title="Pausar descanso">
                   <Pause className="h-4 w-4" />
                 </Button>
               ) : (
-                <Button size="icon" variant="ghost" onClick={() => setRestRunning(true)}>
+                <Button size="icon" variant="ghost" onClick={resumeRestTimer} title="Retomar descanso">
                   <Play className="h-4 w-4" />
                 </Button>
               ))}
+          </div>
+
+          <div className="flex items-center justify-center mt-3">
+            {notifPermission === "granted" ? (
+              <div className="inline-flex items-center gap-1.5 text-[11px] text-emerald-500 font-medium bg-emerald-500/10 px-2.5 py-1 rounded-full">
+                <BellRing className="h-3 w-3" />
+                <span>Aviso com tela bloqueada ativo</span>
+              </div>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={enableNotifications}
+                className="h-7 text-xs text-muted-foreground hover:text-foreground gap-1.5 rounded-full border border-dashed border-border px-2.5"
+              >
+                <Bell className="h-3 w-3" />
+                <span>Ativar avisos com tela apagada</span>
+              </Button>
+            )}
           </div>
         </div>
 

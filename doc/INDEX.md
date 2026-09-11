@@ -19,6 +19,7 @@
 | Arquivo | Conteúdo |
 |---|---|
 | [roadmap/melhorias.md](./roadmap/melhorias.md) | Melhorias sugeridas com status atualizado (implementado/pendente) |
+| [roadmap/plano-novas-funcionalidades.md](./roadmap/plano-novas-funcionalidades.md) | Plano completo de novas funcionalidades (Workout Builder IA, 1RM, Briefing, Streaks, etc.) |
 
 ## Planos
 

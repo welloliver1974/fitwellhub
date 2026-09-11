@@ -15,6 +15,12 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Sparkles, KeyRound, ShieldCheck, RefreshCw } from "lucide-react";
 import { fetchNvidiaModels } from "@/server-fns/ai-settings.functions";
+import {
+  getGoogleFitStatus,
+  getGoogleFitAuthUrl,
+  exchangeGoogleFitCode,
+  disconnectGoogleFit,
+} from "@/server-fns/google-fit.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/ia")({
@@ -260,46 +266,133 @@ function AiSettingsPage() {
       </Card>
 
       <Card className="p-4 space-y-4">
-        <div className="space-y-1">
-          <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-            Foto do prato (modelo de visao)
-          </Label>
-          <Select
-            value={photoProvider}
-            onValueChange={(v) => setPhotoProvider(v as typeof photoProvider)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Seguir o provedor padrao" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="auto">Seguir o provedor padrao</SelectItem>
-              <SelectItem value="nvidia">NVIDIA</SelectItem>
-              <SelectItem value="openrouter">OpenRouter</SelectItem>
-              <SelectItem value="omniroute">OmniRoute</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            Provedor desconhecido para a analise de foto do prato. Independente do Coach.
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <h3 className="text-sm font-semibold flex items-center gap-1.5">
+              <span>⌚</span> Google Fit & Samsung Galaxy Watch
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Sincroniza passos diários e gasto calórico ativo direto do seu smartwatch.
+            </p>
+          </div>
+        </div>
+
+        <GoogleFitSettingsSection />
+      </Card>
+    </div>
+  );
+}
+
+function GoogleFitSettingsSection() {
+  const [status, setStatus] = useState<{ connected: boolean; hasClientConfigured: boolean; lastSync: string | null }>({
+    connected: false,
+    hasClientConfigured: false,
+    lastSync: null,
+  });
+  const [loading, setLoading] = useState(true);
+  const [connecting, setConnecting] = useState(false);
+
+  const checkStatus = async () => {
+    try {
+      const s = await getGoogleFitStatus();
+      setStatus(s);
+    } catch {
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    checkStatus();
+
+    // Tratar retorno OAuth caso haja ?code= na URL
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      const code = url.searchParams.get("code");
+      if (code) {
+        setConnecting(true);
+        const redirectUri = `${window.location.origin}/app/ia`;
+        exchangeGoogleFitCode({ data: { code, redirectUri } })
+          .then(() => {
+            toast.success("Google Fit conectado com sucesso!");
+            url.searchParams.delete("code");
+            url.searchParams.delete("scope");
+            window.history.replaceState({}, document.title, url.pathname);
+            checkStatus();
+          })
+          .catch((err) => {
+            toast.error("Falha ao vincular Google Fit: " + err?.message);
+          })
+          .finally(() => setConnecting(false));
+      }
+    }
+  }, []);
+
+  const handleConnect = async () => {
+    try {
+      const redirectUri = `${window.location.origin}/app/ia`;
+      const authUrl = await getGoogleFitAuthUrl({ data: redirectUri });
+      window.location.href = authUrl;
+    } catch (err: any) {
+      toast.error(err?.message || "Não foi possível conectar com o Google");
+    }
+  };
+
+  const handleDisconnect = async () => {
+    try {
+      await disconnectGoogleFit();
+      setStatus((prev) => ({ ...prev, connected: false }));
+      toast.success("Google Fit desconectado");
+    } catch (err: any) {
+      toast.error("Erro ao desconectar: " + err?.message);
+    }
+  };
+
+  if (loading || connecting) {
+    return (
+      <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+        <span>Verificando integração com Google Fit...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 pt-1">
+      <div className="flex items-center justify-between p-3 rounded-xl bg-secondary/50 border border-border/50">
+        <div>
+          <p className="text-xs font-semibold text-foreground">
+            Status: {status.connected ? "🟢 Conectado" : "⚪ Não conectado"}
+          </p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            {status.connected
+              ? "Recebendo dados do Samsung Health via Google Fit."
+              : status.hasClientConfigured
+                ? "Clique abaixo para vincular sua conta Google."
+                : "Credenciais do Google Cloud prontas para autenticação."}
           </p>
         </div>
 
-        {photoProvider !== "auto" && (
-          <div className="space-y-1">
-            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-              Modelo de visao
-            </Label>
-            <Input
-              value={photoModel}
-              onChange={(e) => setPhotoModel(e.target.value)}
-              placeholder={photoModelPlaceholder}
-              autoComplete="off"
-            />
-            <p className="text-xs text-muted-foreground">
-              Deixe vazio para usar o padrao do provedor escolhido. Precisa aceitar imagens.
-            </p>
-          </div>
+        {status.connected ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDisconnect}
+            className="h-8 text-xs text-destructive hover:bg-destructive/10"
+          >
+            Desconectar
+          </Button>
+        ) : (
+          <Button
+            variant="default"
+            size="sm"
+            onClick={handleConnect}
+            className="h-8 text-xs font-medium"
+          >
+            Conectar Google Fit
+          </Button>
         )}
-      </Card>
+      </div>
     </div>
   );
 }

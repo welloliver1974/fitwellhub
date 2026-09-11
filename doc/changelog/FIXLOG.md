@@ -1454,3 +1454,33 @@ html, body {
 - ✅ Timer de descanso e header voltam a ficar fixos ao rolar
 - ✅ Prevenção de overflow horizontal no mobile preservada
 - ✅ Mudança só em CSS (sem testes/Vitest afetados; sem type-check a fazer)
+
+---
+
+## Sessão: 10/09/2026 — Daily Briefing (IA), Timer em Background e Google Fit (Samsung Watch)
+
+### 🎯 Funcionalidades trabalhadas
+1. **Daily Briefing do Coach IA na Home** (`src/components/daily-briefing-card.tsx`, `src/server-fns/briefing.functions.ts`, `src/lib/briefing-utils.ts`, `src/routes/app.index.tsx`).
+2. **Timer de Descanso com Alerta em Segundo Plano** (`src/lib/rest-timer-service.ts`, `src/routes/app.treinos.$id.foco.tsx`, `public/sw.js`).
+3. **Integração Samsung Galaxy Watch via Google Fit REST API** (`src/lib/google-fit-utils.ts`, `src/server-fns/google-fit.functions.ts`, `src/components/steps-card.tsx`, `src/routes/app.ia.tsx`).
+
+### 🔍 Objetivos & Resoluções
+- **Daily Briefing:**
+  - Adicionado card inteligente no topo da Home (`/app`) com saudação e briefing personalizado de acordo com o turno do dia (manhã, tarde ou noite), cruzando treinos agendados, calorias, proteínas e água consumidos.
+  - Cache inteligente em `localStorage` chaveado por `userId + date + period`: a IA só é chamada uma vez por turno, garantindo carregamento instantâneo (0ms) e economia de tokens.
+  - Fallback determinístico offline automático em TypeScript puro.
+- **Timer de Descanso em Background:**
+  - Substituição do `setInterval` puro por cálculo baseado em `targetTimestamp` absoluto (`Date.now() + seconds * 1000`), imune a throttling quando a tela do celular apaga ou o usuário troca de aplicativo.
+  - Alerta nativo de término via **Web Notifications API** e Service Worker (`registration.showNotification`), com bipes sonoros (`AudioContext`) e vibração tátil física (`navigator.vibrate([250, 100, 250, 100, 250])`).
+  - Ao tocar na notificação, o Service Worker reabre/foca imediatamente a tela do treino ativo.
+- **Integração Samsung Watch / Google Fit:**
+  - Conexão OAuth 2.0 com a **Google Fitness REST API** (`fitness.googleapis.com`), consumindo passos (`com.google.step_count.delta`) e calorias ativas (`com.google.calories.expended`) de forma direta a partir do vínculo nativo existente entre Samsung Health e Google Fit.
+  - Novo card de passos na Home (`StepsCard`) com progresso da meta diária, gasto calórico ativo, distância e botão para lançamento/ajuste manual rápido.
+  - Seção de configuração e conexão Google Fit na tela `/app/ia`.
+
+### 🧪 Testes & Validação
+- Novos testes unitários:
+  - `src/lib/briefing-utils.test.ts` (3 testes)
+  - `src/lib/rest-timer-service.test.ts` (3 testes)
+  - `src/lib/google-fit-utils.test.ts` (3 testes)
+- Suíte completa do Vitest: **23 arquivos de teste e 180 testes verdes** (100% de aprovação).
