@@ -1558,3 +1558,40 @@ Após a introdução dos cards de Daily Briefing e Passos (Google Fit):
 - `npm run build`: Compilação de Client e SSR bem-sucedidas (código 0).
 - Novos testes unitários adicionados em `src/lib/google-fit-utils.test.ts` cobrindo priorização de `estimated_steps` e datasets unbucketed.
 
+---
+
+## Sessão: 11/09/2026 — Rotação Inteligente de Divisão de Treinos (Split Sequencer BCDA) e Calibração de Calorias Ativas
+
+### 🎯 Problema relatado pelo usuário
+1. O usuário treinou o Treino D ontem e seus treinos seguem a ordem B ➔ C ➔ D ➔ A. Hoje o card "Treino de hoje" e o Daily Briefing sugeriram novamente o Treino D.
+2. Na sincronização do Google Fit / Samsung Watch, os passos vieram perfeitos (788 passos), mas o card exibiu "+1877 kcal" como gasto ativo, enquanto o Samsung Health marcou 39 kcal ativas.
+
+### 🔍 Causa Raiz
+1. **Sugestão de Treino em `findTodayWorkout` (`src/routes/app.index.tsx`):**
+   - Quando o usuário ainda não finalizou treino hoje, o código executava um fallback simples:
+     `SELECT * FROM workouts ORDER BY created_at DESC LIMIT 1`.
+   - Isso sempre trazia o último treino cadastrado no banco (Treino D), sem consultar o histórico de sessões anteriores (`workout_sessions`) nem calcular rotação cíclica.
+2. **Calorias Ativas Infladas com TMB:**
+   - O endpoint `com.google.calories.expended` do Google Fit retorna as calorias totais diárias acumuladas (TMB basal + ativas).
+   - O app já calcula TMB e TDEE cientificamente no card de metas. Exibir a TMB de 1877 kcal no card de passos como "Gasto Ativo" duplicava a contagem e causava confusão.
+
+### 🛠️ Solução Implementada
+1. **Módulo de Rotação Inteligente (`src/lib/workout-rotation.ts`):**
+   - Criação de funções de extração de letra de treino e sequenciamento circular (`determineNextWorkout`).
+   - Ordem padrão configurada para o ciclo do usuário: `['B', 'C', 'D', 'A']`.
+   - Se ontem foi concluído o treino **D**, hoje o app sugere automaticamente o treino **A**!
+   - Sequência totalmente configurável e persistida no `localStorage`.
+2. **Integração na Home e no Coach IA (`src/routes/app.index.tsx`):**
+   - `findTodayWorkout` agora consulta a última sessão concluída no histórico e avança no ciclo.
+   - O card "Treino de hoje" e o Daily Briefing do Coach IA apontam para o treino correto da rotação.
+3. **Banner de Divisão Ativa em Treinos (`src/routes/app.treinos.index.tsx`):**
+   - Exibição de badge interativo com a ordem atual da divisão (`B ➔ C ➔ D ➔ A`) e modal para ajuste rápido da sequência.
+4. **Filtro de BMR nas Calorias do Google Fit (`src/lib/google-fit-utils.ts`):**
+   - `parseGoogleFitAggregateResponse` detecta quando `totalCalories` ultrapassa a queima fisiológica de passos e filtra o BMR, garantindo que o card "Passos & Gasto Ativo" mostre exclusivamente a queima real das atividades/caminhadas (~35-45 kcal para ~800 passos).
+
+### ✅ Validação
+- `src/lib/workout-rotation.test.ts`: 7 testes cobrindo extração de letras, ciclo BCDA, avanço após cada treino e fallbacks.
+- `src/lib/google-fit-utils.test.ts`: 6 testes cobrindo filtragem de BMR e cálculo de calorias ativas.
+- `npm run build`: Compilação de Client e SSR bem-sucedidas (código 0).
+
+

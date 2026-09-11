@@ -14,8 +14,9 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, ChevronRight, Dumbbell, Trash2, Copy, Layers, PencilLine, History } from "lucide-react";
+import { Plus, ChevronRight, Dumbbell, Trash2, Copy, Layers, PencilLine, History, RotateCw } from "lucide-react";
 import { toast } from "sonner";
+import { getSavedSplitRotation, saveSplitRotation } from "@/lib/workout-rotation";
 
 export const Route = createFileRoute("/app/treinos/")({
   component: WorkoutsPage,
@@ -42,6 +43,9 @@ function WorkoutsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [splitOrder, setSplitOrder] = useState<string[]>([]);
+  const [splitDialogOpen, setSplitDialogOpen] = useState(false);
+  const [splitInput, setSplitInput] = useState("");
 
   const load = async () => {
     const { data } = await supabase
@@ -62,7 +66,25 @@ function WorkoutsPage() {
   useEffect(() => {
     load();
     loadSessions();
+    const saved = getSavedSplitRotation();
+    setSplitOrder(saved);
+    setSplitInput(saved.join(", "));
   }, []);
+
+  const handleSaveSplit = () => {
+    const items = splitInput
+      .split(/[,>\s-]+/)
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean);
+    if (items.length === 0) {
+      toast.error("Informe ao menos uma letra (ex: B, C, D, A)");
+      return;
+    }
+    saveSplitRotation(items);
+    setSplitOrder(items);
+    setSplitDialogOpen(false);
+    toast.success(`Ordem de rotação salva: ${items.join(" ➔ ")}`);
+  };
 
   const create = async () => {
     if (!name.trim()) return;
@@ -260,6 +282,56 @@ function WorkoutsPage() {
           </Dialog>
         </div>
       </div>
+
+      {workouts.length > 0 && splitOrder.length > 0 && (
+        <div className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-secondary/40 text-xs border border-border/50">
+          <div className="flex items-center gap-2">
+            <RotateCw className="h-3.5 w-3.5 text-primary shrink-0" />
+            <span className="text-muted-foreground">
+              Divisão ativa:{" "}
+              <strong className="text-foreground font-semibold tracking-wide">
+                {splitOrder.join(" ➔ ")}
+              </strong>
+            </span>
+          </div>
+          <Dialog open={splitDialogOpen} onOpenChange={setSplitDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs text-primary hover:text-primary hover:bg-primary/10 rounded-full"
+              >
+                Ajustar divisão
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Ordem da Divisão de Treinos</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3 py-2">
+                <Label>Sequência de Rotação (letras separadas por vírgula)</Label>
+                <Input
+                  value={splitInput}
+                  onChange={(e) => setSplitInput(e.target.value)}
+                  placeholder="B, C, D, A"
+                  autoFocus
+                />
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  O app sugere automaticamente o próximo treino na página inicial e no Coach IA baseado na última sessão finalizada no histórico.
+                  <br />
+                  <br />
+                  Exemplo atual: ao concluir o treino <strong>D</strong>, o próximo sugerido é o <strong>A</strong>.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button onClick={handleSaveSplit} className="rounded-full">
+                  Salvar sequência
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      )}
 
       {workouts.length === 0 ? (
         <Card className="p-10 text-center">

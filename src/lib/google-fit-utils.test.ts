@@ -100,4 +100,39 @@ describe("google-fit-utils", () => {
     const res = parseGoogleFitAggregateResponse(mockResponse);
     expect(res.steps).toBe(4800);
   });
+
+  it("deve filtrar BMR e retornar gasto ativo real quando o Google Fit retornar calorias totais diárias", () => {
+    // Caso real do usuário: 788 passos e 1877 kcal retornadas pelo Google Fit com.google.calories.expended
+    const mockResponse = {
+      bucket: [
+        {
+          dataset: [
+            {
+              point: [
+                {
+                  dataTypeName: "com.google.step_count.delta",
+                  value: [{ intVal: 788 }],
+                },
+              ],
+            },
+            {
+              point: [
+                {
+                  dataTypeName: "com.google.calories.expended",
+                  value: [{ fpVal: 1877.4 }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const res = parseGoogleFitAggregateResponse(mockResponse);
+    expect(res.steps).toBe(788);
+    // 788 passos não queimam 1877 kcal! A estimativa ativa deve ser realista (~32 kcal)
+    expect(res.activeCalories).toBeLessThan(100);
+    expect(res.activeCalories).toBe(32);
+  });
 });
+

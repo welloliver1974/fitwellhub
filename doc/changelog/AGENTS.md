@@ -2,6 +2,25 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [11/09/2026] - Antigravity (Rotação Inteligente de Treinos BCDA + Filtro BMR de Calorias Ativas)
+- **Mudanças realizadas**:
+  - **Sequenciador Cíclico de Divisão de Treinos (`workout-rotation.ts` + `workout-rotation.test.ts`)**:
+    - Implementação de algoritmo inteligente de rotação cíclica com extração automática da letra/identificador dos treinos (ex: A, B, C, D).
+    - Ordem padrão configurada para a sequência do usuário: `['B', 'C', 'D', 'A']`.
+    - Consulta da última sessão concluída no histórico (`workout_sessions`); se a última foi **D**, o app avança automaticamente para o treino **A**!
+    - Armazenamento de preferência em `localStorage` para total persistência e customização futura.
+  - **Integração na Home e no Daily Briefing (`app.index.tsx`)**:
+    - `findTodayWorkout` substituiu o fallback antigo (`workouts ORDER BY created_at DESC LIMIT 1`) pela lógica circular do sequenciador.
+    - O card "Treino de hoje" e o Daily Briefing do Coach IA passam a orientar o treino exato da sequência do usuário.
+  - **Gerenciador Visual de Divisão na Tela de Treinos (`app.treinos.index.tsx`)**:
+    - Badge interativo no topo da lista de treinos exibindo a divisão ativa (`B ➔ C ➔ D ➔ A`) com modal para ajustar ou reordenar as letras a qualquer momento.
+  - **Calibração de Calorias Ativas vs TMB (`google-fit-utils.ts` + `google-fit-utils.test.ts`)**:
+    - O Google Fit envia o endpoint `com.google.calories.expended` somando o BMR (Taxa Metabólica Basal) do dia, gerando "+1877 kcal" de gasto ativo para apenas 788 passos.
+    - Como o FitWell Hub já possui motor científico dedicado para TMB e TDEE, o parser agora detecta calorias desproporcionais e filtra a TMB, entregando apenas o gasto ativo real de locomoção (~35-40 kcal), alinhando com a contagem do Samsung Watch.
+- **Validação**:
+  - `npx vitest run`: 13 testes verdes nos utilitários de rotação e Google Fit.
+  - `npm run build`: Compilação de Client e SSR bem-sucedidas (código 0).
+
 ## [11/09/2026] - Antigravity (Correção da Sincronização Google Fit + Galaxy Watch + Fallback Local de Tokens)
 - **Mudanças realizadas**:
   - **Correção da Janela de Agregação da Fitness API (`google-fit.functions.ts`)**:

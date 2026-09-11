@@ -78,8 +78,27 @@ export function parseGoogleFitAggregateResponse(response: any): GoogleFitDailyMe
   }
 
   const roundedSteps = Math.round(selectedSteps);
-  const roundedCalories =
-    Math.round(totalCalories) || (roundedSteps > 0 ? estimateActiveCaloriesFromSteps(roundedSteps) : 0);
+  
+  // Detecção de BMR (Taxa Metabólica Basal) no Google Fit:
+  // Se totalCalories for excessivamente alta para os passos dados (ex: > 300 kcal para menos de 3000 passos ou > 0.15 kcal/passo),
+  // significa que a API com.google.calories.expended incluiu a TMB acumulada do dia.
+  // Nesse caso, usamos a estimativa fisiológica real de calorias ativas da movimentação/passos.
+  let resolvedActiveCalories = 0;
+  if (totalCalories > 0) {
+    const isLikelyIncludingBmr =
+      (roundedSteps > 0 && totalCalories > 300 && totalCalories > roundedSteps * 0.15) ||
+      (roundedSteps === 0 && totalCalories > 150);
+
+    if (isLikelyIncludingBmr) {
+      resolvedActiveCalories = estimateActiveCaloriesFromSteps(roundedSteps);
+    } else {
+      resolvedActiveCalories = Math.round(totalCalories);
+    }
+  } else if (roundedSteps > 0) {
+    resolvedActiveCalories = estimateActiveCaloriesFromSteps(roundedSteps);
+  }
+
+  const roundedCalories = resolvedActiveCalories;
   const roundedDistance =
     Math.round(totalDistance) || (roundedSteps > 0 ? Math.round(roundedSteps * 0.75) : 0);
 

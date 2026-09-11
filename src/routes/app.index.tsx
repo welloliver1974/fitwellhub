@@ -41,6 +41,7 @@ import { Heatmap } from "@/components/Heatmap";
 import { DailyBriefingCard } from "@/components/daily-briefing-card";
 import { StepsCard } from "@/components/steps-card";
 import { SafeBoundary } from "@/components/safe-boundary";
+import { determineNextWorkout } from "@/lib/workout-rotation";
 
 export const Route = createFileRoute("/app/")({
   component: TodayPage,
@@ -101,14 +102,31 @@ function TodayPage() {
       setHasCompletedWorkoutToday(false);
     }
 
-    // 2. Fallback: sugere o último treino criado como template
-    const { data: last } = await supabase
-      .from("workouts")
-      .select("id,name")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(1);
-    return last?.[0] ?? null;
+    // 2. Rotação Inteligente de Divisão (Split Sequencer):
+    // Busca todos os treinos do usuário e a última sessão finalizada no histórico
+    const [{ data: allWorkouts }, { data: lastSessions }] = await Promise.all([
+      supabase
+        .from("workouts")
+        .select("id, name, created_at, workout_date")
+        .eq("user_id", userId),
+      supabase
+        .from("workout_sessions")
+        .select("id, workout_id, name, completed_at")
+        .eq("user_id", userId)
+        .order("completed_at", { ascending: false })
+        .limit(1),
+    ]);
+
+    const next = determineNextWorkout({
+      workouts: allWorkouts ?? [],
+      lastCompletedSession: lastSessions?.[0] ?? null,
+    });
+
+    if (next) {
+      return { id: next.id, name: next.name };
+    }
+
+    return null;
   };
 
   const load = async () => {
