@@ -1520,3 +1520,41 @@ Após a introdução dos cards de Daily Briefing e Passos (Google Fit):
 ### ✅ Validação
 - `npm run build`: Compilação de Client e SSR bem-sucedidas (código 0).
 - `npx vitest run`: 180 testes passando (23 arquivos de teste).
+
+---
+
+## Sessão: 11/09/2026 — Correção da Leitura de Passos do Google Fit (Galaxy Watch)
+
+### 🎯 Problema relatado pelo usuário
+"fitness api ativa, sim dados do samsung aparem no ggogle fit e parece conectado mas nao le nada do google fit"
+
+### 🔍 Causa Raiz
+1. **Incompatibilidade de intervalo no `dataset:aggregate` com `bucketByTime`:**
+   - A consulta enviava `bucketByTime: { durationMillis: 86400000 }` (24 horas).
+   - O intervalo enviado era `startTimeMillis: startMs` (00:00 de hoje) e `endTimeMillis: Date.now()` (ex: 07:45 da manhã, ~7.7h de duração).
+   - Como o intervalo era menor que `durationMillis` (86.400.000 ms), a Google Fitness API não gerava o bucket de 24h e retornava `bucket: []`, resultando em 0 passos.
+2. **Origem dos passos de Smartwatches (Samsung Health / Health Connect):**
+   - Os passos vindos do Galaxy Watch são gravados no Google Fit dentro do stream consolidado oficial: `derived:com.google.step_count.delta:com.google.android.gms:estimated_steps`.
+   - Sem especificar esse `dataSourceId`, consultas por `dataTypeName: "com.google.step_count.delta"` buscam sensores brutos de hardware do celular (que ficam com 0 passos se o usuário caminhou usando apenas o relógio).
+3. **Renovação proativa de Access Token (OAuth 2.0):**
+   - O Google expira tokens a cada 60 minutos (3600s). No dia seguinte, o access token já estava expirado. Se a renovação falhasse ou demorasse, o Google retornava 401.
+
+### 🛠️ Solução Implementada
+1. **Ajuste da Janela de 24h (`src/server-fns/google-fit.functions.ts`):**
+   - Intervalo corrigido para `startTimeMillis: startMs` (00:00:00 SP) e `endTimeMillis: startMs + 86400000` (exatamente 86.400.000 ms = 1 bucket de 24h).
+   - Todos os passos do dia atual até o momento caem precisamente dentro desse bucket.
+2. **Priorização do stream `estimated_steps` com Fallback Resiliente:**
+   - A consulta primária requisita `derived:com.google.step_count.delta:com.google.android.gms:estimated_steps`.
+   - Se retornar 400 ou 0 passos, a função executa automaticamente uma consulta secundária sem `dataSourceId` fixo.
+   - Suporte a retry automático com renovação instantânea do token em caso de resposta 401 Unauthorized.
+3. **Refatoração do Parser de Agregação (`src/lib/google-fit-utils.ts`):**
+   - `parseGoogleFitAggregateResponse` agora indexa os passos por `streamId`, priorizando `estimated_steps` para evitar duplicidade de contagem caso múltiplos streams sejam retornados.
+   - Suporte tanto a respostas envelopadas em `bucket` quanto a respostas diretas em `dataset`.
+4. **Resiliência de Credenciais e Feedback na UI (`src/routes/app.ia.tsx` e `src/components/steps-card.tsx`):**
+   - As telas agora enviam credenciais ativas do dispositivo como fallback caso as variáveis de ambiente não estejam no servidor.
+   - A UI diferencia claramente quando há 0 passos na nuvem (orientando a abrir o app Google Fit no celular para sincronizar) de erros de autorização ou de ativação da API.
+
+### ✅ Validação
+- `npm run build`: Compilação de Client e SSR bem-sucedidas (código 0).
+- Novos testes unitários adicionados em `src/lib/google-fit-utils.test.ts` cobrindo priorização de `estimated_steps` e datasets unbucketed.
+

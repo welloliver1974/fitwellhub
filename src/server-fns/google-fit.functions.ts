@@ -131,8 +131,10 @@ export const exchangeGoogleFitCode = createServerFn({ method: "POST" })
     const expiresAt = Date.now() + (tokenData.expires_in ?? 3600) * 1000;
 
     // Salvar na tabela de integrações
+    let dbSaved = false;
+    let dbErrorMsg: string | null = null;
     try {
-      await supabase.from("user_integrations").upsert({
+      const { error: upsertErr } = await supabase.from("user_integrations").upsert({
         user_id: userId,
         provider: "google_fit",
         access_token: tokenData.access_token,
@@ -140,11 +142,28 @@ export const exchangeGoogleFitCode = createServerFn({ method: "POST" })
         expires_at: expiresAt,
         updated_at: new Date().toISOString(),
       }, { onConflict: "user_id,provider" });
+
+      if (upsertErr) {
+        console.warn("[GoogleFit] Aviso ao gravar user_integrations no Supabase:", upsertErr.message);
+        dbErrorMsg = upsertErr.message;
+      } else {
+        dbSaved = true;
+      }
     } catch (err: any) {
-      console.warn("Erro ao gravar user_integrations:", err?.message);
+      console.warn("[GoogleFit] Exceção ao gravar user_integrations:", err?.message);
+      dbErrorMsg = err?.message;
     }
 
-    return { success: true };
+    return {
+      success: true,
+      dbSaved,
+      dbError: dbErrorMsg,
+      tokens: {
+        accessToken: tokenData.access_token,
+        refreshToken: tokenData.refresh_token,
+        expiresAt,
+      },
+    };
   });
 
 /**
@@ -167,94 +186,217 @@ export const disconnectGoogleFit = createServerFn({ method: "POST" })
 /**
  * Busca os passos e calorias ativas do dia via Google Fitness REST API.
  */
-export const fetchGoogleFitDailyData = createServerFn({ method: "GET" })
+export const fetchGoogleFitDailyData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((input: unknown) => {
+    if (!input || typeof input !== "object") return {};
+    return z
+      .object({
+        clientId: z.string().optional(),
+        clientSecret: z.string().optional(),
+        accessToken: z.string().optional(),
+        refreshToken: z.string().optional(),
+        expiresAt: z.number().optional(),
+      })
+      .parse(input);
+  })
+  .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const today = getLocalDate();
-    const { start, end } = todayBoundsSaoPaulo();
+    const { start } = todayBoundsSaoPaulo();
     const startMs = new Date(start).getTime();
-    const endMs = new Date(end).getTime();
+    // Google Fit agrega por bucket de 24h. O intervalo [startMs, fullDayEndMs] precisa ter 86400000ms
+    const fullDayEndMs = startMs + 86400000;
 
-    // 1. Tentar buscar da integração ativa
+    // 1. Tentar buscar da integração ativa (banco de dados)
     let tokenRow: any = null;
     try {
-      const { data } = await supabase
+      const { data: dbData } = await supabase
         .from("user_integrations")
         .select("*")
         .eq("user_id", userId)
         .eq("provider", "google_fit")
         .maybeSingle();
-      tokenRow = data;
-    } catch {}
+      tokenRow = dbData;
+    } catch (dbErr: any) {
+      console.warn("[GoogleFit] Erro ao consultar user_integrations:", dbErr?.message);
+    }
+
+    // Se a tabela do Supabase ainda não existir, utiliza tokens locais passados pelo dispositivo
+    if (!tokenRow?.access_token && data?.accessToken) {
+      tokenRow = {
+        access_token: data.accessToken,
+        refresh_token: data.refreshToken,
+        expires_at: data.expiresAt,
+      };
+    }
+
+    let refreshedTokens: { accessToken: string; expiresAt: number } | null = null;
 
     if (tokenRow && tokenRow.access_token) {
       let accessToken = tokenRow.access_token;
-      const clientId = getGoogleClientId();
-      const clientSecret = getGoogleClientSecret();
+      const activeClientId = data?.clientId?.trim() || getGoogleClientId();
+      const activeClientSecret = data?.clientSecret?.trim() || getGoogleClientSecret();
 
-      // Renovar token se expirou
-      if (tokenRow.expires_at && Date.now() > tokenRow.expires_at - 60000 && tokenRow.refresh_token && clientId && clientSecret) {
+      const refreshAccessToken = async (): Promise<string | null> => {
+        if (!tokenRow.refresh_token || !activeClientId || !activeClientSecret) {
+          console.warn("[GoogleFit] Não foi possível renovar token: refresh_token ou credenciais ausentes");
+          return null;
+        }
         try {
+          console.log("[GoogleFit] Renovando access_token com refresh_token...");
           const refreshRes = await fetch("https://oauth2.googleapis.com/token", {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: new URLSearchParams({
-              client_id: clientId,
-              client_secret: clientSecret,
+              client_id: activeClientId,
+              client_secret: activeClientSecret,
               refresh_token: tokenRow.refresh_token,
               grant_type: "refresh_token",
             }),
           });
           if (refreshRes.ok) {
             const refData = await refreshRes.json();
-            accessToken = refData.access_token;
-            await supabase.from("user_integrations").update({
-              access_token: accessToken,
-              expires_at: Date.now() + (refData.expires_in ?? 3600) * 1000,
-              updated_at: new Date().toISOString(),
-            }).eq("id", tokenRow.id);
+            const newAccessToken = refData.access_token;
+            const newExpiresAt = Date.now() + (refData.expires_in ?? 3600) * 1000;
+            if (tokenRow.id) {
+              await supabase.from("user_integrations").update({
+                access_token: newAccessToken,
+                expires_at: newExpiresAt,
+                updated_at: new Date().toISOString(),
+              }).eq("id", tokenRow.id);
+            }
+            console.log("[GoogleFit] Access token renovado com sucesso!");
+            refreshedTokens = {
+              accessToken: newAccessToken,
+              expiresAt: newExpiresAt,
+            };
+            return newAccessToken;
+          } else {
+            const errText = await refreshRes.text();
+            console.warn("[GoogleFit] Falha na resposta da renovação do token:", refreshRes.status, errText);
           }
-        } catch (e) {
-          console.warn("Erro ao renovar token do Google:", e);
+        } catch (e: any) {
+          console.warn("[GoogleFit] Erro ao renovar token do Google:", e?.message);
         }
+        return null;
+      };
+
+      // Renovar proativamente se expirado ou prestes a expirar (< 2 min)
+      if (tokenRow.expires_at && Date.now() > tokenRow.expires_at - 120000) {
+        const renewed = await refreshAccessToken();
+        if (renewed) accessToken = renewed;
       }
 
-      // Consulta de agregação do Google Fitness
-      try {
-        const queryEndMs = Math.max(Date.now(), startMs + 1000);
-        const fitRes = await fetch("https://fitness.googleapis.com/fitness/v1/users/me/dataset:aggregate", {
+      // Função auxiliar para disparar requisição de agregação ao Google Fit
+      const executeAggregateQuery = async (token: string, useEstimatedSteps = true) => {
+        const aggregateBy = useEstimatedSteps
+          ? [
+              {
+                dataTypeName: "com.google.step_count.delta",
+                dataSourceId: "derived:com.google.step_count.delta:com.google.android.gms:estimated_steps",
+              },
+              {
+                dataTypeName: "com.google.calories.expended",
+              },
+            ]
+          : [
+              {
+                dataTypeName: "com.google.step_count.delta",
+              },
+              {
+                dataTypeName: "com.google.calories.expended",
+              },
+            ];
+
+        return fetch("https://fitness.googleapis.com/fitness/v1/users/me/dataset:aggregate", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${accessToken}`,
+            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            aggregateBy: [
-              { dataTypeName: "com.google.step_count.delta" },
-              { dataTypeName: "com.google.calories.expended" },
-            ],
+            aggregateBy,
             bucketByTime: { durationMillis: 86400000 },
             startTimeMillis: startMs,
-            endTimeMillis: queryEndMs,
+            endTimeMillis: fullDayEndMs,
           }),
         });
+      };
+
+      try {
+        let fitRes = await executeAggregateQuery(accessToken, true);
+
+        // Se retornar 401 (token expirado), tenta renovar imediatamente e refaz a requisição
+        if (fitRes.status === 401) {
+          console.warn("[GoogleFit] 401 Unauthorized recebido. Tentando renovar access_token...");
+          const renewed = await refreshAccessToken();
+          if (renewed) {
+            accessToken = renewed;
+            fitRes = await executeAggregateQuery(accessToken, true);
+          }
+        }
+
+        // Se retornar 400 (ex: dataSourceId estimated_steps não suportado pela conta), tenta consulta genérica
+        if (fitRes.status === 400) {
+          console.warn("[GoogleFit] 400 recebido com estimated_steps. Tentando sem dataSourceId fixo...");
+          fitRes = await executeAggregateQuery(accessToken, false);
+        }
 
         if (fitRes.ok) {
           const fitJson = await fitRes.json();
-          const metrics = parseGoogleFitAggregateResponse(fitJson);
+          let metrics = parseGoogleFitAggregateResponse(fitJson);
+          console.log("[GoogleFit] Sucesso na leitura do aggregate:", {
+            bucketsCount: fitJson?.bucket?.length ?? 0,
+            steps: metrics.steps,
+            calories: metrics.activeCalories,
+          });
 
-          // Salvar ou atualizar na tabela daily_steps_logs se disponível
+          // Se retornou 0 passos com stream primário, tenta leitura secundária genérica por dataTypeName puro
+          if (metrics.steps === 0) {
+            console.log("[GoogleFit] 0 passos com stream primário, testando fallback genérico de dataTypeName...");
+            try {
+              const fallbackRes = await executeAggregateQuery(accessToken, false);
+              if (fallbackRes.ok) {
+                const fallbackJson = await fallbackRes.json();
+                const fallbackMetrics = parseGoogleFitAggregateResponse(fallbackJson);
+                if (fallbackMetrics.steps > 0) {
+                  metrics = fallbackMetrics;
+                  console.log("[GoogleFit] Passos encontrados no stream secundário:", metrics.steps);
+                }
+              }
+            } catch {}
+          }
+
+          // Se ainda for 0 passos, busca dataSources disponíveis para debug
+          if (metrics.steps === 0) {
+            try {
+              const dsRes = await fetch("https://fitness.googleapis.com/fitness/v1/users/me/dataSources?dataTypeName=com.google.step_count.delta", {
+                headers: { Authorization: `Bearer ${accessToken}` },
+              });
+              if (dsRes.ok) {
+                const dsJson = await dsRes.json();
+                const streams = dsJson?.dataSource?.map((d: any) => d.dataStreamId);
+                console.log("[GoogleFit] Step dataSources registrados na conta Google:", streams);
+              }
+            } catch {}
+          }
+
+          // Salva na tabela daily_steps_logs apenas se encontrou passos > 0
           try {
-            await supabase.from("daily_steps_logs").upsert({
-              user_id: userId,
-              log_date: today,
-              steps: metrics.steps,
-              active_calories: metrics.activeCalories,
-              source: "google_fit",
-              updated_at: new Date().toISOString(),
-            }, { onConflict: "user_id,log_date" });
-          } catch {}
+            if (metrics.steps > 0) {
+              await supabase.from("daily_steps_logs").upsert({
+                user_id: userId,
+                log_date: today,
+                steps: metrics.steps,
+                active_calories: metrics.activeCalories,
+                source: "google_fit",
+                updated_at: new Date().toISOString(),
+              }, { onConflict: "user_id,log_date" });
+            }
+          } catch (upsertErr: any) {
+            console.warn("[GoogleFit] Aviso ao salvar daily_steps_logs:", upsertErr?.message);
+          }
 
           return {
             connected: true,
@@ -263,14 +405,17 @@ export const fetchGoogleFitDailyData = createServerFn({ method: "GET" })
             distanceMeters: metrics.distanceMeters,
             source: "google_fit",
             updatedAt: new Date().toISOString(),
+            refreshedTokens,
           };
         } else {
           const errText = await fitRes.text();
-          console.error("Erro Google Fit dataset:aggregate:", fitRes.status, errText);
+          console.error("[GoogleFit] Erro dataset:aggregate:", fitRes.status, errText);
 
           let errorMsg = `Erro ${fitRes.status} ao consultar Google Fit`;
           if (errText.includes("Fitness API has not been used") || errText.includes("accessNotConfigured")) {
             errorMsg = "A 'Fitness API' precisa ser ativada na Biblioteca do Google Cloud Console.";
+          } else if (fitRes.status === 401) {
+            errorMsg = "Sua autorização com o Google expirou. Por favor, desconecte e conecte novamente.";
           }
 
           return {
@@ -281,10 +426,11 @@ export const fetchGoogleFitDailyData = createServerFn({ method: "GET" })
             source: "google_fit",
             updatedAt: null,
             error: errorMsg,
+            refreshedTokens,
           };
         }
       } catch (err: any) {
-        console.warn("Falha ao consultar API do Google Fit:", err?.message);
+        console.warn("[GoogleFit] Falha na chamada da API do Google Fit:", err?.message);
       }
     }
 

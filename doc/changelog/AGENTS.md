@@ -2,6 +2,20 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [11/09/2026] - Antigravity (Correção da Sincronização Google Fit + Galaxy Watch + Fallback Local de Tokens)
+- **Mudanças realizadas**:
+  - **Correção da Janela de Agregação da Fitness API (`google-fit.functions.ts`)**:
+    - O Google Fit exige que o intervalo `[startTimeMillis, endTimeMillis]` cubra ao menos a duração do `durationMillis` (86400000ms = 24h). Anteriormente, a query enviava até `Date.now()`, retornando `bucket: []` vazio. Agora cobre exatamente as 24h do dia atual (`[startMs, startMs + 86400000]`).
+  - **Priorização do stream oficial `estimated_steps` (`google-fit.functions.ts` + `google-fit-utils.ts`)**:
+    - Os passos consolidados do Galaxy Watch (Samsung Health) residem em `derived:com.google.step_count.delta:com.google.android.gms:estimated_steps`. O parser agora indexa por stream e prioriza esse identificador para evitar contagem zerada ou duplicação.
+  - **Resiliência contra ausência da tabela no Supabase (`app.ia.tsx` + `google-fit.functions.ts` + `steps-card.tsx`)**:
+    - Como as tabelas `user_integrations` e `daily_steps_logs` ainda não haviam sido executadas no painel do Supabase, o app foi blindado com armazenamento em `localStorage` (`fitwell_google_fit_tokens`).
+    - O status conectado é reconhecido imediatamente no dispositivo e os tokens são passados diretamente para as server functions.
+    - Adicionado card explicativo com botão "Copiar SQL para Supabase" com 1 clique na aba IA para persistência multi-dispositivo.
+- **Validação**:
+  - `npm run build`: Compilação de Client e SSR bem-sucedidas (código 0).
+  - Testes unitários atualizados em `google-fit-utils.test.ts`.
+
 ## [10/09/2026] - Antigravity (Daily Briefing do Coach IA + Timer em Background + Integração Samsung Watch via Google Fit)
 - **Mudanças realizadas**:
   - **Daily Briefing do Coach IA no Topo da Home (`app.index.tsx` + `daily-briefing-card.tsx` + `briefing.functions.ts` + `briefing-utils.ts`)**:

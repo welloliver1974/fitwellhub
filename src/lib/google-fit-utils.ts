@@ -9,50 +9,79 @@ export interface GoogleFitDailyMetrics {
  * POST https://fitness.googleapis.com/fitness/v1/users/me/dataset:aggregate
  */
 export function parseGoogleFitAggregateResponse(response: any): GoogleFitDailyMetrics {
-  let steps = 0;
-  let activeCalories = 0;
-  let distanceMeters = 0;
+  let totalCalories = 0;
+  let totalDistance = 0;
+  const stepsByStream: Record<string, number> = {};
 
-  if (!response || !Array.isArray(response.bucket)) {
-    return { steps, activeCalories, distanceMeters };
+  if (!response) {
+    return { steps: 0, activeCalories: 0, distanceMeters: 0 };
   }
 
-  for (const bucket of response.bucket) {
-    if (!Array.isArray(bucket.dataset)) continue;
+  // Normaliza buckets ou dataset direto na raiz
+  const buckets = Array.isArray(response.bucket)
+    ? response.bucket
+    : Array.isArray(response.dataset)
+      ? [{ dataset: response.dataset }]
+      : [];
+
+  for (const bucket of buckets) {
+    if (!bucket || !Array.isArray(bucket.dataset)) continue;
 
     for (const dataset of bucket.dataset) {
       if (!Array.isArray(dataset.point)) continue;
 
-      const datasetType = (dataset.dataSourceId || dataset.dataTypeName || "").toLowerCase();
+      const streamId = (dataset.dataSourceId || dataset.dataTypeName || "unknown").toLowerCase();
+      const isStepStream = streamId.includes("step");
+      const isCalorieStream = streamId.includes("calories");
+      const isDistanceStream = streamId.includes("distance");
 
       for (const point of dataset.point) {
         const pointType = (point.dataTypeName || "").toLowerCase();
-        const typeName = pointType || datasetType;
+        const isPointStep = pointType ? pointType.includes("step") : isStepStream;
+        const isPointCal = pointType ? pointType.includes("calories") : isCalorieStream;
+        const isPointDist = pointType ? pointType.includes("distance") : isDistanceStream;
+
         const values = point.value;
         if (!Array.isArray(values) || values.length === 0) continue;
 
-        if (typeName.includes("step")) {
-          // Passos vêm como intVal ou fpVal
+        if (isPointStep) {
           const val = values[0].intVal ?? values[0].fpVal ?? 0;
-          steps += Number(val);
-        } else if (typeName.includes("calories")) {
-          // Calorias vêm como fpVal ou intVal
+          stepsByStream[streamId] = (stepsByStream[streamId] || 0) + Number(val);
+        } else if (isPointCal) {
           const val = values[0].fpVal ?? values[0].intVal ?? 0;
-          activeCalories += Number(val);
-        } else if (typeName.includes("distance")) {
-          // Distância em metros
+          totalCalories += Number(val);
+        } else if (isPointDist) {
           const val = values[0].fpVal ?? values[0].intVal ?? 0;
-          distanceMeters += Number(val);
+          totalDistance += Number(val);
         }
       }
     }
   }
 
-  const roundedSteps = Math.round(steps);
+  // Para passos: se houver stream oficial de "estimated_steps", ele tem prioridade absoluta
+  let selectedSteps = 0;
+  let foundEstimated = false;
+
+  for (const [streamId, count] of Object.entries(stepsByStream)) {
+    if (streamId.includes("estimated_steps") && count > 0) {
+      selectedSteps = count;
+      foundEstimated = true;
+      break;
+    }
+  }
+
+  if (!foundEstimated) {
+    // Se não encontrou estimated_steps com passos, seleciona o maior valor entre os streams de passos
+    for (const count of Object.values(stepsByStream)) {
+      if (count > selectedSteps) selectedSteps = count;
+    }
+  }
+
+  const roundedSteps = Math.round(selectedSteps);
   const roundedCalories =
-    Math.round(activeCalories) || (roundedSteps > 0 ? estimateActiveCaloriesFromSteps(roundedSteps) : 0);
+    Math.round(totalCalories) || (roundedSteps > 0 ? estimateActiveCaloriesFromSteps(roundedSteps) : 0);
   const roundedDistance =
-    Math.round(distanceMeters) || (roundedSteps > 0 ? Math.round(roundedSteps * 0.75) : 0);
+    Math.round(totalDistance) || (roundedSteps > 0 ? Math.round(roundedSteps * 0.75) : 0);
 
   return {
     steps: roundedSteps,

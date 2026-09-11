@@ -96,35 +96,84 @@ export function StepsCard({
           console.warn("Aviso ao buscar daily_steps_logs:", dbErr);
         }
 
-        // 2. Verificar se o Google Fit / Samsung Watch está vinculado no banco
+        // 2. Verificar se o Google Fit / Samsung Watch está vinculado no banco ou no dispositivo
         let isConnected = false;
+        let localTokens: any = null;
         try {
-          const { data: integration } = await supabase
+          const { data: integration, error: intErr } = await supabase
             .from("user_integrations")
             .select("updated_at, access_token")
             .eq("user_id", currentUserId)
             .eq("provider", "google_fit")
             .maybeSingle();
 
-          if (integration && integration.access_token) {
+          if (!intErr && integration && integration.access_token) {
             isConnected = true;
             setConnected(true);
+          } else {
+            const localTokensStr = typeof window !== "undefined" ? localStorage.getItem("fitwell_google_fit_tokens") : null;
+            if (localTokensStr) {
+              try {
+                localTokens = JSON.parse(localTokensStr);
+                if (localTokens?.accessToken) {
+                  isConnected = true;
+                  setConnected(true);
+                }
+              } catch {}
+            }
           }
         } catch {}
+
+        if (!localTokens && typeof window !== "undefined") {
+          try {
+            const str = localStorage.getItem("fitwell_google_fit_tokens");
+            if (str) localTokens = JSON.parse(str);
+          } catch {}
+        }
 
         // 3. Se estiver conectado ou for sincronização manual, busca direto do Google Fit
         if (session?.access_token && (isConnected || isSync)) {
           try {
-            const metrics = await fetchGoogleFitDailyData({
+            const activeClientId =
+              (typeof window !== "undefined" && localStorage.getItem("fitwell_google_client_id")) ||
+              (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) ||
+              undefined;
+            const activeClientSecret =
+              (typeof window !== "undefined" && localStorage.getItem("fitwell_google_client_secret")) ||
+              undefined;
+
+            const metrics: any = await fetchGoogleFitDailyData({
+              data: {
+                clientId: activeClientId,
+                clientSecret: activeClientSecret,
+                accessToken: localTokens?.accessToken,
+                refreshToken: localTokens?.refreshToken,
+                expiresAt: localTokens?.expiresAt,
+              },
               headers: { Authorization: `Bearer ${session.access_token}` },
             });
 
+            if (metrics?.refreshedTokens && localTokens) {
+              localStorage.setItem("fitwell_google_fit_tokens", JSON.stringify({
+                ...localTokens,
+                ...metrics.refreshedTokens,
+              }));
+            }
+
             if (metrics && typeof metrics.steps === "number" && !metrics.error) {
-              setSteps(metrics.steps);
-              setActiveCalories(metrics.activeCalories);
-              setDistanceMeters(metrics.distanceMeters);
-              if (onActiveCaloriesChange) onActiveCaloriesChange(metrics.activeCalories);
-              if (isSync) toast.success(`${metrics.steps.toLocaleString("pt-BR")} passos sincronizados!`);
+              if (metrics.steps > 0 || steps === 0) {
+                setSteps(metrics.steps);
+                setActiveCalories(metrics.activeCalories);
+                setDistanceMeters(metrics.distanceMeters);
+                if (onActiveCaloriesChange) onActiveCaloriesChange(metrics.activeCalories);
+              }
+              if (isSync) {
+                if (metrics.steps > 0) {
+                  toast.success(`${metrics.steps.toLocaleString("pt-BR")} passos sincronizados do Google Fit!`);
+                } else {
+                  toast.info("Google Fit consultado: 0 passos registrados na nuvem hoje até agora.");
+                }
+              }
             } else if (metrics?.error && isSync) {
               toast.error(metrics.error);
             }

@@ -316,24 +316,98 @@ function GoogleFitSettingsSection() {
   const [syncingData, setSyncingData] = useState(false);
   const [syncedMetrics, setSyncedMetrics] = useState<{ steps: number; activeCalories: number } | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [missingTableNotice, setMissingTableNotice] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
 
   const redirectUri =
     typeof window !== "undefined" ? `${window.location.origin}/app/ia` : "";
+
+  const SQL_TABLES_SCRIPT = `-- Criação das tabelas de integração do Google Fit no Supabase:
+CREATE TABLE IF NOT EXISTS public.user_integrations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL,
+  access_token TEXT,
+  refresh_token TEXT,
+  expires_at BIGINT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(user_id, provider)
+);
+ALTER TABLE public.user_integrations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "own user_integrations all" ON public.user_integrations FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE TABLE IF NOT EXISTS public.daily_steps_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  log_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  steps INTEGER NOT NULL DEFAULT 0,
+  active_calories NUMERIC DEFAULT 0,
+  source TEXT DEFAULT 'manual',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(user_id, log_date)
+);
+ALTER TABLE public.daily_steps_logs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "own daily_steps_logs all" ON public.daily_steps_logs FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE INDEX IF NOT EXISTS idx_daily_steps_logs_user_date ON public.daily_steps_logs(user_id, log_date);`;
+
+  const handleCopySql = () => {
+    navigator.clipboard.writeText(SQL_TABLES_SCRIPT);
+    setCopiedSql(true);
+    toast.success("Script SQL copiado! Cole no SQL Editor do seu Supabase.");
+    setTimeout(() => setCopiedSql(false), 3000);
+  };
 
   const handleSyncNow = async () => {
     if (!session?.access_token) return;
     setSyncingData(true);
     setSyncError(null);
     try {
-      const res = await fetchGoogleFitDailyData({
+      const activeClientId =
+        clientId.trim() ||
+        (typeof window !== "undefined" && localStorage.getItem("fitwell_google_client_id")) ||
+        (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) ||
+        undefined;
+      const activeClientSecret =
+        clientSecret.trim() ||
+        (typeof window !== "undefined" && localStorage.getItem("fitwell_google_client_secret")) ||
+        undefined;
+
+      const localTokensStr = typeof window !== "undefined" ? localStorage.getItem("fitwell_google_fit_tokens") : null;
+      let localTokens: any = null;
+      if (localTokensStr) {
+        try { localTokens = JSON.parse(localTokensStr); } catch {}
+      }
+
+      const res: any = await fetchGoogleFitDailyData({
+        data: {
+          clientId: activeClientId,
+          clientSecret: activeClientSecret,
+          accessToken: localTokens?.accessToken,
+          refreshToken: localTokens?.refreshToken,
+          expiresAt: localTokens?.expiresAt,
+        },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
+
+      if (res?.refreshedTokens && localTokens) {
+        localStorage.setItem("fitwell_google_fit_tokens", JSON.stringify({
+          ...localTokens,
+          ...res.refreshedTokens,
+        }));
+      }
+
       if (res?.error) {
         setSyncError(res.error);
         toast.error(res.error);
       } else if (res) {
         setSyncedMetrics({ steps: res.steps, activeCalories: res.activeCalories });
-        toast.success(`${res.steps.toLocaleString("pt-BR")} passos sincronizados do Google Fit!`);
+        if (res.steps > 0) {
+          toast.success(`${res.steps.toLocaleString("pt-BR")} passos sincronizados do Google Fit!`);
+        } else {
+          toast.info("Google Fit consultado: 0 passos na nuvem hoje até o momento.");
+        }
       }
     } catch (err: any) {
       setSyncError(err?.message || "Falha ao sincronizar");
@@ -346,25 +420,77 @@ function GoogleFitSettingsSection() {
   const checkStatus = async () => {
     if (!user) return;
     try {
-      const { data } = await supabase
+      let isConn = false;
+      let lastSyncTime: string | null = null;
+
+      // 1. Tenta buscar da tabela user_integrations no Supabase
+      const { data, error } = await supabase
         .from("user_integrations")
         .select("updated_at, access_token")
         .eq("user_id", user.id)
         .eq("provider", "google_fit")
         .maybeSingle();
 
-      const isConn = Boolean(data && data.access_token);
+      if (!error && data?.access_token) {
+        isConn = true;
+        lastSyncTime = data.updated_at;
+      } else {
+        if (error && (error.code === "PGRST205" || error.message?.includes("not find the table"))) {
+          setMissingTableNotice(true);
+        }
+        // 2. Fallback de localStorage no dispositivo
+        const localTokensStr = typeof window !== "undefined" ? localStorage.getItem("fitwell_google_fit_tokens") : null;
+        if (localTokensStr) {
+          try {
+            const parsed = JSON.parse(localTokensStr);
+            if (parsed?.accessToken) {
+              isConn = true;
+              lastSyncTime = new Date().toISOString();
+            }
+          } catch {}
+        }
+      }
+
       setStatus({
         connected: isConn,
         hasClientConfigured: Boolean(clientId || import.meta.env.VITE_GOOGLE_CLIENT_ID),
-        lastSync: data?.updated_at || null,
+        lastSync: lastSyncTime,
       });
 
       if (isConn && session?.access_token) {
+        const localTokensStr = typeof window !== "undefined" ? localStorage.getItem("fitwell_google_fit_tokens") : null;
+        let localTokens: any = null;
+        if (localTokensStr) {
+          try { localTokens = JSON.parse(localTokensStr); } catch {}
+        }
+
+        const activeClientId =
+          clientId.trim() ||
+          (typeof window !== "undefined" && localStorage.getItem("fitwell_google_client_id")) ||
+          (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) ||
+          undefined;
+        const activeClientSecret =
+          clientSecret.trim() ||
+          (typeof window !== "undefined" && localStorage.getItem("fitwell_google_client_secret")) ||
+          undefined;
+
         fetchGoogleFitDailyData({
+          data: {
+            clientId: activeClientId,
+            clientSecret: activeClientSecret,
+            accessToken: localTokens?.accessToken,
+            refreshToken: localTokens?.refreshToken,
+            expiresAt: localTokens?.expiresAt,
+          },
           headers: { Authorization: `Bearer ${session.access_token}` },
         })
-          .then((res) => {
+          .then((res: any) => {
+            if (res?.refreshedTokens && localTokens) {
+              localStorage.setItem("fitwell_google_fit_tokens", JSON.stringify({
+                ...localTokens,
+                ...res.refreshedTokens,
+              }));
+            }
             if (res?.error) setSyncError(res.error);
             else if (res) setSyncedMetrics({ steps: res.steps, activeCalories: res.activeCalories });
           })
@@ -405,7 +531,13 @@ function GoogleFitSettingsSection() {
           },
           headers: { Authorization: `Bearer ${session.access_token}` },
         })
-          .then(() => {
+          .then((res: any) => {
+            if (res?.tokens?.accessToken) {
+              localStorage.setItem("fitwell_google_fit_tokens", JSON.stringify(res.tokens));
+            }
+            if (res?.dbSaved === false) {
+              setMissingTableNotice(true);
+            }
             toast.success("Google Fit conectado com sucesso!");
             url.searchParams.delete("code");
             url.searchParams.delete("scope");
@@ -495,7 +627,11 @@ function GoogleFitSettingsSection() {
         ? { Authorization: `Bearer ${session.access_token}` }
         : undefined;
       await disconnectGoogleFit({ headers });
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("fitwell_google_fit_tokens");
+      }
       setStatus((prev) => ({ ...prev, connected: false }));
+      setSyncedMetrics(null);
       toast.success("Google Fit desconectado");
     } catch (err: any) {
       toast.error("Erro ao desconectar: " + err?.message);
@@ -573,23 +709,54 @@ function GoogleFitSettingsSection() {
         </div>
       </div>
 
-      {/* Alerta de erro da Fitness API caso necessário ativar no Google Cloud */}
+      {/* Aviso de fallback local caso as tabelas do Supabase ainda não tenham sido criadas */}
+      {missingTableNotice && (
+        <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <p className="font-semibold text-amber-500 flex items-center gap-1.5">
+              <span>⚡</span> Conexão ativa neste dispositivo (Modo Local)
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCopySql}
+              className="h-7 text-[11px] gap-1 border-amber-500/40 text-amber-500 hover:bg-amber-500/10 self-start sm:self-auto"
+            >
+              {copiedSql ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+              {copiedSql ? "SQL Copiado!" : "Copiar SQL para Supabase"}
+            </Button>
+          </div>
+          <p className="text-muted-foreground text-[11px] leading-relaxed">
+            A integração e a leitura de passos funcionam normalmente aqui. Para que sua conexão fique salva na nuvem e sincronize em qualquer outro celular ou computador, basta rodar o script no <strong>SQL Editor</strong> do seu Supabase.
+          </p>
+        </div>
+      )}
+
+      {/* Alerta de erro da sincronização */}
       {syncError && (
         <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-xs space-y-1.5">
           <p className="font-semibold text-destructive flex items-center gap-1.5">
             <span>⚠️</span> {syncError}
           </p>
-          <p className="text-muted-foreground text-[11px]">
-            Para permitir a leitura de passos, a <strong>Fitness API</strong> precisa estar ativada no seu projeto no Google Cloud Console.
-          </p>
-          <a
-            href="https://console.cloud.google.com/apis/library/fitness.googleapis.com"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary underline hover:opacity-80"
-          >
-            Ativar Fitness API no Google Cloud Console ↗
-          </a>
+          {syncError.includes("Fitness API") ? (
+            <>
+              <p className="text-muted-foreground text-[11px]">
+                A <strong>Fitness API</strong> precisa estar ativada no seu projeto no Google Cloud Console.
+              </p>
+              <a
+                href="https://console.cloud.google.com/apis/library/fitness.googleapis.com"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary underline hover:opacity-80"
+              >
+                Ativar Fitness API no Google Cloud Console ↗
+              </a>
+            </>
+          ) : syncError.includes("expirou") ? (
+            <p className="text-muted-foreground text-[11px]">
+              Clique no botão <strong>Conectar Google Fit</strong> acima para renovar suas permissões com o Google.
+            </p>
+          ) : null}
         </div>
       )}
 
@@ -598,18 +765,31 @@ function GoogleFitSettingsSection() {
         <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-xs flex items-center justify-between">
           <div>
             <p className="font-semibold text-foreground">
-              {syncedMetrics
+              {syncedMetrics && syncedMetrics.steps > 0
                 ? `${syncedMetrics.steps.toLocaleString("pt-BR")} passos hoje`
-                : "Aguardando primeira leitura de passos"}
+                : syncedMetrics
+                  ? "0 passos na nuvem do Google Fit hoje"
+                  : "Aguardando primeira leitura de passos"}
             </p>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              {syncedMetrics
-                ? `~${syncedMetrics.activeCalories} kcal ativas gastas pelo smartwatch`
-                : "Clique em 'Sincronizar passos' acima para ler do Google Fit"}
+              {syncedMetrics && syncedMetrics.steps > 0
+                ? `~${syncedMetrics.activeCalories} kcal ativas estimadas do smartwatch`
+                : "Se já andou hoje, abra o app Google Fit no celular e arraste para baixo para sincronizar os dados do relógio com a nuvem."}
             </p>
           </div>
-          {syncedMetrics && syncedMetrics.steps > 0 && (
+          {syncedMetrics && syncedMetrics.steps > 0 ? (
             <span className="text-emerald-500 font-bold text-sm">✓ Sincronizado</span>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSyncNow}
+              disabled={syncingData}
+              className="h-7 text-[11px] gap-1 shrink-0 ml-2"
+            >
+              <RefreshCw className={`h-3 w-3 ${syncingData ? "animate-spin" : ""}`} />
+              Sincronizar
+            </Button>
           )}
         </div>
       )}

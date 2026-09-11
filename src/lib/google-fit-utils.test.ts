@@ -64,4 +64,40 @@ describe("google-fit-utils", () => {
     expect(estimateActiveCaloriesFromSteps(10000, 75)).toBe(400); // 10000 * 0.04 = 400
     expect(estimateActiveCaloriesFromSteps(10000, 90)).toBe(480);
   });
+
+  it("deve priorizar stream oficial estimated_steps quando múltiplos streams de passos existirem", () => {
+    const mockResponse = {
+      bucket: [
+        {
+          dataset: [
+            {
+              dataSourceId: "derived:com.google.step_count.delta:com.google.android.gms:estimated_steps",
+              point: [{ value: [{ intVal: 6200 }] }],
+            },
+            {
+              dataSourceId: "raw:com.google.step_count.delta:com.google.android.gms:samsung_raw",
+              point: [{ value: [{ intVal: 1500 }] }],
+            },
+          ],
+        },
+      ],
+    };
+
+    const res = parseGoogleFitAggregateResponse(mockResponse);
+    expect(res.steps).toBe(6200); // Priorizou estimated_steps sem somar 1500 indevidamente
+  });
+
+  it("deve processar resposta direta unbucketed (response.dataset)", () => {
+    const mockResponse = {
+      dataset: [
+        {
+          dataTypeName: "com.google.step_count.delta",
+          point: [{ value: [{ intVal: 4800 }] }],
+        },
+      ],
+    };
+
+    const res = parseGoogleFitAggregateResponse(mockResponse);
+    expect(res.steps).toBe(4800);
+  });
 });
