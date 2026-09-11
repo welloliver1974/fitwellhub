@@ -222,6 +222,7 @@ export const fetchGoogleFitDailyData = createServerFn({ method: "GET" })
 
       // Consulta de agregação do Google Fitness
       try {
+        const queryEndMs = Math.max(Date.now(), startMs + 1000);
         const fitRes = await fetch("https://fitness.googleapis.com/fitness/v1/users/me/dataset:aggregate", {
           method: "POST",
           headers: {
@@ -232,11 +233,10 @@ export const fetchGoogleFitDailyData = createServerFn({ method: "GET" })
             aggregateBy: [
               { dataTypeName: "com.google.step_count.delta" },
               { dataTypeName: "com.google.calories.expended" },
-              { dataTypeName: "com.google.distance.delta" },
             ],
             bucketByTime: { durationMillis: 86400000 },
             startTimeMillis: startMs,
-            endTimeMillis: endMs,
+            endTimeMillis: queryEndMs,
           }),
         });
 
@@ -264,9 +264,27 @@ export const fetchGoogleFitDailyData = createServerFn({ method: "GET" })
             source: "google_fit",
             updatedAt: new Date().toISOString(),
           };
+        } else {
+          const errText = await fitRes.text();
+          console.error("Erro Google Fit dataset:aggregate:", fitRes.status, errText);
+
+          let errorMsg = `Erro ${fitRes.status} ao consultar Google Fit`;
+          if (errText.includes("Fitness API has not been used") || errText.includes("accessNotConfigured")) {
+            errorMsg = "A 'Fitness API' precisa ser ativada na Biblioteca do Google Cloud Console.";
+          }
+
+          return {
+            connected: true,
+            steps: 0,
+            activeCalories: 0,
+            distanceMeters: 0,
+            source: "google_fit",
+            updatedAt: null,
+            error: errorMsg,
+          };
         }
-      } catch (err) {
-        console.warn("Falha ao consultar API do Google Fit:", err);
+      } catch (err: any) {
+        console.warn("Falha ao consultar API do Google Fit:", err?.message);
       }
     }
 

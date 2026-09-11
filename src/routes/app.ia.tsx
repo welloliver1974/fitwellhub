@@ -21,6 +21,7 @@ import {
   getGoogleFitAuthUrl,
   exchangeGoogleFitCode,
   disconnectGoogleFit,
+  fetchGoogleFitDailyData,
 } from "@/server-fns/google-fit.functions";
 import { toast } from "sonner";
 
@@ -312,9 +313,35 @@ function GoogleFitSettingsSection() {
   });
   const [jsonInput, setJsonInput] = useState("");
   const [copied, setCopied] = useState(false);
+  const [syncingData, setSyncingData] = useState(false);
+  const [syncedMetrics, setSyncedMetrics] = useState<{ steps: number; activeCalories: number } | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   const redirectUri =
     typeof window !== "undefined" ? `${window.location.origin}/app/ia` : "";
+
+  const handleSyncNow = async () => {
+    if (!session?.access_token) return;
+    setSyncingData(true);
+    setSyncError(null);
+    try {
+      const res = await fetchGoogleFitDailyData({
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res?.error) {
+        setSyncError(res.error);
+        toast.error(res.error);
+      } else if (res) {
+        setSyncedMetrics({ steps: res.steps, activeCalories: res.activeCalories });
+        toast.success(`${res.steps.toLocaleString("pt-BR")} passos sincronizados do Google Fit!`);
+      }
+    } catch (err: any) {
+      setSyncError(err?.message || "Falha ao sincronizar");
+      toast.error("Erro na sincronização: " + err?.message);
+    } finally {
+      setSyncingData(false);
+    }
+  };
 
   const checkStatus = async () => {
     if (!user) return;
@@ -326,11 +353,23 @@ function GoogleFitSettingsSection() {
         .eq("provider", "google_fit")
         .maybeSingle();
 
+      const isConn = Boolean(data && data.access_token);
       setStatus({
-        connected: Boolean(data && data.access_token),
+        connected: isConn,
         hasClientConfigured: Boolean(clientId || import.meta.env.VITE_GOOGLE_CLIENT_ID),
         lastSync: data?.updated_at || null,
       });
+
+      if (isConn && session?.access_token) {
+        fetchGoogleFitDailyData({
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        })
+          .then((res) => {
+            if (res?.error) setSyncError(res.error);
+            else if (res) setSyncedMetrics({ steps: res.steps, activeCalories: res.activeCalories });
+          })
+          .catch(() => {});
+      }
     } catch {
     } finally {
       setLoading(false);
@@ -372,6 +411,7 @@ function GoogleFitSettingsSection() {
             url.searchParams.delete("scope");
             window.history.replaceState({}, document.title, url.pathname);
             checkStatus();
+            handleSyncNow();
           })
           .catch((err) => {
             toast.error("Falha ao vincular Google Fit: " + (err?.message || "Erro desconhecido"));
@@ -500,14 +540,26 @@ function GoogleFitSettingsSection() {
 
         <div className="flex items-center gap-2 self-end sm:self-auto">
           {status.connected ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDisconnect}
-              className="h-8 text-xs text-destructive hover:bg-destructive/10"
-            >
-              Desconectar
-            </Button>
+            <>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleSyncNow}
+                disabled={syncingData}
+                className="h-8 text-xs font-medium gap-1.5 bg-primary text-primary-foreground"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${syncingData ? "animate-spin" : ""}`} />
+                {syncingData ? "Sincronizando..." : "Sincronizar passos"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDisconnect}
+                className="h-8 text-xs text-destructive hover:bg-destructive/10"
+              >
+                Desconectar
+              </Button>
+            </>
           ) : (
             <Button
               variant="default"
@@ -520,6 +572,47 @@ function GoogleFitSettingsSection() {
           )}
         </div>
       </div>
+
+      {/* Alerta de erro da Fitness API caso necessário ativar no Google Cloud */}
+      {syncError && (
+        <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-xs space-y-1.5">
+          <p className="font-semibold text-destructive flex items-center gap-1.5">
+            <span>⚠️</span> {syncError}
+          </p>
+          <p className="text-muted-foreground text-[11px]">
+            Para permitir a leitura de passos, a <strong>Fitness API</strong> precisa estar ativada no seu projeto no Google Cloud Console.
+          </p>
+          <a
+            href="https://console.cloud.google.com/apis/library/fitness.googleapis.com"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary underline hover:opacity-80"
+          >
+            Ativar Fitness API no Google Cloud Console ↗
+          </a>
+        </div>
+      )}
+
+      {/* Card de Métricas do Dia quando conectado */}
+      {status.connected && (
+        <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-xs flex items-center justify-between">
+          <div>
+            <p className="font-semibold text-foreground">
+              {syncedMetrics
+                ? `${syncedMetrics.steps.toLocaleString("pt-BR")} passos hoje`
+                : "Aguardando primeira leitura de passos"}
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {syncedMetrics
+                ? `~${syncedMetrics.activeCalories} kcal ativas gastas pelo smartwatch`
+                : "Clique em 'Sincronizar passos' acima para ler do Google Fit"}
+            </p>
+          </div>
+          {syncedMetrics && syncedMetrics.steps > 0 && (
+            <span className="text-emerald-500 font-bold text-sm">✓ Sincronizado</span>
+          )}
+        </div>
+      )}
 
       {/* Instrução rápida sobre o Samsung Watch */}
       <div className="p-3 rounded-xl bg-muted/40 border border-border/40 text-[11px] text-muted-foreground space-y-1.5">

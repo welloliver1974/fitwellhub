@@ -23,20 +23,23 @@ export function parseGoogleFitAggregateResponse(response: any): GoogleFitDailyMe
     for (const dataset of bucket.dataset) {
       if (!Array.isArray(dataset.point)) continue;
 
+      const datasetType = (dataset.dataSourceId || dataset.dataTypeName || "").toLowerCase();
+
       for (const point of dataset.point) {
-        const typeName = point.dataTypeName;
+        const pointType = (point.dataTypeName || "").toLowerCase();
+        const typeName = pointType || datasetType;
         const values = point.value;
         if (!Array.isArray(values) || values.length === 0) continue;
 
-        if (typeName === "com.google.step_count.delta") {
-          // Passos vêm como intVal
+        if (typeName.includes("step")) {
+          // Passos vêm como intVal ou fpVal
           const val = values[0].intVal ?? values[0].fpVal ?? 0;
           steps += Number(val);
-        } else if (typeName === "com.google.calories.expended") {
-          // Calorias vêm como fpVal
+        } else if (typeName.includes("calories")) {
+          // Calorias vêm como fpVal ou intVal
           const val = values[0].fpVal ?? values[0].intVal ?? 0;
           activeCalories += Number(val);
-        } else if (typeName === "com.google.distance.delta") {
+        } else if (typeName.includes("distance")) {
           // Distância em metros
           const val = values[0].fpVal ?? values[0].intVal ?? 0;
           distanceMeters += Number(val);
@@ -45,10 +48,16 @@ export function parseGoogleFitAggregateResponse(response: any): GoogleFitDailyMe
     }
   }
 
+  const roundedSteps = Math.round(steps);
+  const roundedCalories =
+    Math.round(activeCalories) || (roundedSteps > 0 ? estimateActiveCaloriesFromSteps(roundedSteps) : 0);
+  const roundedDistance =
+    Math.round(distanceMeters) || (roundedSteps > 0 ? Math.round(roundedSteps * 0.75) : 0);
+
   return {
-    steps: Math.round(steps),
-    activeCalories: Math.round(activeCalories),
-    distanceMeters: Math.round(distanceMeters),
+    steps: roundedSteps,
+    activeCalories: roundedCalories,
+    distanceMeters: roundedDistance,
   };
 }
 

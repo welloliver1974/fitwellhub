@@ -97,6 +97,7 @@ export function StepsCard({
         }
 
         // 2. Verificar se o Google Fit / Samsung Watch está vinculado no banco
+        let isConnected = false;
         try {
           const { data: integration } = await supabase
             .from("user_integrations")
@@ -106,31 +107,34 @@ export function StepsCard({
             .maybeSingle();
 
           if (integration && integration.access_token) {
+            isConnected = true;
             setConnected(true);
           }
         } catch {}
-      }
 
-      // 3. Se for uma sincronização explícita e houver credenciais e sessão ativas
-      if (isSync && session?.access_token && hasClientConfigured) {
-        try {
-          const metrics = await fetchGoogleFitDailyData({
-            headers: { Authorization: `Bearer ${session.access_token}` },
-          });
+        // 3. Se estiver conectado ou for sincronização manual, busca direto do Google Fit
+        if (session?.access_token && (isConnected || isSync)) {
+          try {
+            const metrics = await fetchGoogleFitDailyData({
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            });
 
-          if (metrics && typeof metrics.steps === "number") {
-            setSteps(metrics.steps);
-            setActiveCalories(metrics.activeCalories);
-            setDistanceMeters(metrics.distanceMeters);
-            if (onActiveCaloriesChange) onActiveCaloriesChange(metrics.activeCalories);
-            toast.success("Passos sincronizados com o Google Fit!");
+            if (metrics && typeof metrics.steps === "number" && !metrics.error) {
+              setSteps(metrics.steps);
+              setActiveCalories(metrics.activeCalories);
+              setDistanceMeters(metrics.distanceMeters);
+              if (onActiveCaloriesChange) onActiveCaloriesChange(metrics.activeCalories);
+              if (isSync) toast.success(`${metrics.steps.toLocaleString("pt-BR")} passos sincronizados!`);
+            } else if (metrics?.error && isSync) {
+              toast.error(metrics.error);
+            }
+          } catch (syncErr: any) {
+            console.warn("Sincronização remota com Google Fit falhou:", syncErr);
+            if (isSync) toast.info("Dados locais mantidos");
           }
-        } catch (syncErr: any) {
-          console.warn("Sincronização remota com Google Fit falhou:", syncErr);
-          toast.info("Dados locais mantidos");
+        } else if (isSync) {
+          toast.info("Passos de hoje atualizados!");
         }
-      } else if (isSync) {
-        toast.info("Passos de hoje atualizados!");
       }
     } catch (err: any) {
       console.warn("Erro ao carregar dados de passos:", err);
@@ -140,8 +144,8 @@ export function StepsCard({
   };
 
   useEffect(() => {
-    loadLocalData(false);
-  }, [currentUserId]);
+    loadLocalData(true);
+  }, [currentUserId, session?.access_token]);
 
   const handleManualSave = async () => {
     const val = parseInt(manualInput.replace(/\D/g, ""), 10);
