@@ -43,7 +43,9 @@ export interface BriefingResult {
  * ou quando a IA não estiver configurada.
  */
 export function generateDeterministicBriefing(data: BriefingUserData): BriefingResult {
-  const first = data.userName ? data.userName.split(" ")[0] : "guerreiro";
+  const rawFirst = data.userName ? data.userName.trim().split(" ")[0] : "";
+  const first = rawFirst ? rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1) : "";
+  const nameSuffix = first ? `, ${first}` : "";
   const calGoal = data.caloriesGoal || 2000;
   const calConsumed = data.caloriesConsumed || 0;
   const protGoal = data.proteinGoal || 140;
@@ -55,7 +57,7 @@ export function generateDeterministicBriefing(data: BriefingUserData): BriefingR
     if (data.workoutName) {
       return {
         period: "manha",
-        title: `Bom dia, ${first}! 🌅`,
+        title: `Bom dia${nameSuffix}! 🌅`,
         message: `Hoje é dia de ${data.workoutName}. Garanta um café da manhã reforçado com boas fontes de carboidrato e proteína para treinar com energia máxima.`,
         actionText: "Ver treino de hoje",
         actionLink: "/app/treinos",
@@ -63,7 +65,7 @@ export function generateDeterministicBriefing(data: BriefingUserData): BriefingR
     }
     return {
       period: "manha",
-      title: `Bom dia, ${first}! ☀️`,
+      title: `Bom dia${nameSuffix}! ☀️`,
       message: `Dia perfeito para manter o foco e a constância. Comece o dia bebendo um bom copo d'água e planeje suas refeições para bater a meta de ${calGoal} kcal.`,
       actionText: "Registrar café da manhã",
       actionLink: "/app/nutricao",
@@ -85,7 +87,7 @@ export function generateDeterministicBriefing(data: BriefingUserData): BriefingR
     }
     return {
       period: "tarde",
-      title: `Boa tarde, ${first}! ⚡`,
+      title: `Boa tarde${nameSuffix}! ⚡`,
       message: data.workoutName
         ? `Lembre-se do seu treino de ${data.workoutName} mais tarde. Mantenha a garrafinha cheia!`
         : `Metade do dia já foi: você já consumiu ${calConsumed} kcal. Continue firme na hidratação!`,
@@ -101,7 +103,7 @@ export function generateDeterministicBriefing(data: BriefingUserData): BriefingR
   if (remainingWater > 500) {
     return {
       period: "noite",
-      title: `Boa noite, ${first}! 🌙`,
+      title: `Boa noite${nameSuffix}! 🌙`,
       message: `Quase fechando o dia! Ainda faltam ${remainingWater}ml para bater sua meta de hidratação. Beba um pouco d'água antes de descansar.`,
       actionText: "Registrar água",
       actionLink: "/app",

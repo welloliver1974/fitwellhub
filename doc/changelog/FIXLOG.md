@@ -1594,4 +1594,36 @@ Após a introdução dos cards de Daily Briefing e Passos (Google Fit):
 - `src/lib/google-fit-utils.test.ts`: 6 testes cobrindo filtragem de BMR e cálculo de calorias ativas.
 - `npm run build`: Compilação de Client e SSR bem-sucedidas (código 0).
 
+---
+
+## Sessão: 11/09/2026 — Personalização Elegante do Daily Briefing (Substituição de 'guerreiro' pelo nome real do usuário)
+
+### 🎯 Problema relatado pelo usuário
+O Daily Briefing recepcionava com a mensagem *"Boa tarde, guerreiro! ⚡"*. O usuário observou que seria mais elegante e refinado ser chamado pelo próprio nome ou pelo nome cadastrado no app.
+
+### 🔍 Causa Raiz
+1. **Fallback Determinístico (`src/lib/briefing-utils.ts`):** Na ausência da propriedade `userName`, o gerador de fallback continha a string estática `"guerreiro"` como fallback (`const first = data.userName ? data.userName.split(" ")[0] : "guerreiro"`).
+2. **Componente do Card (`src/components/daily-briefing-card.tsx`):** O componente não extraía nem propagava o nome do usuário para a geração instantânea local nem para o endpoint do servidor. Além disso, se o briefing já havia sido gravado no `localStorage`, a chave continuava exibindo o texto antigo em cache.
+3. **Servidor / Coach IA (`src/server-fns/briefing.functions.ts`):** O handler lia apenas `claims?.user_metadata?.full_name`, sem consultar a tabela de perfis (`profiles.display_name`) nem outros campos de metadados (`display_name`, `name`), recorrendo à string `"Guerreiro"`. Não havia instrução explícita no system prompt restringindo termos clichês ou gírias.
+
+### 🛠️ Solução Implementada
+1. **Eliminação de Termos Genéricos (`src/lib/briefing-utils.ts`):**
+   - Removido completamente o termo `"guerreiro"`.
+   - Se houver nome disponível, saúda com o primeiro nome capitalizado (`Bom dia, Well! 🌅`, `Boa tarde, Well! ⚡`, `Boa noite, Well! 🌙`).
+   - Se o usuário não possuir nome ou ainda não estiver carregado, gera uma saudação limpa, direta e elegante (`Bom dia! ☀️`, `Boa tarde! ⚡`, `Boa noite! 🌙`).
+2. **Resolução Multicamada do Nome do Usuário (`src/components/daily-briefing-card.tsx` e `src/routes/app.index.tsx`):**
+   - `TodayPage` passa o nome disponível no login para o `DailyBriefingCard`.
+   - O card resolve o nome preferencialmente da tabela `profiles` (`display_name`), metadados de autenticação (`full_name`, `display_name`, `name`) ou prefixo de e-mail.
+   - Atualizada a chave de cache para `fitwell-briefing-v2-...` e adicionado descarte automático de qualquer cache legado que contenha "guerreiro".
+3. **Diretrizes Estritas no Prompt do Coach IA (`src/server-fns/briefing.functions.ts`):**
+   - `briefingSchema` agora aceita `userName`.
+   - A função busca o nome cadastrado no perfil do banco (`profiles.display_name`).
+   - O system prompt instrui explicitamente a saudar pelo primeiro nome e **proíbe categoricamente** vocativos como "guerreiro", "campeão", "parceiro" ou "monstro".
+4. **Testes Unitários Atualizados (`src/lib/briefing-utils.test.ts`):**
+   - Adicionados testes verificando a ausência do termo "guerreiro" em todos os períodos e garantindo a correta capitalização do primeiro nome.
+
+### ✅ Validação
+- `npm test -- src/lib/briefing-utils.test.ts`: 5 testes executados com 100% de sucesso.
+
+
 

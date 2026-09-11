@@ -284,6 +284,7 @@ function TodayPage() {
       <SafeBoundary name="DailyBriefingCard">
         <DailyBriefingCard
           userId={user?.id}
+          userName={user?.user_metadata?.full_name || user?.user_metadata?.display_name || user?.user_metadata?.name}
           workoutName={todayWorkout?.name}
           hasWorkoutToday={hasCompletedWorkoutToday}
           caloriesConsumed={totals.calories}

@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
+import { supabase } from "@/integrations/supabase/client";
 import { getLocalDate } from "@/lib/utils";
 import {
   generateDeterministicBriefing,
@@ -15,6 +16,7 @@ import { toast } from "sonner";
 
 interface DailyBriefingCardProps {
   userId?: string;
+  userName?: string;
   workoutName?: string | null;
   hasWorkoutToday?: boolean;
   caloriesConsumed?: number;
@@ -27,6 +29,7 @@ interface DailyBriefingCardProps {
 
 export function DailyBriefingCard({
   userId,
+  userName: propUserName,
   workoutName,
   hasWorkoutToday,
   caloriesConsumed,
@@ -36,22 +39,56 @@ export function DailyBriefingCard({
   waterMl,
   waterGoal,
 }: DailyBriefingCardProps) {
-  const { session } = useAuth();
+  const { session, user } = useAuth();
   const today = getLocalDate();
   const period = getPeriodOfDay();
-  const cacheKey = `fitwell-briefing-${userId || "guest"}-${today}-${period}`;
+  const [profileName, setProfileName] = useState<string>("");
+
+  useEffect(() => {
+    if (!user) return;
+    if (propUserName) {
+      setProfileName(propUserName);
+      return;
+    }
+    const meta =
+      user.user_metadata?.full_name ||
+      user.user_metadata?.display_name ||
+      user.user_metadata?.name;
+    if (meta) setProfileName(meta);
+
+    supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.display_name?.trim()) {
+          setProfileName(data.display_name.trim());
+        }
+      });
+  }, [user, propUserName]);
+
+  const rawFirst = (propUserName || profileName || user?.user_metadata?.full_name || user?.user_metadata?.display_name || user?.user_metadata?.name || user?.email?.split("@")[0] || "").trim().split(" ")[0];
+  const effectiveUserName = rawFirst ? rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1) : "";
+
+  const cacheKey = `fitwell-briefing-v2-${userId || "guest"}-${today}-${period}`;
 
   // Inicializa nulo para evitar qualquer risco de hydration mismatch no SSR
   const [briefing, setBriefing] = useState<BriefingResult | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // 1. Tentar ler do cache local
+    // 1. Tentar ler do cache local (desconsidera caches legados que continham 'guerreiro')
     try {
       const cached = localStorage.getItem(cacheKey);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (parsed && parsed.title) {
+        if (
+          parsed &&
+          parsed.title &&
+          !parsed.title.toLowerCase().includes("guerreiro") &&
+          !parsed.message?.toLowerCase().includes("guerreiro")
+        ) {
           setBriefing(parsed);
           return;
         }
@@ -61,6 +98,7 @@ export function DailyBriefingCard({
     // 2. Se não estiver no cache, gerar instantaneamente o briefing determinístico
     const fallback = generateDeterministicBriefing({
       period,
+      userName: effectiveUserName,
       workoutName,
       hasWorkoutToday,
       caloriesConsumed,
@@ -71,7 +109,7 @@ export function DailyBriefingCard({
       waterGoal,
     });
     setBriefing(fallback);
-  }, [cacheKey, workoutName, hasWorkoutToday, caloriesConsumed, proteinConsumed, waterMl]);
+  }, [cacheKey, effectiveUserName, workoutName, hasWorkoutToday, caloriesConsumed, proteinConsumed, waterMl]);
 
   const fetchBriefing = async (force = false) => {
     if (!force && briefing) return;
@@ -85,6 +123,7 @@ export function DailyBriefingCard({
       const res = await getDailyBriefing({
         data: {
           period,
+          userName: effectiveUserName,
           workoutName,
           hasWorkoutToday,
           caloriesConsumed,
@@ -109,6 +148,7 @@ export function DailyBriefingCard({
       // Garante fallback sempre ativo sem quebrar a UI
       const fallback = generateDeterministicBriefing({
         period,
+        userName: effectiveUserName,
         workoutName,
         hasWorkoutToday,
         caloriesConsumed,

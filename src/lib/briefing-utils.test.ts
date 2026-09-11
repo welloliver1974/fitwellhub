@@ -43,4 +43,34 @@ describe("briefing-utils", () => {
     expect(res.message).toContain("proteína");
     expect(res.actionLink).toBe("/app/nutricao");
   });
+
+  it("deve gerar saudação elegante sem o termo guerreiro quando não houver nome", () => {
+    const resTarde = generateDeterministicBriefing({
+      period: "tarde",
+    });
+    expect(resTarde.title).toBe("Boa tarde! ⚡");
+    expect(resTarde.title.toLowerCase()).not.toContain("guerreiro");
+
+    const resManha = generateDeterministicBriefing({
+      period: "manha",
+    });
+    expect(resManha.title).toBe("Bom dia! ☀️");
+    expect(resManha.title.toLowerCase()).not.toContain("guerreiro");
+
+    const resNoite = generateDeterministicBriefing({
+      period: "noite",
+      waterMl: 1000,
+      waterGoal: 2500,
+    });
+    expect(resNoite.title).toBe("Boa noite! 🌙");
+    expect(resNoite.title.toLowerCase()).not.toContain("guerreiro");
+  });
+
+  it("deve saudar pelo primeiro nome com a primeira letra maiúscula no período da tarde", () => {
+    const res = generateDeterministicBriefing({
+      period: "tarde",
+      userName: "carlos silva",
+    });
+    expect(res.title).toBe("Boa tarde, Carlos! ⚡");
+  });
 });

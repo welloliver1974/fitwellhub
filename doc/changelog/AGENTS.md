@@ -2,6 +2,18 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [11/09/2026] - Antigravity (Personalização Elegante do Daily Briefing + Eliminação do termo 'guerreiro')
+- **Mudanças realizadas**:
+  - **Eliminação de vocativos genéricos (`briefing-utils.ts` + `briefing-utils.test.ts`)**:
+    - Substituição definitiva do fallback `"guerreiro"` por uma saudação polida e sofisticada: quando há nome, usa o primeiro nome capitalizado (`Bom dia, Well! 🌅`, `Boa tarde, Well! ⚡`, `Boa noite, Well! 🌙`); quando não há, usa a saudação limpa (`Bom dia! ☀️`, `Boa tarde! ⚡`, `Boa noite! 🌙`).
+  - **Resolução e propagação do nome do usuário (`daily-briefing-card.tsx` + `app.index.tsx`)**:
+    - O card busca o nome nas informações de login e na tabela de perfis do Supabase (`profiles.display_name`), enviando o nome para a geração determinística instantânea e para a IA.
+    - Atualizada a chave de cache local (`fitwell-briefing-v2-...`) com descarte automático de mensagens legadas contendo "guerreiro".
+  - **Diretrizes Estritas de Linguagem no Coach IA (`briefing.functions.ts`)**:
+    - Prompt do sistema instruído explicitamente para saudar pelo primeiro nome e proibido de usar termos informais/clichês como "guerreiro", "campeão", "parceiro" ou "monstro".
+- **Validação**:
+  - `npx vitest run src/lib/briefing-utils.test.ts`: 5 testes verdes (100% de aprovação).
+
 ## [11/09/2026] - Antigravity (Rotação Inteligente de Treinos BCDA + Filtro BMR de Calorias Ativas)
 - **Mudanças realizadas**:
   - **Sequenciador Cíclico de Divisão de Treinos (`workout-rotation.ts` + `workout-rotation.test.ts`)**:
