@@ -54,10 +54,8 @@ export function StepsCard({
   const [manualInput, setManualInput] = useState("");
   const [guideOpen, setGuideOpen] = useState(false);
 
-  // Verifica se o Client ID do Google foi configurado nas variáveis de ambiente
-  const hasClientConfigured = Boolean(
-    import.meta.env.VITE_GOOGLE_CLIENT_ID || import.meta.env.GOOGLE_CLIENT_ID
-  );
+  // Credenciais do Google configuradas
+  const hasClientConfigured = true;
 
   const loadLocalData = async (isSync = false) => {
     if (isSync) setSyncing(true);
@@ -189,20 +187,18 @@ export function StepsCard({
   };
 
   const handleConnectClick = async () => {
-    // Se o Client ID não estiver no .env, abre o guia explicativo
-    if (!hasClientConfigured) {
-      setGuideOpen(true);
-      return;
-    }
-
     try {
       const redirectUri = `${window.location.origin}/app/ia`;
+      const clientId =
+        (typeof window !== "undefined" && localStorage.getItem("fitwell_google_client_id")) ||
+        (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) ||
+        undefined;
       const headers = session?.access_token
         ? { Authorization: `Bearer ${session.access_token}` }
         : undefined;
 
       const authUrl = await getGoogleFitAuthUrl({
-        data: redirectUri,
+        data: { redirectUri, clientId },
         headers,
       });
 
@@ -211,7 +207,7 @@ export function StepsCard({
       }
     } catch (err: any) {
       console.warn("Erro ao gerar URL do Google Fit:", err);
-      setGuideOpen(true);
+      toast.error(err?.message || "Não foi possível iniciar a conexão com o Google");
     }
   };
 

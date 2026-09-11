@@ -55,18 +55,28 @@ export const getGoogleFitStatus = createServerFn({ method: "GET" })
  */
 export const getGoogleFitAuthUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((redirectUri: unknown) => z.string().parse(redirectUri))
-  .handler(async ({ data: redirectUri }) => {
-    const clientId = getGoogleClientId();
+  .inputValidator((input: unknown) => {
+    if (typeof input === "string") {
+      return { redirectUri: input, clientId: undefined };
+    }
+    return z
+      .object({
+        redirectUri: z.string(),
+        clientId: z.string().optional(),
+      })
+      .parse(input);
+  })
+  .handler(async ({ data }) => {
+    const clientId = data.clientId?.trim() || getGoogleClientId();
     if (!clientId) {
       throw new Error(
-        "GOOGLE_CLIENT_ID não configurado no servidor. Adicione as credenciais nas variáveis de ambiente ou utilize o registro manual de passos."
+        "Client ID do Google não configurado. Adicione o Client ID no .env ou nas configurações do Google Fit."
       );
     }
 
     const params = new URLSearchParams({
       client_id: clientId,
-      redirect_uri: redirectUri,
+      redirect_uri: data.redirectUri,
       response_type: "code",
       scope: GOOGLE_FIT_SCOPES,
       access_type: "offline",
@@ -86,16 +96,18 @@ export const exchangeGoogleFitCode = createServerFn({ method: "POST" })
       .object({
         code: z.string(),
         redirectUri: z.string(),
+        clientId: z.string().optional(),
+        clientSecret: z.string().optional(),
       })
       .parse(data)
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const clientId = getGoogleClientId();
-    const clientSecret = getGoogleClientSecret();
+    const clientId = data.clientId?.trim() || getGoogleClientId();
+    const clientSecret = data.clientSecret?.trim() || getGoogleClientSecret();
 
     if (!clientId || !clientSecret) {
-      throw new Error("Credenciais do Google não configuradas no servidor.");
+      throw new Error("Credenciais do Google (Client ID / Client Secret) não encontradas.");
     }
 
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {

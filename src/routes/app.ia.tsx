@@ -13,7 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Sparkles, KeyRound, ShieldCheck, RefreshCw } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Loader2, Sparkles, KeyRound, ShieldCheck, RefreshCw, Copy, Check, ChevronDown, ChevronUp, FileCode } from "lucide-react";
 import { fetchNvidiaModels } from "@/server-fns/ai-settings.functions";
 import {
   getGoogleFitStatus,
@@ -287,16 +288,37 @@ function GoogleFitSettingsSection() {
   const { user, session } = useAuth();
   const [status, setStatus] = useState<{ connected: boolean; hasClientConfigured: boolean; lastSync: string | null }>({
     connected: false,
-    hasClientConfigured: Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID),
+    hasClientConfigured: true,
     lastSync: null,
   });
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
+  const [clientId, setClientId] = useState(() => {
+    if (typeof window !== "undefined") {
+      return (
+        localStorage.getItem("fitwell_google_client_id") ||
+        (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) ||
+        ""
+      );
+    }
+    return "";
+  });
+  const [clientSecret, setClientSecret] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("fitwell_google_client_secret") || "";
+    }
+    return "";
+  });
+  const [jsonInput, setJsonInput] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const redirectUri =
+    typeof window !== "undefined" ? `${window.location.origin}/app/ia` : "";
 
   const checkStatus = async () => {
     if (!user) return;
     try {
-      // 1. Consulta direta no banco
       const { data } = await supabase
         .from("user_integrations")
         .select("updated_at, access_token")
@@ -306,7 +328,7 @@ function GoogleFitSettingsSection() {
 
       setStatus({
         connected: Boolean(data && data.access_token),
-        hasClientConfigured: Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID),
+        hasClientConfigured: Boolean(clientId || import.meta.env.VITE_GOOGLE_CLIENT_ID),
         lastSync: data?.updated_at || null,
       });
     } catch {
@@ -324,9 +346,24 @@ function GoogleFitSettingsSection() {
       const code = url.searchParams.get("code");
       if (code && session?.access_token) {
         setConnecting(true);
-        const redirectUri = `${window.location.origin}/app/ia`;
+        const currentUri = `${window.location.origin}/app/ia`;
+        const activeClientId =
+          clientId.trim() ||
+          localStorage.getItem("fitwell_google_client_id") ||
+          (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) ||
+          undefined;
+        const activeClientSecret =
+          clientSecret.trim() ||
+          localStorage.getItem("fitwell_google_client_secret") ||
+          undefined;
+
         exchangeGoogleFitCode({
-          data: { code, redirectUri },
+          data: {
+            code,
+            redirectUri: currentUri,
+            clientId: activeClientId,
+            clientSecret: activeClientSecret,
+          },
           headers: { Authorization: `Bearer ${session.access_token}` },
         })
           .then(() => {
@@ -337,27 +374,73 @@ function GoogleFitSettingsSection() {
             checkStatus();
           })
           .catch((err) => {
-            toast.error("Falha ao vincular Google Fit: " + err?.message);
+            toast.error("Falha ao vincular Google Fit: " + (err?.message || "Erro desconhecido"));
           })
           .finally(() => setConnecting(false));
       }
     }
   }, [user, session]);
 
+  const handleParseJson = (rawText: string) => {
+    try {
+      const parsed = JSON.parse(rawText.trim());
+      const creds = parsed.web || parsed.installed || parsed;
+      const cId = creds.client_id || "";
+      const cSec = creds.client_secret || "";
+
+      if (!cId && !cSec) {
+        toast.error("Nenhum client_id ou client_secret encontrado no JSON.");
+        return;
+      }
+
+      if (cId) {
+        setClientId(cId);
+        localStorage.setItem("fitwell_google_client_id", cId);
+      }
+      if (cSec) {
+        setClientSecret(cSec);
+        localStorage.setItem("fitwell_google_client_secret", cSec);
+      }
+      setJsonInput("");
+      setStatus((prev) => ({ ...prev, hasClientConfigured: true }));
+      toast.success("Credenciais do Google extraídas e salvas no dispositivo!");
+    } catch {
+      toast.error("JSON inválido. Copie e cole todo o conteúdo do arquivo do Google Cloud Console.");
+    }
+  };
+
+  const handleSaveCredentials = () => {
+    if (clientId.trim()) {
+      localStorage.setItem("fitwell_google_client_id", clientId.trim());
+    }
+    if (clientSecret.trim()) {
+      localStorage.setItem("fitwell_google_client_secret", clientSecret.trim());
+    }
+    setStatus((prev) => ({ ...prev, hasClientConfigured: Boolean(clientId.trim()) }));
+    toast.success("Credenciais salvas com sucesso neste dispositivo!");
+  };
+
   const handleConnect = async () => {
-    if (!status.hasClientConfigured) {
-      toast.info(
-        "Para conectar automaticamente, adicione VITE_GOOGLE_CLIENT_ID no arquivo .env ou registre seus passos pelo botão de lápis."
-      );
+    const activeClientId =
+      clientId.trim() ||
+      (typeof window !== "undefined" && localStorage.getItem("fitwell_google_client_id")) ||
+      (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) ||
+      "";
+
+    if (!activeClientId) {
+      setShowConfig(true);
+      toast.info("Por favor, cole seu Client ID ou JSON do Google antes de conectar.");
       return;
     }
 
     try {
-      const redirectUri = `${window.location.origin}/app/ia`;
       const headers = session?.access_token
         ? { Authorization: `Bearer ${session.access_token}` }
         : undefined;
-      const authUrl = await getGoogleFitAuthUrl({ data: redirectUri, headers });
+      const authUrl = await getGoogleFitAuthUrl({
+        data: { redirectUri, clientId: activeClientId },
+        headers,
+      });
       if (authUrl) {
         window.location.href = authUrl;
       }
@@ -379,63 +462,176 @@ function GoogleFitSettingsSection() {
     }
   };
 
+  const handleCopyUri = () => {
+    if (redirectUri) {
+      navigator.clipboard.writeText(redirectUri);
+      setCopied(true);
+      toast.success("URI de redirecionamento copiada!");
+      setTimeout(() => setCopied(false), 2500);
+    }
+  };
+
   if (loading || connecting) {
     return (
       <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin text-primary" />
-        <span>Verificando integração com Google Fit...</span>
+        <span>{connecting ? "Concluindo autorização com o Google..." : "Verificando integração..."}</span>
       </div>
     );
   }
 
   return (
     <div className="space-y-3 pt-1">
-      <div className="flex items-center justify-between p-3 rounded-xl bg-secondary/50 border border-border/50">
+      {/* Barra de Status e Ação */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-secondary/50 border border-border/50">
         <div>
-          <p className="text-xs font-semibold text-foreground">
-            Status: {status.connected ? "🟢 Conectado" : "⚪ Não conectado"}
+          <p className="text-xs font-semibold text-foreground flex items-center gap-2">
+            <span>Status:</span>
+            <span className={status.connected ? "text-emerald-500 font-bold" : "text-muted-foreground"}>
+              {status.connected ? "🟢 Conectado" : "⚪ Não conectado"}
+            </span>
           </p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
+          <p className="text-[11px] text-muted-foreground mt-1">
             {status.connected
-              ? "Recebendo dados do Samsung Health via Google Fit."
-              : status.hasClientConfigured
-                ? "Clique abaixo para vincular sua conta Google."
-                : "Passos podem ser lançados diretamente ou via credenciais do Google Cloud."}
+              ? "Passos e calorias do Samsung Watch sincronizados via Google Fit."
+              : "Clique abaixo para vincular sua conta Google e ativar a sincronização."}
           </p>
         </div>
 
-        {status.connected ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleDisconnect}
-            className="h-8 text-xs text-destructive hover:bg-destructive/10"
-          >
-            Desconectar
-          </Button>
-        ) : (
-          <Button
-            variant="default"
-            size="sm"
-            onClick={handleConnect}
-            className="h-8 text-xs font-medium"
-          >
-            Conectar Google Fit
-          </Button>
-        )}
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          {status.connected ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDisconnect}
+              className="h-8 text-xs text-destructive hover:bg-destructive/10"
+            >
+              Desconectar
+            </Button>
+          ) : (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleConnect}
+              className="h-8 text-xs font-medium bg-primary text-primary-foreground"
+            >
+              Conectar Google Fit
+            </Button>
+          )}
+        </div>
       </div>
 
-      {!status.hasClientConfigured && !status.connected && (
-        <div className="p-3 rounded-xl bg-muted/40 border border-border/40 text-[11px] text-muted-foreground space-y-1.5">
-          <p className="font-semibold text-foreground">Como funciona o Samsung Watch?</p>
-          <p>
-            Como você já conectou o <strong>Samsung Health</strong> ao <strong>Google Fit</strong> no celular, você pode lançar os passos de hoje a qualquer momento com 1 clique na Home (ícone de lápis).
-          </p>
-          <p>
-            Para login automático direto da nuvem, configure <code>VITE_GOOGLE_CLIENT_ID</code> e <code>GOOGLE_CLIENT_SECRET</code> no seu <code>.env</code>.
-          </p>
-        </div>
-      )}
+      {/* Instrução rápida sobre o Samsung Watch */}
+      <div className="p-3 rounded-xl bg-muted/40 border border-border/40 text-[11px] text-muted-foreground space-y-1.5">
+        <p className="font-semibold text-foreground">Como funciona com o Samsung Galaxy Watch?</p>
+        <p>
+          O <strong>Samsung Health</strong> compartilha os passos com o <strong>Google Fit</strong> no seu celular. Ao conectar aqui, o FitWell Hub sincroniza seus passos automaticamente.
+        </p>
+        <p>
+          <em>Dica:</em> Você também pode lançar seus passos rapidamente a qualquer momento pelo ícone de lápis na página inicial.
+        </p>
+      </div>
+
+      {/* Accordion / Seção de Credenciais do Google Cloud */}
+      <div className="rounded-xl border border-border/50 overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setShowConfig(!showConfig)}
+          className="w-full flex items-center justify-between p-3 text-left bg-secondary/30 hover:bg-secondary/60 transition-colors text-xs font-medium text-foreground"
+        >
+          <span className="flex items-center gap-2">
+            <KeyRound className="h-3.5 w-3.5 text-primary" />
+            Configurações de Credenciais do Google Cloud
+            {clientId && (
+              <span className="text-[10px] bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded font-normal">
+                Configurado
+              </span>
+            )}
+          </span>
+          {showConfig ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </button>
+
+        {showConfig && (
+          <div className="p-3.5 space-y-3 bg-card border-t border-border/40 text-xs">
+            {/* URI de redirecionamento */}
+            <div className="space-y-1.5">
+              <Label className="text-[11px] text-muted-foreground">
+                URI de Redirecionamento autorizada (adicione no Google Cloud Console):
+              </Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={redirectUri}
+                  readOnly
+                  className="font-mono text-[11px] h-8 bg-muted/50"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyUri}
+                  className="h-8 text-xs shrink-0"
+                >
+                  {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copied ? "Copiado" : "Copiar"}
+                </Button>
+              </div>
+            </div>
+
+            {/* Importar via JSON */}
+            <div className="space-y-1.5 pt-1">
+              <Label className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                <FileCode className="h-3.5 w-3.5" />
+                Opção 1: Colar JSON baixado do Google Cloud
+              </Label>
+              <Textarea
+                placeholder='Cole aqui o JSON {"web":{"client_id":"...","client_secret":"..."}}'
+                value={jsonInput}
+                onChange={(e) => {
+                  setJsonInput(e.target.value);
+                  if (e.target.value.includes("client_id")) {
+                    handleParseJson(e.target.value);
+                  }
+                }}
+                className="font-mono text-[10px] h-16 resize-none"
+              />
+            </div>
+
+            {/* Campos manuais */}
+            <div className="space-y-2 pt-1 border-t border-border/30">
+              <Label className="text-[11px] text-muted-foreground">
+                Opção 2: Inserir manualmente
+              </Label>
+              <div className="space-y-1.5">
+                <Input
+                  placeholder="Google Client ID (.apps.googleusercontent.com)"
+                  value={clientId}
+                  onChange={(e) => setClientId(e.target.value)}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Input
+                  type="password"
+                  placeholder="Google Client Secret"
+                  value={clientSecret}
+                  onChange={(e) => setClientSecret(e.target.value)}
+                  className="h-8 text-xs"
+                />
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={handleSaveCredentials}
+              className="w-full h-8 text-xs mt-1"
+            >
+              Salvar Credenciais neste Aparelho
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
