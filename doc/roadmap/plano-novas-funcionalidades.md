@@ -229,3 +229,18 @@ Quando você estiver pronto para implementar, a ordem mais recomendada de execu�
 1. **Sprint 1 (Treino de Alto Nível):** [Gerador de Fichas de Treino por IA](#1-gerador-de-fichas-de-treino-por-ia-workout-routine-builder) + [Sobrecarga Progressiva & 1RM](#2-sobrecarga-progressiva-inteligente--1rm-estimado-no-modo-foco).
 2. **Sprint 2 (Experiência Diária):** [Daily Briefing do Coach IA na Home](#3-daily-briefing-do-coach-ia-no-topo-da-home) + [Sistema de Ofensivas (Streaks)](#5-sistema-de-ofensivas-streaks-e-conquistas-gamificadas).
 3. **Sprint 3 (Nutrição e Rotina Prática):** [Gerador de Lista de Compras Inteligente](#4-gerador-de-lista-de-compras-inteligente-smart-grocery-list) + [Rebalanceamento Calórico Semanal](#6-modo-refeição-livre--rebalanceamento-calórico-semanal).
+
+---
+
+## 📝 Status da Integração Google Fit / Galaxy Watch (Item 9) - Registro para Retomada
+- **Status do OAuth:** Conexão 100% autorizada pelo Google e salva em `user_integrations`.
+- **Melhorias Aplicadas:**
+  - Suporte a colar o JSON do Google Cloud direto na UI.
+  - Parser resiliente que aceita `dataSourceId` e `dataTypeName`.
+  - Remoção de consulta de distância que exigia escopo GPS restrito.
+  - Adição do botão **Sincronizar passos** e captura de erros da API.
+- **Checklist para verificar com calma amanhã:**
+  1. No Google Cloud Console, confirmar se a **Fitness API** está ativada no projeto (`fitness-api-508301`).
+  2. No celular, abrir o app **Google Fit** e puxar para baixo para garantir que os dados do Samsung Health já subiram para a nuvem da Google.
+  3. Clicar em **Sincronizar passos** na aba IA ou Home para validar a leitura.
+  4. Lançamento manual pelo ícone de lápis permanece 100% funcional como fallback a qualquer momento.
