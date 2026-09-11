@@ -240,6 +240,7 @@ function TodayPage() {
   if (loading || !goals) return <p className="text-muted-foreground">Carregando…</p>;
 
   const todayLabel = new Date().toLocaleDateString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
     weekday: "long",
     day: "numeric",
     month: "long",

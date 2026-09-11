@@ -1,10 +1,17 @@
 export type DayPeriod = "manha" | "tarde" | "noite";
 
 /**
- * Determina o período do dia com base no horário local (padrão Brasil/SP).
+ * Determina o período do dia com base no horário oficial de Brasília (America/Sao_Paulo).
  */
 export function getPeriodOfDay(date: Date = new Date()): DayPeriod {
-  const hours = date.getHours();
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    hour: "numeric",
+    hour12: false,
+  }).formatToParts(date);
+  const hourVal = parts.find((p) => p.type === "hour")?.value ?? "0";
+  const hours = parseInt(hourVal, 10) % 24;
+
   if (hours >= 5 && hours < 12) return "manha";
   if (hours >= 12 && hours < 18) return "tarde";
   return "noite";
