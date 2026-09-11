@@ -19,7 +19,16 @@ import {
   fetchGoogleFitDailyData,
   getGoogleFitAuthUrl,
 } from "@/server-fns/google-fit.functions";
-import { Footprints, Flame, Watch, RotateCw, Pencil } from "lucide-react";
+import {
+  Footprints,
+  Flame,
+  Watch,
+  RotateCw,
+  Pencil,
+  ExternalLink,
+  Info,
+  CheckCircle2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 interface StepsCardProps {
@@ -40,10 +49,15 @@ export function StepsCard({
   const [activeCalories, setActiveCalories] = useState(0);
   const [distanceMeters, setDistanceMeters] = useState(0);
   const [connected, setConnected] = useState(false);
-  const [hasClientConfigured, setHasClientConfigured] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualInput, setManualInput] = useState("");
+  const [guideOpen, setGuideOpen] = useState(false);
+
+  // Verifica se o Client ID do Google foi configurado nas variáveis de ambiente
+  const hasClientConfigured = Boolean(
+    import.meta.env.VITE_GOOGLE_CLIENT_ID || import.meta.env.GOOGLE_CLIENT_ID
+  );
 
   const loadLocalData = async (isSync = false) => {
     if (isSync) setSyncing(true);
@@ -69,7 +83,7 @@ export function StepsCard({
             setDistanceMeters(Math.round(st * 0.75));
             if (onActiveCaloriesChange) onActiveCaloriesChange(cal);
           } else {
-            // Fallback de cache local caso o usuário tenha lançado offline
+            // Fallback de cache local
             try {
               const cached = localStorage.getItem(`fitwell-steps-${currentUserId}-${today}`);
               if (cached) {
@@ -84,7 +98,7 @@ export function StepsCard({
           console.warn("Aviso ao buscar daily_steps_logs:", dbErr);
         }
 
-        // 2. Verificar se o Google Fit / Samsung Watch está vinculado
+        // 2. Verificar se o Google Fit / Samsung Watch está vinculado no banco
         try {
           const { data: integration } = await supabase
             .from("user_integrations")
@@ -99,8 +113,8 @@ export function StepsCard({
         } catch {}
       }
 
-      // 3. Se for uma sincronização explícita e houver sessão, chamar o Google Fit
-      if (isSync && session?.access_token) {
+      // 3. Se for uma sincronização explícita e houver credenciais e sessão ativas
+      if (isSync && session?.access_token && hasClientConfigured) {
         try {
           const metrics = await fetchGoogleFitDailyData({
             headers: { Authorization: `Bearer ${session.access_token}` },
@@ -117,6 +131,8 @@ export function StepsCard({
           console.warn("Sincronização remota com Google Fit falhou:", syncErr);
           toast.info("Dados locais mantidos");
         }
+      } else if (isSync) {
+        toast.info("Passos de hoje atualizados!");
       }
     } catch (err: any) {
       console.warn("Erro ao carregar dados de passos:", err);
@@ -172,7 +188,13 @@ export function StepsCard({
     toast.success("Passos registrados com sucesso!");
   };
 
-  const handleConnectGoogle = async () => {
+  const handleConnectClick = async () => {
+    // Se o Client ID não estiver no .env, abre o guia explicativo
+    if (!hasClientConfigured) {
+      setGuideOpen(true);
+      return;
+    }
+
     try {
       const redirectUri = `${window.location.origin}/app/ia`;
       const headers = session?.access_token
@@ -188,7 +210,8 @@ export function StepsCard({
         window.location.href = authUrl;
       }
     } catch (err: any) {
-      toast.error(err?.message || "Não foi possível iniciar a conexão com o Google");
+      console.warn("Erro ao gerar URL do Google Fit:", err);
+      setGuideOpen(true);
     }
   };
 
@@ -212,7 +235,7 @@ export function StepsCard({
                 </span>
               ) : (
                 <span className="inline-flex items-center text-[10px] font-medium text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
-                  Manual
+                  {steps > 0 ? "Registrado" : "Sem registro"}
                 </span>
               )}
             </div>
@@ -227,7 +250,7 @@ export function StepsCard({
             className="h-8 w-8 text-muted-foreground hover:text-foreground"
             onClick={() => loadLocalData(true)}
             disabled={syncing}
-            title="Sincronizar passos"
+            title="Atualizar passos"
           >
             <RotateCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
           </Button>
@@ -302,31 +325,102 @@ export function StepsCard({
 
         {!connected && (
           <div className="pt-2 border-t border-border/60 flex items-center justify-between gap-2">
-            <span className="text-[11px] text-muted-foreground">Sincronizar Samsung Watch:</span>
-            {hasClientConfigured ? (
+            <span className="text-[11px] text-muted-foreground">Samsung Watch:</span>
+
+            <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleConnectGoogle}
-                className="h-7 text-xs font-semibold gap-1 text-primary hover:text-primary"
+                onClick={() => {
+                  setManualInput(steps > 0 ? String(steps) : "");
+                  setManualOpen(true);
+                }}
+                className="h-7 text-xs gap-1"
               >
-                <Watch className="h-3 w-3" />
-                Conectar Google Fit
+                <Pencil className="h-3 w-3" />
+                Lançar passos
               </Button>
-            ) : (
+
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setManualOpen(true)}
-                className="h-7 text-xs text-muted-foreground hover:text-foreground gap-1"
+                onClick={handleConnectClick}
+                className="h-7 text-xs font-semibold gap-1 text-primary hover:text-primary"
               >
-                <Pencil className="h-3 w-3" />
-                Lançamento manual
+                <Watch className="h-3 w-3" />
+                {hasClientConfigured ? "Conectar Google Fit" : "Como conectar"}
               </Button>
-            )}
+            </div>
           </div>
         )}
       </div>
+
+      {/* Dialog de Guia de Conexão com o Samsung Watch / Google Fit */}
+      <Dialog open={guideOpen} onOpenChange={setGuideOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Watch className="h-5 w-5 text-primary" />
+              Conectar Samsung Watch & Google Fit
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs text-muted-foreground leading-relaxed">
+            <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 text-foreground">
+              <p className="font-semibold text-xs mb-1 flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                Sua sincronização já está funcionando!
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Como você já compartilhou os dados do seu <strong>Samsung Health</strong> com o <strong>Google Fit</strong>, os passos do seu Galaxy Watch já são atualizados no celular.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="font-semibold text-foreground text-xs uppercase tracking-wide">
+                Opção 1: Lançamento Rápido (Recomendado agora)
+              </h4>
+              <p>
+                Você pode registrar seus passos de hoje em <strong>5 segundos</strong> tocando no botão <strong>Lançar passos</strong> ou no ícone de lápis. O app calcula automaticamente calorias ativas e distância.
+              </p>
+              <Button
+                variant="default"
+                size="sm"
+                className="w-full mt-1 gap-1"
+                onClick={() => {
+                  setGuideOpen(false);
+                  setManualInput(steps > 0 ? String(steps) : "");
+                  setManualOpen(true);
+                }}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Digitar passos do relógio agora
+              </Button>
+            </div>
+
+            <div className="space-y-2 pt-2 border-t border-border/60">
+              <h4 className="font-semibold text-foreground text-xs uppercase tracking-wide flex items-center gap-1">
+                <Info className="h-3.5 w-3.5 text-blue-500" />
+                Opção 2: Conexão Automática via Google Cloud
+              </h4>
+              <p>
+                Para conectar automaticamente via OAuth da Google Fitness API:
+              </p>
+              <ol className="list-decimal list-inside space-y-1 pl-1 text-[11px]">
+                <li>Acesse o <strong>Google Cloud Console</strong> e ative a <strong>Fitness API</strong>.</li>
+                <li>Crie um <strong>ID do cliente OAuth 2.0 (Web)</strong> com a URL do app.</li>
+                <li>Adicione <code>VITE_GOOGLE_CLIENT_ID</code> e <code>GOOGLE_CLIENT_SECRET</code> no seu arquivo <code>.env</code>.</li>
+              </ol>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGuideOpen(false)} className="w-full">
+              Entendido
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

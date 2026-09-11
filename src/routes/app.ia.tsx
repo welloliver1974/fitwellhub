@@ -284,18 +284,31 @@ function AiSettingsPage() {
 }
 
 function GoogleFitSettingsSection() {
+  const { user, session } = useAuth();
   const [status, setStatus] = useState<{ connected: boolean; hasClientConfigured: boolean; lastSync: string | null }>({
     connected: false,
-    hasClientConfigured: false,
+    hasClientConfigured: Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID),
     lastSync: null,
   });
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
 
   const checkStatus = async () => {
+    if (!user) return;
     try {
-      const s = await getGoogleFitStatus();
-      setStatus(s);
+      // 1. Consulta direta no banco
+      const { data } = await supabase
+        .from("user_integrations")
+        .select("updated_at, access_token")
+        .eq("user_id", user.id)
+        .eq("provider", "google_fit")
+        .maybeSingle();
+
+      setStatus({
+        connected: Boolean(data && data.access_token),
+        hasClientConfigured: Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID),
+        lastSync: data?.updated_at || null,
+      });
     } catch {
     } finally {
       setLoading(false);
@@ -309,10 +322,13 @@ function GoogleFitSettingsSection() {
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
       const code = url.searchParams.get("code");
-      if (code) {
+      if (code && session?.access_token) {
         setConnecting(true);
         const redirectUri = `${window.location.origin}/app/ia`;
-        exchangeGoogleFitCode({ data: { code, redirectUri } })
+        exchangeGoogleFitCode({
+          data: { code, redirectUri },
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        })
           .then(() => {
             toast.success("Google Fit conectado com sucesso!");
             url.searchParams.delete("code");
@@ -326,13 +342,25 @@ function GoogleFitSettingsSection() {
           .finally(() => setConnecting(false));
       }
     }
-  }, []);
+  }, [user, session]);
 
   const handleConnect = async () => {
+    if (!status.hasClientConfigured) {
+      toast.info(
+        "Para conectar automaticamente, adicione VITE_GOOGLE_CLIENT_ID no arquivo .env ou registre seus passos pelo botão de lápis."
+      );
+      return;
+    }
+
     try {
       const redirectUri = `${window.location.origin}/app/ia`;
-      const authUrl = await getGoogleFitAuthUrl({ data: redirectUri });
-      window.location.href = authUrl;
+      const headers = session?.access_token
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : undefined;
+      const authUrl = await getGoogleFitAuthUrl({ data: redirectUri, headers });
+      if (authUrl) {
+        window.location.href = authUrl;
+      }
     } catch (err: any) {
       toast.error(err?.message || "Não foi possível conectar com o Google");
     }
@@ -340,7 +368,10 @@ function GoogleFitSettingsSection() {
 
   const handleDisconnect = async () => {
     try {
-      await disconnectGoogleFit();
+      const headers = session?.access_token
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : undefined;
+      await disconnectGoogleFit({ headers });
       setStatus((prev) => ({ ...prev, connected: false }));
       toast.success("Google Fit desconectado");
     } catch (err: any) {
@@ -369,7 +400,7 @@ function GoogleFitSettingsSection() {
               ? "Recebendo dados do Samsung Health via Google Fit."
               : status.hasClientConfigured
                 ? "Clique abaixo para vincular sua conta Google."
-                : "Credenciais do Google Cloud prontas para autenticação."}
+                : "Passos podem ser lançados diretamente ou via credenciais do Google Cloud."}
           </p>
         </div>
 
@@ -393,6 +424,18 @@ function GoogleFitSettingsSection() {
           </Button>
         )}
       </div>
+
+      {!status.hasClientConfigured && !status.connected && (
+        <div className="p-3 rounded-xl bg-muted/40 border border-border/40 text-[11px] text-muted-foreground space-y-1.5">
+          <p className="font-semibold text-foreground">Como funciona o Samsung Watch?</p>
+          <p>
+            Como você já conectou o <strong>Samsung Health</strong> ao <strong>Google Fit</strong> no celular, você pode lançar os passos de hoje a qualquer momento com 1 clique na Home (ícone de lápis).
+          </p>
+          <p>
+            Para login automático direto da nuvem, configure <code>VITE_GOOGLE_CLIENT_ID</code> e <code>GOOGLE_CLIENT_SECRET</code> no seu <code>.env</code>.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
