@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { getAiSettingsLocal } from "@/lib/ai-settings";
 import { consultWorkoutCoach, type WorkoutCoachResponse } from "@/server-fns/workout-coach.functions";
@@ -52,17 +53,63 @@ export function WorkoutCoachChat({ routine }: WorkoutCoachChatProps) {
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [userStats, setUserStats] = useState<WorkoutCoachResponse["userStats"] | null>(null);
+  const [profileName, setProfileName] = useState<string>("");
 
-  const initialGreeting: Message = {
+  // Buscar nome real do usuário
+  useEffect(() => {
+    if (!user) return;
+    const meta =
+      user.user_metadata?.full_name ||
+      user.user_metadata?.display_name ||
+      user.user_metadata?.name;
+    if (meta) setProfileName(meta);
+
+    supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.display_name?.trim()) {
+          setProfileName(data.display_name.trim());
+        }
+      });
+  }, [user]);
+
+  const rawFirst = (
+    profileName ||
+    userStats?.displayName ||
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.display_name ||
+    user?.user_metadata?.name ||
+    user?.email?.split("@")[0] ||
+    ""
+  ).trim().split(" ")[0];
+
+  const firstName = rawFirst ? rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1) : "";
+
+  const buildInitialGreeting = (name: string): Message => ({
     id: "welcome-coach",
     role: "assistant",
-    content: `Fala! Tô acompanhando tudo por aqui em tempo real: seu gasto calórico, sua hidratação, o que você comeu hoje e essa rotina montada na tela.
+    content: `${name ? `Fala, ${name}!` : "Fala!"} Tô acompanhando tudo por aqui em tempo real: seu gasto calórico, sua hidratação, o que você comeu hoje e essa rotina montada na tela.
 
 Quer entender o porquê de cada exercício, ajustar alguma série ou tirar qualquer dúvida biomecânica? Pode mandar!`,
     timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-  };
+  });
 
-  const [messages, setMessages] = useState<Message[]>([initialGreeting]);
+  const [messages, setMessages] = useState<Message[]>([buildInitialGreeting(firstName)]);
+
+  // Atualizar a saudação inicial com o nome do usuário assim que carregado
+  useEffect(() => {
+    if (firstName) {
+      setMessages((prev) => {
+        if (prev.length === 1 && prev[0].id === "welcome-coach") {
+          return [buildInitialGreeting(firstName)];
+        }
+        return prev;
+      });
+    }
+  }, [firstName]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -197,7 +244,7 @@ Quer entender o porquê de cada exercício, ajustar alguma série ou tirar qualq
                 </div>
                 <div>
                   <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
-                    Coach FitWell
+                    Coach FitWell {firstName ? `• ${firstName}` : ""}
                     <Badge variant="outline" className="text-[10px] font-medium border-primary/30 text-primary py-0 px-1.5">
                       Visão 360°
                     </Badge>
