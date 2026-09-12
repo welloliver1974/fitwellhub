@@ -150,7 +150,27 @@ Quer entender o porquê de cada exercício, ajustar alguma série ou tirar qualq
         return;
       }
 
-      const local = getAiSettingsLocal();
+      const localSettings = getAiSettingsLocal();
+      const localProvider = localSettings?.provider || "groq";
+      let localApiKey = "";
+      let localModel = "";
+      let localBaseUrl = "";
+
+      if (localProvider === "groq") {
+        localApiKey = localSettings?.groq_api_key || "";
+        localModel = localSettings?.groq_model || "";
+      } else if (localProvider === "openrouter") {
+        localApiKey = localSettings?.openrouter_api_key || "";
+        localModel = localSettings?.openrouter_model || "";
+      } else if (localProvider === "nvidia") {
+        localApiKey = localSettings?.openrouter_api_key || "";
+        localModel = localSettings?.nvidia_model || "";
+      } else if (localProvider === "omniroute") {
+        localApiKey = localSettings?.omniroute_api_key || "";
+        localModel = localSettings?.custom_model || "";
+        localBaseUrl = localSettings?.custom_base_url || "";
+      }
+
       const historyForApi = messages
         .filter((m) => m.id !== "welcome-coach")
         .map((m) => ({
@@ -163,10 +183,10 @@ Quer entender o porquê de cada exercício, ajustar alguma série ou tirar qualq
           message: text,
           history: historyForApi,
           routine: routine || undefined,
-          clientProvider: local.provider,
-          clientApiKey: local.apiKey,
-          clientModel: local.textModel,
-          clientBaseUrl: local.baseUrl,
+          clientProvider: localProvider,
+          clientApiKey: localApiKey || undefined,
+          clientModel: localModel || undefined,
+          clientBaseUrl: localBaseUrl || undefined,
         },
         headers: {
           Authorization: `Bearer ${token}`,

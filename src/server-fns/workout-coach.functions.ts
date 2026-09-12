@@ -156,7 +156,14 @@ export const consultWorkoutCoach = createServerFn({ method: "POST" })
     );
 
     // 4. Parâmetros antropométricos e metabólicos (TMB + TDEE)
-    const displayName = profile?.display_name?.trim() || "Atleta";
+    const claims = (context as any).claims;
+    const rawName =
+      profile?.display_name?.trim() ||
+      claims?.user_metadata?.full_name ||
+      claims?.user_metadata?.display_name ||
+      claims?.user_metadata?.name ||
+      "Atleta";
+    const displayName = rawName.trim().split(" ")[0];
     const height = profile?.height_cm ? Number(profile.height_cm) : null;
     const age = profile?.birth_date ? calculateAge(profile.birth_date) : null;
     const sex = profile?.sex || null;
