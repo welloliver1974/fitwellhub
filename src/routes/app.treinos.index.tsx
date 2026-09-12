@@ -14,7 +14,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, ChevronRight, Dumbbell, Trash2, Copy, Layers, PencilLine, History, RotateCw } from "lucide-react";
+import { Plus, ChevronRight, Dumbbell, Trash2, Copy, Layers, PencilLine, History, RotateCw, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { getSavedSplitRotation, saveSplitRotation } from "@/lib/workout-rotation";
 
@@ -247,6 +247,12 @@ function WorkoutsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Treinos</h1>
         <div className="flex gap-2">
+          <Link to="/app/treinos/ia">
+            <Button size="sm" variant="outline" className="rounded-full border-primary/40 bg-primary/5 hover:bg-primary/10 text-primary">
+              <Sparkles className="h-4 w-4 mr-1 text-primary" />
+              Assistente IA
+            </Button>
+          </Link>
           <Link to="/app/templates">
             <Button size="sm" variant="outline" className="rounded-full">
               <Layers className="h-4 w-4 mr-1" />

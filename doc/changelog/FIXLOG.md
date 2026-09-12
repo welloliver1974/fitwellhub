@@ -1,5 +1,21 @@
 # FIXLOG — FitWell Hub
 
+## Sessão: 11/09/2026 — Central de IA Desacoplada do .env + Busca Dinâmica de Modelos + Assistente de Treinos IA com Snapshot
+
+### 🎯 Funcionalidades trabalhadas
+1. `src/routes/app.ia.tsx` + `src/lib/ai-settings.ts` + `src/server-fns/ai-settings.functions.ts`:
+   - Central de Configurações de IA totalmente independente do `.env`.
+   - Busca em tempo real de modelos para Groq (`/v1/models`), OpenRouter (`/v1/models`) e NVIDIA NIM via dropdowns sem necessidade de digitar nomes técnicos.
+   - Suporte completo a Provedor Manual/Customizado compatível com OpenAI (Ollama, LM Studio, vLLM, proxies).
+   - Eliminação completa do Google Gemini devido a erros recorrentes de cota (429).
+   - Persistência dupla das credenciais e preferências em Supabase (`ai_settings`) e `localStorage`, resolvendo a perda de chaves no Cloudflare Pages a cada deploy do GitHub.
+2. `src/routes/app.treinos.ia.tsx` + `src/lib/workout-ai-utils.ts` + `src/server-fns/workout-generator.functions.ts`:
+   - Assistente de Treinos IA em aba isolada com diagnóstico de rotina existente (divisão BCDA).
+   - Mecanismo de segurança com criação automática de Snapshot e restauração em 1 clique ("Restaurar Treino Original ↩️").
+   - Preservação total de sessões anteriores (`workout_sessions`), cargas e histórico.
+
+---
+
 ## Sessão: 20/05/2026 — Análise de Foto de Prato (IA)
 
 ### 🎯 Funcionalidade trabalhada

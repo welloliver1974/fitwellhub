@@ -2,6 +2,54 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [11/09/2026] - Antigravity (Central de IA Independente do .env + Listagem Dinâmica de Modelos Groq/OpenRouter/NVIDIA/Custom + Remoção do Gemini)
+- **Motivação**:
+  - Toda vez que o projeto era commitado e enviado ao GitHub, a esteira do Cloudflare descartava as chaves do `.env` (pois o arquivo `.env` é gitignored por segurança), forçando o usuário a reconfigurar as chaves repetidamente.
+  - O usuário solicitou salvar as chaves diretamente no app (para nunca mais perder), selecionar modelos de IA dinamicamente através de uma lista/dropdown (ao invés de ter que digitar nomes técnicos de LLMs), adicionar suporte à **NVIDIA NIM** e a um **Provedor Manual/Customizado**, e eliminar completamente o **Gemini** (devido a erros constantes de cota 429).
+- **Mudanças realizadas**:
+  - **Remoção Total do Gemini (`ai-settings.ts`, `app.ia.tsx`)**:
+    - Removido `gemini` dos tipos `AiProvider`, `VisionAiProvider` e de todas as telas de seleção.
+    - O app agora opera exclusivamente com provedores rápidos, estáveis e de alta disponibilidade (**Groq**, **OpenRouter**, **NVIDIA** e **Custom/Manual**).
+  - **Listagem Dinâmica de Modelos via API (`ai-settings.functions.ts`)**:
+    - Criada a função `fetchGroqModels({ apiKey })`: consulta em tempo real a API oficial `https://api.groq.com/openai/v1/models`, filtra modelos de chat ativos (ex: `llama-3.3-70b-versatile`, `deepseek-r1-distill-llama-70b`, `llama-3.1-8b-instant`, `mixtral-8x7b-32768`) e devolve uma lista limpa ordenada alfabeticamente.
+    - Criada a função `fetchOpenRouterModels({ apiKey })`: consulta `https://openrouter.ai/api/v1/models`, trazendo dezenas de modelos de ponta sem digitação manual.
+    - Reutilizada a função `fetchNvidiaModels`: consulta modelos ativos da NVIDIA NIM (ex: `meta/llama-3.3-70b-instruct`, `mistralai/mixtral-8x22b-instruct-v0.1`, etc.).
+  - **Suporte a Provedor Manual / Customizado (`ai-settings.ts`)**:
+    - Suporte a qualquer endpoint compatível com a OpenAI API (ex: LocalAI, LM Studio, Ollama, vLLM ou proxies corporativos) com campos de `Base URL` e `Nome do Modelo`.
+  - **Armazenamento com Dual Persistence (Supabase + localStorage) (`ai-settings.ts`, `app.ia.tsx`)**:
+    - As chaves de API e preferências são salvas simultaneamente no banco Supabase (`ai_settings`) e no `localStorage` do navegador (`fitwell_ai_settings_v2`).
+    - Quando o app roda no Cloudflare sem `.env`, ele carrega as chaves e modelos diretamente do perfil do usuário e do cache local permanente — nunca mais perde as chaves após um `git push`!
+    - Para armazenar os modelos específicos de cada provedor (`groq_model`, `openrouter_model`, `nvidia_model`, `custom_model`, `custom_base_url`) sem necessidade de criar migrations no Postgres, foi desenvolvido o codificador `encodeAiExtraMeta` / `decodeAiExtraMeta`, que preserva metadados JSON na coluna `omniroute_base_url` com 100% de retrocompatibilidade.
+  - **UI Renovada e Sofisticada da Central de IA (`app.ia.tsx`)**:
+    - Cards dedicados para cada provedor com gradientes sutis, badges informativos, botões para mascarar/revelar chaves (ícone de olho), e botão de "Buscar Modelos Disponíveis ⚡" com carregamento em tempo real.
+    - O seletor de modelos transforma-se em um `Select` elegante com os modelos disponíveis trazidos diretamente da API do provedor.
+    - Botão "Salvar Configurações de IA" com feedback visual rico e persistência garantida em 2 camadas.
+    - Mantida intacta a integração e status do Samsung Watch / Google Fit.
+- **Validação**:
+  - `npx vitest run src/lib/ai-settings.test.ts`: 26 testes verdes (100% de aprovação, incluindo encoding de metadados, fallbacks e providers).
+  - Teste completo da suíte Vitest: 19 arquivos de teste e 171+ testes aprovados.
+
+## [11/09/2026] - Antigravity (Assistente de Treinos IA em Aba Dedicada + Backup e Ponto de Restauração)
+- **Mudanças realizadas**:
+  - **Aba Dedicada e Segura de Planejamento (`/app/treinos/ia` em `app.treinos.ia.tsx`)**:
+    - Ambiente isolado de experimentação com interface dark mode refinada, aviso de proteção de dados e diagnóstico dos treinos atuais.
+    - Leitura em tempo real dos treinos ativos (divisão BCDA), exercícios habituais e sessões concluídas no banco de dados.
+    - Dois modos de operação: "Otimizar Meus Treinos Atuais" (mantém a base e refina volume, ordem e descansos) e "Montar Nova Divisão Sob Medida" (pergunta objetivo, dias, nível e limitações).
+    - Pré-visualização rica com cards expansíveis de treinos, exercícios, séries, repetições e tempos de descanso.
+    - Opção de salvar diretamente como Templates (sem tocar na grade ativa) ou aplicar na grade oficial.
+  - **Mecanismo de Segurança & Ponto de Restauração com 1 Clique (`workout-ai-utils.ts` + `workout-ai-utils.test.ts`)**:
+    - Antes de aplicar qualquer alteração, o app captura um snapshot exato dos treinos atuais e salva localmente como ponto de restauração.
+    - Botão "Restaurar Treino Original ↩️" no topo da tela permitindo desfazer qualquer alteração e voltar à ficha anterior com 1 toque.
+    - Nenhuma sessão passada (`workout_sessions`) ou carga histórica é deletada.
+  - **Server Function Especializada com IA (`workout-generator.functions.ts`)**:
+    - Integração com `ai-settings.functions.ts` usando saída estruturada estrita em JSON com fallbacks biomecânicos determinísticos.
+    - Injeção de catálogo de exercícios para padronização de nomenclatura.
+  - **Atalho de Navegação na Tela de Treinos (`app.treinos.index.tsx`)**:
+    - Adição de botão comemorativo "Assistente IA 🪄" no cabeçalho ao lado de "Templates" e "Novo".
+- **Validação**:
+  - `npx vitest run src/lib/workout-ai-utils.test.ts`: 6 testes verdes (100% de aprovação).
+  - `npm run build`: Compilação de Client (57s) e SSR (43s) com código 0 e chunk dedicado `app.treinos.ia-*.js`.
+
 ## [11/09/2026] - Antigravity (Personalização Elegante do Daily Briefing + Eliminação do termo 'guerreiro')
 - **Mudanças realizadas**:
   - **Eliminação de vocativos genéricos (`briefing-utils.ts` + `briefing-utils.test.ts`)**:

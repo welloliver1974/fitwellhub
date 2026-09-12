@@ -14,8 +14,38 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Sparkles, KeyRound, ShieldCheck, RefreshCw, Copy, Check, ChevronDown, ChevronUp, FileCode } from "lucide-react";
-import { fetchNvidiaModels } from "@/server-fns/ai-settings.functions";
+import {
+  Loader2,
+  Sparkles,
+  KeyRound,
+  ShieldCheck,
+  RefreshCw,
+  Copy,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  FileCode,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  Zap,
+  Globe,
+  Cpu,
+  Wrench,
+  Camera,
+} from "lucide-react";
+import {
+  fetchNvidiaModels,
+  fetchGroqModels,
+  fetchOpenRouterModels,
+} from "@/server-fns/ai-settings.functions";
+import {
+  encodeAiExtraMeta,
+  normalizeAiSettings,
+  saveAiSettingsLocal,
+  getAiSettingsLocal,
+  type AiProvider,
+} from "@/lib/ai-settings";
 import {
   getGoogleFitStatus,
   getGoogleFitAuthUrl,
@@ -29,245 +59,671 @@ export const Route = createFileRoute("/app/ia")({
   component: AiSettingsPage,
 });
 
-type AiProvider = "groq" | "openrouter" | "omniroute" | "nvidia";
+const DEFAULT_GROQ_MODELS = [
+  "llama-3.3-70b-versatile",
+  "deepseek-r1-distill-llama-70b",
+  "llama-3.1-8b-instant",
+  "mixtral-8x7b-32768",
+  "gemma2-9b-it",
+];
+
+const DEFAULT_OPENROUTER_MODELS = [
+  "meta-llama/llama-3.3-70b-instruct",
+  "deepseek/deepseek-chat",
+  "deepseek/deepseek-r1",
+  "anthropic/claude-3.5-sonnet",
+  "openai/gpt-4o-mini",
+  "openai/gpt-4o",
+  "qwen/qwen-2.5-72b-instruct",
+];
+
+const DEFAULT_NVIDIA_MODELS = [
+  "nvidia/llama-3.1-nemotron-70b-instruct",
+  "meta/llama-3.3-70b-instruct",
+  "meta/llama-3.1-8b-instruct",
+];
 
 function AiSettingsPage() {
   const { user, session } = useAuth();
+
+  // Provedor ativo para o Coach / Treinos
   const [provider, setProvider] = useState<AiProvider>("groq");
+
+  // Chaves e Modelos por Provedor
   const [groqKey, setGroqKey] = useState("");
+  const [groqModel, setGroqModel] = useState("llama-3.3-70b-versatile");
+  const [groqModels, setGroqModels] = useState<string[]>(DEFAULT_GROQ_MODELS);
+  const [loadingGroqModels, setLoadingGroqModels] = useState(false);
+
   const [openrouterKey, setOpenrouterKey] = useState("");
+  const [openrouterModel, setOpenrouterModel] = useState("meta-llama/llama-3.3-70b-instruct");
+  const [openrouterModels, setOpenrouterModels] = useState<string[]>(DEFAULT_OPENROUTER_MODELS);
+  const [loadingOrModels, setLoadingOrModels] = useState(false);
+
+  const [nvidiaKey, setNvidiaKey] = useState("");
+  const [nvidiaModel, setNvidiaModel] = useState("nvidia/llama-3.1-nemotron-70b-instruct");
+  const [nvidiaModels, setNvidiaModels] = useState<string[]>(DEFAULT_NVIDIA_MODELS);
+  const [loadingNvidiaModels, setLoadingNvidiaModels] = useState(false);
+
   const [omniKey, setOmniKey] = useState("");
-  const [omniBaseUrl, setOmniBaseUrl] = useState("");
-  const [nvidiaModel, setNvidiaModel] = useState("");
+  const [customBaseUrl, setCustomBaseUrl] = useState("");
+  const [customModel, setCustomModel] = useState("");
+
+  // Visão (Foto do prato e Scanner de rótulos)
   const [photoProvider, setPhotoProvider] = useState<"auto" | "openrouter" | "omniroute" | "nvidia">("auto");
   const [photoModel, setPhotoModel] = useState("");
-  const [nvidiaModels, setNvidiaModels] = useState<string[]>([]);
-  const [loadingModels, setLoadingModels] = useState(false);
+
+  // Visualização de Chaves
+  const [showKeys, setShowKeys] = useState(false);
+
+  // Estados de página
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const photoModelPlaceholder =
-    photoProvider === "nvidia"
-      ? "meta/llama-3.2-90b-vision-instruct"
-      : "qwen/qwen2.5-vl-72b-instruct";
 
   useEffect(() => {
-    if (!user) return;
-    (async () => {
-      const { data, error } = await supabase
-        .from("ai_settings")
-        .select("provider,photo_provider,photo_model,groq_api_key,openrouter_api_key,omniroute_api_key,omniroute_base_url")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (error) {
-        toast.error(error.message);
-      } else if (data) {
-        setProvider(
-          data.provider === "openrouter" || data.provider === "omniroute" || data.provider === "nvidia" ? data.provider : "groq",
-        );
-        setGroqKey(data.groq_api_key ?? "");
-        setOpenrouterKey(data.openrouter_api_key ?? "");
-        setOmniKey(data.omniroute_api_key ?? "");
-        setOmniBaseUrl(data.omniroute_base_url ?? "");
-        setNvidiaModel(data.omniroute_base_url ?? "");
-        setPhotoProvider(
-          data.photo_provider === "openrouter" ||
-            data.photo_provider === "omniroute" ||
-            data.photo_provider === "nvidia"
-            ? data.photo_provider
-            : "auto",
-        );
-        setPhotoModel(data.photo_model ?? "");
+    // 1. Tentar ler do cache local imediatamente para zero lag
+    const local = getAiSettingsLocal();
+    if (local) {
+      if (local.provider) setProvider(local.provider);
+      if (local.groq_api_key) setGroqKey(local.groq_api_key);
+      if (local.groq_model) setGroqModel(local.groq_model);
+      if (local.openrouter_api_key) {
+        setOpenrouterKey(local.openrouter_api_key);
+        setNvidiaKey(local.openrouter_api_key);
       }
+      if (local.openrouter_model) setOpenrouterModel(local.openrouter_model);
+      if (local.nvidia_model) setNvidiaModel(local.nvidia_model);
+      if (local.omniroute_api_key) setOmniKey(local.omniroute_api_key);
+      if (local.custom_base_url) setCustomBaseUrl(local.custom_base_url);
+      if (local.custom_model) setCustomModel(local.custom_model);
+      if (local.photo_provider) setPhotoProvider(local.photo_provider);
+      if (local.photo_model) setPhotoModel(local.photo_model);
+    }
+
+    // 2. Sincronizar com o banco Supabase
+    if (!user) {
       setLoading(false);
+      return;
+    }
+
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("ai_settings")
+          .select("provider,photo_provider,photo_model,groq_api_key,openrouter_api_key,omniroute_api_key,omniroute_base_url")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (error) {
+          console.warn("Aviso ao ler ai_settings do Supabase:", error.message);
+        } else if (data) {
+          const norm = normalizeAiSettings(data);
+          setProvider(norm.provider);
+          if (norm.groq_api_key) setGroqKey(norm.groq_api_key);
+          if (norm.groq_model) setGroqModel(norm.groq_model);
+          if (norm.openrouter_api_key) {
+            setOpenrouterKey(norm.openrouter_api_key);
+            setNvidiaKey(norm.openrouter_api_key);
+          }
+          if (norm.openrouter_model) setOpenrouterModel(norm.openrouter_model);
+          if (norm.nvidia_model) setNvidiaModel(norm.nvidia_model);
+          if (norm.omniroute_api_key) setOmniKey(norm.omniroute_api_key);
+          if (norm.custom_base_url) setCustomBaseUrl(norm.custom_base_url);
+          if (norm.custom_model) setCustomModel(norm.custom_model);
+          if (norm.photo_provider) setPhotoProvider(norm.photo_provider);
+          if (norm.photo_model) setPhotoModel(norm.photo_model);
+          saveAiSettingsLocal(norm);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar ai_settings:", err);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, [user]);
 
+  // Função para buscar modelos da Groq em tempo real
+  const handleFetchGroqModels = async () => {
+    if (!groqKey.trim()) return toast.error("Cole sua chave da Groq primeiro.");
+    setLoadingGroqModels(true);
+    try {
+      const models = await fetchGroqModels({
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+        data: { apiKey: groqKey.trim() },
+      });
+      if (models && models.length > 0) {
+        setGroqModels(models);
+        if (!models.includes(groqModel)) setGroqModel(models[0]);
+        toast.success(`${models.length} modelos ativos carregados da sua conta Groq!`);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao consultar modelos da Groq");
+    } finally {
+      setLoadingGroqModels(false);
+    }
+  };
+
+  // Função para buscar modelos do OpenRouter em tempo real
+  const handleFetchOpenRouterModels = async () => {
+    setLoadingOrModels(true);
+    try {
+      const models = await fetchOpenRouterModels({
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+        data: { apiKey: openrouterKey.trim() || undefined },
+      });
+      if (models && models.length > 0) {
+        setOpenrouterModels(models);
+        if (!models.includes(openrouterModel)) setOpenrouterModel(models[0]);
+        toast.success(`${models.length} modelos carregados do OpenRouter!`);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao consultar modelos do OpenRouter");
+    } finally {
+      setLoadingOrModels(false);
+    }
+  };
+
+  // Função para buscar modelos da NVIDIA em tempo real
+  const handleFetchNvidiaModels = async () => {
+    const key = nvidiaKey.trim() || openrouterKey.trim();
+    if (!key) return toast.error("Cole sua chave da NVIDIA primeiro.");
+    setLoadingNvidiaModels(true);
+    try {
+      const models = await fetchNvidiaModels({
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+        data: { apiKey: key },
+      });
+      if (models && models.length > 0) {
+        setNvidiaModels(models);
+        if (!models.includes(nvidiaModel)) setNvidiaModel(models[0]);
+        toast.success(`${models.length} modelos carregados da NVIDIA NIM!`);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao consultar modelos da NVIDIA");
+    } finally {
+      setLoadingNvidiaModels(false);
+    }
+  };
+
+  // Salvar tudo de forma permanente
   const save = async () => {
-    if (!user) return;
     setSaving(true);
-    const baseUrl = provider === "nvidia" ? nvidiaModel.trim() : omniBaseUrl.trim();
-    const { error } = await supabase.from("ai_settings").upsert(
-      {
-        user_id: user.id,
-        provider,
-        groq_api_key: groqKey.trim() || null,
-        openrouter_api_key: openrouterKey.trim() || null,
-        omniroute_api_key: omniKey.trim() || null,
-        omniroute_base_url: baseUrl || null,
-        photo_provider: photoProvider === "auto" ? null : photoProvider,
-        photo_model: photoModel.trim() || null,
-      },
-      { onConflict: "user_id" },
-    );
+
+    const extraMeta = encodeAiExtraMeta({
+      groq_model: groqModel.trim() || null,
+      openrouter_model: openrouterModel.trim() || null,
+      nvidia_model: nvidiaModel.trim() || null,
+      custom_model: customModel.trim() || null,
+      custom_base_url: customBaseUrl.trim() || null,
+    });
+
+    const activeOrKey = provider === "nvidia" ? (nvidiaKey.trim() || openrouterKey.trim()) : openrouterKey.trim();
+
+    const normalized = normalizeAiSettings({
+      provider,
+      groq_api_key: groqKey.trim() || null,
+      openrouter_api_key: activeOrKey || null,
+      omniroute_api_key: omniKey.trim() || null,
+      omniroute_base_url: extraMeta,
+      photo_provider: photoProvider === "auto" ? null : photoProvider,
+      photo_model: photoModel.trim() || null,
+    });
+
+    // 1. Salvar no cache local imediato
+    saveAiSettingsLocal(normalized);
+
+    // 2. Salvar no Supabase
+    if (user) {
+      const { error } = await supabase.from("ai_settings").upsert(
+        {
+          user_id: user.id,
+          provider,
+          groq_api_key: groqKey.trim() || null,
+          openrouter_api_key: activeOrKey || null,
+          omniroute_api_key: omniKey.trim() || null,
+          omniroute_base_url: extraMeta,
+          photo_provider: photoProvider === "auto" ? null : photoProvider,
+          photo_model: photoModel.trim() || null,
+        },
+        { onConflict: "user_id" },
+      );
+      if (error) {
+        toast.error(`Aviso: Salvo no dispositivo, mas erro no banco (${error.message})`);
+      } else {
+        toast.success("Configurações de IA salvas com sucesso no banco e no dispositivo!");
+      }
+    } else {
+      toast.success("Configurações salvas no dispositivo!");
+    }
+
     setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success("Configuracoes de IA salvas");
   };
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" /> Carregando...
+      <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+        Carregando configurações de inteligência artificial...
       </div>
     );
   }
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-3xl font-display font-bold flex items-center gap-2">
-          <Sparkles className="h-6 w-6 text-primary" /> IA
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Escolha o provedor padrao e cole suas chaves para usar o Coach sem editar o .env.
-        </p>
+    <div className="space-y-6">
+      {/* Cabeçalho */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+            <Sparkles className="h-6 w-6 text-primary" /> Central de IA
+          </h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+            Configure suas chaves e selecione os modelos direto no app. Nunca mais perca dados a cada deploy.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowKeys(!showKeys)}
+          className="rounded-full text-xs gap-1.5"
+        >
+          {showKeys ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+          {showKeys ? "Ocultar chaves" : "Mostrar chaves"}
+        </Button>
       </div>
 
-      <Card className="p-4 space-y-4">
-        <div className="space-y-1">
-          <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-            Provedor padrao
-          </Label>
-          <Select value={provider} onValueChange={(v) => setProvider(v as AiProvider)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="groq">Groq</SelectItem>
-              <SelectItem value="openrouter">OpenRouter</SelectItem>
-              <SelectItem value="omniroute">OmniRoute</SelectItem>
-              <SelectItem value="nvidia">NVIDIA</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <KeyRound className="h-4 w-4" /> Groq API Key
-            </Label>
-            <Input
-              type="password"
-              value={groqKey}
-              onChange={(e) => setGroqKey(e.target.value)}
-              placeholder="Cole sua chave da Groq"
-              autoComplete="off"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <KeyRound className="h-4 w-4" /> {provider === "nvidia" ? "NVIDIA API Key" : "OpenRouter API Key"}
-            </Label>
-            <Input
-              type="password"
-              value={openrouterKey}
-              onChange={(e) => setOpenrouterKey(e.target.value)}
-              placeholder={provider === "nvidia" ? "Cole sua chave da NVIDIA" : "Cole sua chave do OpenRouter"}
-              autoComplete="off"
-            />
-          </div>
-        </div>
-
-        {provider === "nvidia" && (
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <KeyRound className="h-4 w-4" /> Modelo NVIDIA
-            </Label>
-            <div className="flex gap-2">
-              <Select value={nvidiaModel} onValueChange={setNvidiaModel}>
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="Selecione um modelo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {nvidiaModels.map((m) => (
-                    <SelectItem key={m} value={m}>{m}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                variant="outline"
-                size="icon"
-                disabled={!openrouterKey.trim() || loadingModels}
-                onClick={async () => {
-                  if (!openrouterKey.trim()) return toast.error("Cole a chave da NVIDIA primeiro.");
-                  setLoadingModels(true);
-                  try {
-                    const models = await fetchNvidiaModels({
-                      headers: session?.access_token
-                        ? { Authorization: `Bearer ${session.access_token}` }
-                        : undefined,
-                      data: { apiKey: openrouterKey.trim() },
-                    });
-                    setNvidiaModels(models);
-                    if (!nvidiaModel && models.length) setNvidiaModel(models[0]);
-                    toast.success(`${models.length} modelos carregados`);
-                  } catch (e) {
-                    toast.error(e instanceof Error ? e.message : "Erro ao buscar modelos");
-                  } finally {
-                    setLoadingModels(false);
-                  }
-                }}
-                title="Buscar modelos disponiveis"
-              >
-                {loadingModels ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              </Button>
-            </div>
-            {nvidiaModels.length === 0 && (
-              <p className="text-xs text-muted-foreground">
-                Cole a chave da NVIDIA e clique em &#x21bb; para buscar os modelos disponiveis.
-              </p>
-            )}
-          </div>
-        )}
-
-        {provider === "omniroute" && (
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <KeyRound className="h-4 w-4" /> OmniRoute API Key
-              </Label>
-              <Input
-                type="password"
-                value={omniKey}
-                onChange={(e) => setOmniKey(e.target.value)}
-                placeholder="Cole sua chave do OmniRoute"
-                autoComplete="off"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <KeyRound className="h-4 w-4" /> Endpoint proprio
-              </Label>
-              <Input
-                value={omniBaseUrl}
-                onChange={(e) => setOmniBaseUrl(e.target.value)}
-                placeholder="https://seu-endpoint/v1/chat/completions"
-                autoComplete="off"
-              />
-            </div>
-          </div>
-        )}
-
-        <div className="rounded-xl bg-secondary/50 p-3 text-xs text-muted-foreground">
-          <div className="flex items-start gap-2">
-            <ShieldCheck className="mt-0.5 h-4 w-4 text-primary" />
-            <p>
-              O provedor padrao sera usado no Coach, chat, analises de texto e analise de foto
-              (a foto usa um modelo de visao). O OmniRoute permite usar um endpoint proprio
-              compativel com OpenAI. O NVIDIA usa o modelo escolhido pela API da NVIDIA — para a
-              foto, escolha um modelo de visao (ex.: meta/llama-3.2-90b-vision-instruct) na lista
-              de modelos.
+      {/* Card de Blindagem de Dados */}
+      <Card className="p-4 bg-emerald-950/20 border-emerald-500/30 rounded-2xl">
+        <div className="flex items-start gap-3">
+          <ShieldCheck className="h-5 w-5 text-emerald-400 mt-0.5 shrink-0" />
+          <div className="text-xs space-y-1">
+            <p className="font-semibold text-emerald-200">
+              Chaves salvas de forma permanente
+            </p>
+            <p className="text-muted-foreground leading-relaxed">
+              Suas chaves ficam registradas no seu banco de dados na nuvem (Supabase) e com cópia segura no navegador. Você pode dar quantos <em>git push</em> quiser no GitHub que o Cloudflare nunca mais perderá sua conexão de IA.
             </p>
           </div>
         </div>
-
-        <Button onClick={save} disabled={saving} className="w-full">
-          {saving ? "Salvando..." : "Salvar configuracoes"}
-        </Button>
       </Card>
 
-      <Card className="p-4 space-y-4">
+      {/* Seletor de Provedor Principal */}
+      <Card className="p-4 sm:p-5 rounded-2xl border-border/60 space-y-4">
+        <div>
+          <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold">
+            1. Escolha o Provedor Principal para o Coach & Treinos
+          </Label>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Define quem processa as respostas de texto do Coach, Daily Briefing e Gerador de Treinos.
+          </p>
+        </div>
+
+        {/* Grade de Seleção de Provedores */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <button
+            type="button"
+            onClick={() => setProvider("groq")}
+            className={`p-3 rounded-xl text-left border transition-all ${
+              provider === "groq"
+                ? "bg-primary/10 border-primary text-foreground shadow-sm"
+                : "bg-secondary/20 border-border/50 text-muted-foreground hover:border-border"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-xs sm:text-sm text-foreground flex items-center gap-1.5">
+                <Zap className="h-4 w-4 text-amber-400" /> Groq
+              </span>
+              {provider === "groq" && <CheckCircle2 className="h-3.5 w-3.5 text-primary" />}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1 line-clamp-1">Ultra-rápido (0.5s)</p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setProvider("openrouter")}
+            className={`p-3 rounded-xl text-left border transition-all ${
+              provider === "openrouter"
+                ? "bg-primary/10 border-primary text-foreground shadow-sm"
+                : "bg-secondary/20 border-border/50 text-muted-foreground hover:border-border"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-xs sm:text-sm text-foreground flex items-center gap-1.5">
+                <Globe className="h-4 w-4 text-blue-400" /> OpenRouter
+              </span>
+              {provider === "openrouter" && <CheckCircle2 className="h-3.5 w-3.5 text-primary" />}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1 line-clamp-1">DeepSeek, Claude, Llama</p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setProvider("nvidia")}
+            className={`p-3 rounded-xl text-left border transition-all ${
+              provider === "nvidia"
+                ? "bg-primary/10 border-primary text-foreground shadow-sm"
+                : "bg-secondary/20 border-border/50 text-muted-foreground hover:border-border"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-xs sm:text-sm text-foreground flex items-center gap-1.5">
+                <Cpu className="h-4 w-4 text-emerald-400" /> NVIDIA NIM
+              </span>
+              {provider === "nvidia" && <CheckCircle2 className="h-3.5 w-3.5 text-primary" />}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1 line-clamp-1">Llama 70B de precisão</p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setProvider("omniroute")}
+            className={`p-3 rounded-xl text-left border transition-all ${
+              provider === "omniroute"
+                ? "bg-primary/10 border-primary text-foreground shadow-sm"
+                : "bg-secondary/20 border-border/50 text-muted-foreground hover:border-border"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-xs sm:text-sm text-foreground flex items-center gap-1.5">
+                <Wrench className="h-4 w-4 text-purple-400" /> Manual / Custom
+              </span>
+              {provider === "omniroute" && <CheckCircle2 className="h-3.5 w-3.5 text-primary" />}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1 line-clamp-1">Endpoint próprio/Local</p>
+          </button>
+        </div>
+
+        {/* Detalhes do Provedor Selecionado: GROQ */}
+        {provider === "groq" && (
+          <div className="p-4 rounded-xl bg-secondary/30 border border-border/60 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Zap className="h-4 w-4 text-amber-400" /> Configuração Groq
+              </span>
+              <span className="text-[11px] text-muted-foreground">gratuito & alta velocidade</span>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Chave de API da Groq (gsk_...)</Label>
+              <Input
+                type={showKeys ? "text" : "password"}
+                value={groqKey}
+                onChange={(e) => setGroqKey(e.target.value)}
+                placeholder="Cole aqui sua gsk_..."
+                className="text-xs h-9"
+                autoComplete="off"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Modelo da Groq para o Coach</Label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleFetchGroqModels}
+                  disabled={loadingGroqModels || !groqKey.trim()}
+                  className="h-6 px-2 text-[11px] text-primary hover:text-primary gap-1"
+                >
+                  {loadingGroqModels ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3 w-3" />
+                  )}
+                  Buscar modelos da minha conta
+                </Button>
+              </div>
+
+              <Select value={groqModel} onValueChange={setGroqModel}>
+                <SelectTrigger className="text-xs h-9">
+                  <SelectValue placeholder="Selecione o modelo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {groqModels.map((m) => (
+                    <SelectItem key={m} value={m} className="text-xs">
+                      {m === "llama-3.3-70b-versatile" ? "⭐ " : ""}{m}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Recomendado: <strong>llama-3.3-70b-versatile</strong> ou <strong>deepseek-r1-distill-llama-70b</strong>.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Detalhes do Provedor Selecionado: OPENROUTER */}
+        {provider === "openrouter" && (
+          <div className="p-4 rounded-xl bg-secondary/30 border border-border/60 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Globe className="h-4 w-4 text-blue-400" /> Configuração OpenRouter
+              </span>
+              <span className="text-[11px] text-muted-foreground">acesso a todos os modelos do mundo</span>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Chave de API do OpenRouter (sk-or-v1-...)</Label>
+              <Input
+                type={showKeys ? "text" : "password"}
+                value={openrouterKey}
+                onChange={(e) => setOpenrouterKey(e.target.value)}
+                placeholder="Cole aqui sua sk-or-v1-..."
+                className="text-xs h-9"
+                autoComplete="off"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Modelo Escolhido para o Coach</Label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleFetchOpenRouterModels}
+                  disabled={loadingOrModels}
+                  className="h-6 px-2 text-[11px] text-primary hover:text-primary gap-1"
+                >
+                  {loadingOrModels ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3 w-3" />
+                  )}
+                  Buscar catálogo OpenRouter
+                </Button>
+              </div>
+
+              <Select value={openrouterModel} onValueChange={setOpenrouterModel}>
+                <SelectTrigger className="text-xs h-9">
+                  <SelectValue placeholder="Selecione o modelo" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  {openrouterModels.map((m) => (
+                    <SelectItem key={m} value={m} className="text-xs">
+                      {m}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
+
+        {/* Detalhes do Provedor Selecionado: NVIDIA */}
+        {provider === "nvidia" && (
+          <div className="p-4 rounded-xl bg-secondary/30 border border-border/60 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Cpu className="h-4 w-4 text-emerald-400" /> Configuração NVIDIA NIM
+              </span>
+              <span className="text-[11px] text-muted-foreground">alta performance com chips NVIDIA</span>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Chave de API da NVIDIA (nvapi-...)</Label>
+              <Input
+                type={showKeys ? "text" : "password"}
+                value={nvidiaKey || openrouterKey}
+                onChange={(e) => {
+                  setNvidiaKey(e.target.value);
+                  setOpenrouterKey(e.target.value);
+                }}
+                placeholder="Cole aqui sua nvapi-..."
+                className="text-xs h-9"
+                autoComplete="off"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Modelo NVIDIA</Label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleFetchNvidiaModels}
+                  disabled={loadingNvidiaModels || (!nvidiaKey.trim() && !openrouterKey.trim())}
+                  className="h-6 px-2 text-[11px] text-primary hover:text-primary gap-1"
+                >
+                  {loadingNvidiaModels ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3 w-3" />
+                  )}
+                  Buscar modelos NVIDIA
+                </Button>
+              </div>
+
+              <Select value={nvidiaModel} onValueChange={setNvidiaModel}>
+                <SelectTrigger className="text-xs h-9">
+                  <SelectValue placeholder="Selecione o modelo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {nvidiaModels.map((m) => (
+                    <SelectItem key={m} value={m} className="text-xs">
+                      {m}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
+
+        {/* Detalhes do Provedor Selecionado: MANUAL / CUSTOM */}
+        {provider === "omniroute" && (
+          <div className="p-4 rounded-xl bg-secondary/30 border border-border/60 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Wrench className="h-4 w-4 text-purple-400" /> Configuração de Endpoint Manual
+              </span>
+              <span className="text-[11px] text-muted-foreground">compatível com qualquer API OpenAI</span>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">URL Completa do Endpoint (Base URL)</Label>
+              <Input
+                value={customBaseUrl}
+                onChange={(e) => setCustomBaseUrl(e.target.value)}
+                placeholder="Ex: http://localhost:11434/v1/chat/completions ou https://seu-proxy.com/v1"
+                className="text-xs h-9"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Chave de API (Opcional se for local)</Label>
+                <Input
+                  type={showKeys ? "text" : "password"}
+                  value={omniKey}
+                  onChange={(e) => setOmniKey(e.target.value)}
+                  placeholder="Cole aqui se houver"
+                  className="text-xs h-9"
+                  autoComplete="off"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Nome do Modelo no Endpoint</Label>
+                <Input
+                  value={customModel}
+                  onChange={(e) => setCustomModel(e.target.value)}
+                  placeholder="Ex: llama3, mistral, gpt-4"
+                  className="text-xs h-9"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* Seção de Visão (Foto do Prato & Scanner) */}
+      <Card className="p-4 sm:p-5 rounded-2xl border-border/60 space-y-4">
+        <div>
+          <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold flex items-center gap-1.5">
+            <Camera className="h-4 w-4 text-primary" /> 2. Provedor de Visão (Foto do Prato & Rótulos)
+          </Label>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Analisa fotos de refeições para estimar calorias e macronutrientes automaticamente.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Provedor para Análise Visual</Label>
+            <Select
+              value={photoProvider}
+              onValueChange={(v) => setPhotoProvider(v as any)}
+            >
+              <SelectTrigger className="text-xs h-9">
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto" className="text-xs">
+                  Automático (Segue o provedor principal ativo)
+                </SelectItem>
+                <SelectItem value="openrouter" className="text-xs">
+                  OpenRouter (Qwen 2.5 VL / Llama 3.2 Vision)
+                </SelectItem>
+                <SelectItem value="nvidia" className="text-xs">
+                  NVIDIA (Llama 3.2 90B Vision)
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">Modelo de Visão Customizado (Opcional)</Label>
+            <Input
+              value={photoModel}
+              onChange={(e) => setPhotoModel(e.target.value)}
+              placeholder="Padrão: qwen/qwen2.5-vl-72b-instruct"
+              className="text-xs h-9"
+            />
+          </div>
+        </div>
+      </Card>
+
+      {/* Botão de Salvar Geral */}
+      <Button
+        onClick={save}
+        disabled={saving}
+        className="w-full rounded-full py-5 text-sm font-semibold shadow-md gap-2"
+      >
+        {saving ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Gravando no banco de dados e no aparelho...
+          </>
+        ) : (
+          <>
+            <CheckCircle2 className="h-4 w-4" />
+            Salvar Configurações de IA Permanentemente
+          </>
+        )}
+      </Button>
+
+      {/* Integração Google Fit / Smartwatch */}
+      <Card className="p-4 sm:p-5 rounded-2xl border-border/60 space-y-4">
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
             <h3 className="text-sm font-semibold flex items-center gap-1.5">

@@ -7,6 +7,7 @@ import {
   resolveAiChatEndpoint,
   resolveAiProvider,
   resolveVisionProvider,
+  encodeAiExtraMeta,
 } from "@/lib/ai-settings";
 
 afterEach(() => {
@@ -34,8 +35,23 @@ describe("normalizeAiSettings", () => {
     expect(s.nvidia_model).toBe("meu-modelo");
   });
 
-  it("não seta nvidia_model para outros providers", () => {
-    expect(normalizeAiSettings({ provider: "groq", omniroute_base_url: "x" }).nvidia_model).toBeNull();
+  it("decodifica metadados extras (modelos selecionados para groq e openrouter)", () => {
+    const metaJson = encodeAiExtraMeta({
+      groq_model: "deepseek-r1-distill-llama-70b",
+      openrouter_model: "deepseek/deepseek-chat",
+      custom_base_url: "http://localhost:11434/v1",
+      custom_model: "llama3:latest",
+    });
+
+    const s = normalizeAiSettings({
+      provider: "groq",
+      omniroute_base_url: metaJson,
+    });
+
+    expect(s.groq_model).toBe("deepseek-r1-distill-llama-70b");
+    expect(s.openrouter_model).toBe("deepseek/deepseek-chat");
+    expect(s.custom_base_url).toBe("http://localhost:11434/v1");
+    expect(s.custom_model).toBe("llama3:latest");
   });
 
   it("preserva chaves e updated_at", () => {
@@ -62,11 +78,23 @@ describe("resolveAiProvider", () => {
 });
 
 describe("getTextModel", () => {
-  it("usa modelo padrão por provider", () => {
+  it("usa modelo padrão por provider quando não houver customização", () => {
     expect(getTextModel("groq")).toBe("llama-3.3-70b-versatile");
-    expect(getTextModel("openrouter")).toBe("qwen/qwen-2.5-72b-instruct");
+    expect(getTextModel("openrouter")).toBe("meta-llama/llama-3.3-70b-instruct");
     expect(getTextModel("omniroute")).toBe("llama-3.3-70b-versatile");
     expect(getTextModel("nvidia")).toBe("nvidia/llama-3.1-nemotron-70b-instruct");
+  });
+
+  it("groq usa groq_model custom quando selecionado pelo usuário", () => {
+    expect(getTextModel("groq", { groq_model: "deepseek-r1-distill-llama-70b" })).toBe(
+      "deepseek-r1-distill-llama-70b",
+    );
+  });
+
+  it("openrouter usa openrouter_model custom quando selecionado", () => {
+    expect(getTextModel("openrouter", { openrouter_model: "deepseek/deepseek-chat" })).toBe(
+      "deepseek/deepseek-chat",
+    );
   });
 
   it("nvidia usa nvidia_model custom quando presente", () => {
@@ -97,7 +125,7 @@ describe("resolveAiApiKey", () => {
     expect(resolveAiApiKey({}, "nvidia")).toBe("env-nvidia");
   });
 
-  it("omniroute vér fallback para OPENROUTER e GROQ (ordem)", () => {
+  it("omniroute vê fallback para OPENROUTER e GROQ (ordem)", () => {
     process.env.OMNIROUTE_API_KEY = "env-omni";
     expect(resolveAiApiKey({}, "omniroute")).toBe("env-omni");
 
@@ -106,7 +134,7 @@ describe("resolveAiApiKey", () => {
     expect(resolveAiApiKey({}, "omniroute")).toBe("env-or");
 
     process.env.GROQ_API_KEY = "env-groq";
-    expect(resolveAiApiKey({}, "omniroute")).toBe("env-or"); // prioridade mantém OR acima de groq
+    expect(resolveAiApiKey({}, "omniroute")).toBe("env-or");
   });
 
   it("retorna null quando nada disponível", () => {
@@ -172,6 +200,11 @@ describe("resolveAiChatEndpoint", () => {
 
   it("omniroute usa baseUrl custom quando presente", () => {
     expect(resolveAiChatEndpoint("omniroute", " https://custom.example ")).toBe("https://custom.example");
+  });
+
+  it("omniroute decodifica custom_base_url de json de metadados", () => {
+    const meta = encodeAiExtraMeta({ custom_base_url: "https://minha-api-custom.com/v1/chat/completions" });
+    expect(resolveAiChatEndpoint("omniroute", meta)).toBe("https://minha-api-custom.com/v1/chat/completions");
   });
 
   it("desconhecido cai em groq", () => {

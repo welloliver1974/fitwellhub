@@ -31,6 +31,7 @@ import { Route as AppChatRouteImport } from './routes/app.chat'
 import { Route as AppTreinosIndexRouteImport } from './routes/app.treinos.index'
 import { Route as AppTemplatesIndexRouteImport } from './routes/app.templates.index'
 import { Route as AppReceitasIndexRouteImport } from './routes/app.receitas.index'
+import { Route as AppTreinosIaRouteImport } from './routes/app.treinos.ia'
 import { Route as AppTreinosIdRouteImport } from './routes/app.treinos.$id'
 import { Route as AppTemplatesIdRouteImport } from './routes/app.templates.$id'
 import { Route as AppReceitasIdRouteImport } from './routes/app.receitas.$id'
@@ -147,6 +148,11 @@ const AppReceitasIndexRoute = AppReceitasIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppReceitasRoute,
 } as any)
+const AppTreinosIaRoute = AppTreinosIaRouteImport.update({
+  id: '/ia',
+  path: '/ia',
+  getParentRoute: () => AppTreinosRoute,
+} as any)
 const AppTreinosIdRoute = AppTreinosIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -197,6 +203,7 @@ export interface FileRoutesByFullPath {
   '/app/receitas/$id': typeof AppReceitasIdRoute
   '/app/templates/$id': typeof AppTemplatesIdRoute
   '/app/treinos/$id': typeof AppTreinosIdRouteWithChildren
+  '/app/treinos/ia': typeof AppTreinosIaRoute
   '/app/receitas/': typeof AppReceitasIndexRoute
   '/app/templates/': typeof AppTemplatesIndexRoute
   '/app/treinos/': typeof AppTreinosIndexRoute
@@ -222,6 +229,7 @@ export interface FileRoutesByTo {
   '/app/receitas/$id': typeof AppReceitasIdRoute
   '/app/templates/$id': typeof AppTemplatesIdRoute
   '/app/treinos/$id': typeof AppTreinosIdRouteWithChildren
+  '/app/treinos/ia': typeof AppTreinosIaRoute
   '/app/receitas': typeof AppReceitasIndexRoute
   '/app/templates': typeof AppTemplatesIndexRoute
   '/app/treinos': typeof AppTreinosIndexRoute
@@ -252,6 +260,7 @@ export interface FileRoutesById {
   '/app/receitas/$id': typeof AppReceitasIdRoute
   '/app/templates/$id': typeof AppTemplatesIdRoute
   '/app/treinos/$id': typeof AppTreinosIdRouteWithChildren
+  '/app/treinos/ia': typeof AppTreinosIaRoute
   '/app/receitas/': typeof AppReceitasIndexRoute
   '/app/templates/': typeof AppTemplatesIndexRoute
   '/app/treinos/': typeof AppTreinosIndexRoute
@@ -283,6 +292,7 @@ export interface FileRouteTypes {
     | '/app/receitas/$id'
     | '/app/templates/$id'
     | '/app/treinos/$id'
+    | '/app/treinos/ia'
     | '/app/receitas/'
     | '/app/templates/'
     | '/app/treinos/'
@@ -308,6 +318,7 @@ export interface FileRouteTypes {
     | '/app/receitas/$id'
     | '/app/templates/$id'
     | '/app/treinos/$id'
+    | '/app/treinos/ia'
     | '/app/receitas'
     | '/app/templates'
     | '/app/treinos'
@@ -337,6 +348,7 @@ export interface FileRouteTypes {
     | '/app/receitas/$id'
     | '/app/templates/$id'
     | '/app/treinos/$id'
+    | '/app/treinos/ia'
     | '/app/receitas/'
     | '/app/templates/'
     | '/app/treinos/'
@@ -505,6 +517,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppReceitasIndexRouteImport
       parentRoute: typeof AppReceitasRoute
     }
+    '/app/treinos/ia': {
+      id: '/app/treinos/ia'
+      path: '/ia'
+      fullPath: '/app/treinos/ia'
+      preLoaderRoute: typeof AppTreinosIaRouteImport
+      parentRoute: typeof AppTreinosRoute
+    }
     '/app/treinos/$id': {
       id: '/app/treinos/$id'
       path: '/$id'
@@ -597,11 +616,13 @@ const AppTreinosIdRouteWithChildren = AppTreinosIdRoute._addFileChildren(
 
 interface AppTreinosRouteChildren {
   AppTreinosIdRoute: typeof AppTreinosIdRouteWithChildren
+  AppTreinosIaRoute: typeof AppTreinosIaRoute
   AppTreinosIndexRoute: typeof AppTreinosIndexRoute
 }
 
 const AppTreinosRouteChildren: AppTreinosRouteChildren = {
   AppTreinosIdRoute: AppTreinosIdRouteWithChildren,
+  AppTreinosIaRoute: AppTreinosIaRoute,
   AppTreinosIndexRoute: AppTreinosIndexRoute,
 }
 
