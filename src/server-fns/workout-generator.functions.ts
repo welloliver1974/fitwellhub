@@ -21,6 +21,10 @@ const generatorInputSchema = z.object({
   splitType: z.string().optional(),
   equipment: z.enum(["academia", "condominio", "casa"]).default("academia"),
   focusRestrictions: z.string().optional(),
+  clientProvider: z.string().optional(),
+  clientApiKey: z.string().optional(),
+  clientModel: z.string().optional(),
+  clientBaseUrl: z.string().optional(),
 });
 
 export interface WorkoutGeneratorResult {
@@ -86,8 +90,23 @@ export const generateAiWorkoutRoutine = createServerFn({ method: "POST" })
       (s: any) => `${s.name} (${new Date(s.completed_at).toLocaleDateString("pt-BR")})`
     );
 
-    // 2. Resolver provedor e credenciais de IA
-    const settings = await fetchAiSettings(supabase, userId);
+    // 2. Resolver provedor e credenciais de IA (mesclando banco e dados enviados pelo cliente)
+    const dbSettings = await fetchAiSettings(supabase, userId);
+    const chosenProvider = (data.clientProvider as any) || resolveAiProvider(dbSettings);
+
+    const settings = {
+      ...dbSettings,
+      provider: chosenProvider,
+      groq_api_key: (chosenProvider === "groq" && data.clientApiKey) ? data.clientApiKey : dbSettings.groq_api_key,
+      openrouter_api_key: ((chosenProvider === "openrouter" || chosenProvider === "nvidia") && data.clientApiKey) ? data.clientApiKey : dbSettings.openrouter_api_key,
+      omniroute_api_key: (chosenProvider === "omniroute" && data.clientApiKey) ? data.clientApiKey : dbSettings.omniroute_api_key,
+      groq_model: (chosenProvider === "groq" && data.clientModel) ? data.clientModel : dbSettings.groq_model,
+      openrouter_model: (chosenProvider === "openrouter" && data.clientModel) ? data.clientModel : dbSettings.openrouter_model,
+      nvidia_model: (chosenProvider === "nvidia" && data.clientModel) ? data.clientModel : dbSettings.nvidia_model,
+      custom_model: (chosenProvider === "omniroute" && data.clientModel) ? data.clientModel : dbSettings.custom_model,
+      custom_base_url: (chosenProvider === "omniroute" && data.clientBaseUrl) ? data.clientBaseUrl : dbSettings.custom_base_url,
+    };
+
     const provider = resolveAiProvider(settings);
     const apiKey = resolveAiApiKey(provider, settings);
     const model = getTextModel(settings, provider);
@@ -100,7 +119,7 @@ export const generateAiWorkoutRoutine = createServerFn({ method: "POST" })
       diagnosis = "Nenhum treino anterior encontrado. A IA montará uma estrutura ideal do zero baseada no seu objetivo.";
     }
 
-    if (!apiKey) {
+    if (!apiKey && provider !== "omniroute") {
       // Sem chave configurada: retornar rotina determinística padrão rica e fundamentada
       return {
         routine: getDeterministicRoutineFallback(),

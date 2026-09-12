@@ -16,6 +16,9 @@
    - Assistente de Treinos IA em aba isolada com diagnóstico de rotina existente (divisão BCDA).
    - Mecanismo de segurança com criação automática de Snapshot e restauração em 1 clique ("Restaurar Treino Original ↩️").
    - Preservação total de sessões anteriores (`workout_sessions`), cargas e histórico.
+   - **Correção de Bug (TypeError reading 'workouts')**:
+     - Causa: Falta de repasse do cabeçalho `Authorization: Bearer ${session.access_token}` para o middleware `requireSupabaseAuth` da server function.
+     - Solução: Injeção de `session.access_token`, envio de configurações locais de IA (`clientProvider`, `clientApiKey`, `clientModel`) como fallback e blindagem com optional chaining em todas as referências a `routine?.workouts`.
 
 ---
 

@@ -2,6 +2,21 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [11/09/2026] - Antigravity (Correção do Erro 'Cannot read properties of undefined (reading workouts)' no Assistente de Treinos)
+- **Causa Raiz**:
+  - A server function `generateAiWorkoutRoutine` exigia autenticação (`requireSupabaseAuth`), porém a chamada na rota `app.treinos.ia.tsx` não estava enviando o cabeçalho `Authorization: Bearer ${session.access_token}` e `session` não havia sido desestruturado do hook `useAuth()`.
+  - A requisição falhava silenciosamente com 401 na camada de middleware do TanStack Start e o retorno do cliente recebia `routine` indefinido, quebrando na tentativa de ler `res.routine.workouts`.
+- **Correções Realizadas**:
+  - **Injeção do Token de Sessão & Credenciais Locais (`app.treinos.ia.tsx`)**:
+    - Adicionado `session` em `const { user, session } = useAuth()` e passado `headers: { Authorization: Bearer ${session.access_token} }`.
+    - Leitura das configurações ativas de IA diretamente do `localStorage` (`getAiSettingsLocal()`) e repasse para a server function, garantindo credenciais mesmo antes de sync do banco.
+  - **Recepção de Credenciais Flexíveis na Server Function (`workout-generator.functions.ts`)**:
+    - Atualizado o schema `generatorInputSchema` para aceitar `clientProvider`, `clientApiKey`, `clientModel` e `clientBaseUrl`, mesclando com o banco de dados Supabase e sempre acionando o fallback biomecânico determinístico caso a API externa falhe.
+  - **Blindagem Defensiva Total com Optional Chaining (`app.treinos.ia.tsx`)**:
+    - Protegidas todas as leituras de `.workouts` (`res?.routine?.workouts`, `routine?.workouts?.map`, `backupInfo?.workouts`, etc.) contra qualquer estado nulo ou indefinido.
+- **Validação**:
+  - `npx vitest run`: **25 arquivos de teste e 201 testes aprovados (100% de sucesso)**.
+
 ## [11/09/2026] - Antigravity (Botão de Teste de Conexão e Latência dos Modelos de IA na Central de IA)
 - **Motivação**:
   - O usuário sentiu falta de validar de imediato se as chaves de API e os modelos configurados na Central de IA estão realmente funcionando, sem ter que navegar até o Chat do Coach ou Daily Briefing para testar.

@@ -42,13 +42,14 @@ import {
 } from "@/lib/workout-ai-utils";
 import { generateAiWorkoutRoutine } from "@/server-fns/workout-generator.functions";
 import { saveSplitRotation } from "@/lib/workout-rotation";
+import { getAiSettingsLocal } from "@/lib/ai-settings";
 
 export const Route = createFileRoute("/app/treinos/ia")({
   component: WorkoutAiAssistantPage,
 });
 
 function WorkoutAiAssistantPage() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const navigate = useNavigate();
 
   // Estados de dados atuais
@@ -124,24 +125,55 @@ function WorkoutAiAssistantPage() {
     setIsGenerating(true);
     setRoutine(null);
     try {
+      const localSettings = getAiSettingsLocal();
+      const localProvider = localSettings?.provider || "groq";
+      let localApiKey = "";
+      let localModel = "";
+      let localBaseUrl = "";
+
+      if (localProvider === "groq") {
+        localApiKey = localSettings?.groq_api_key || "";
+        localModel = localSettings?.groq_model || "";
+      } else if (localProvider === "openrouter") {
+        localApiKey = localSettings?.openrouter_api_key || "";
+        localModel = localSettings?.openrouter_model || "";
+      } else if (localProvider === "nvidia") {
+        localApiKey = localSettings?.openrouter_api_key || "";
+        localModel = localSettings?.nvidia_model || "";
+      } else if (localProvider === "omniroute") {
+        localApiKey = localSettings?.omniroute_api_key || "";
+        localModel = localSettings?.custom_model || "";
+        localBaseUrl = localSettings?.custom_base_url || "";
+      }
+
       const res = await generateAiWorkoutRoutine({
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
         data: {
           mode,
           goal,
           frequency,
           equipment,
           focusRestrictions: focusRestrictions.trim(),
+          clientProvider: localProvider,
+          clientApiKey: localApiKey || undefined,
+          clientModel: localModel || undefined,
+          clientBaseUrl: localBaseUrl || undefined,
         },
       });
 
+      if (!res?.routine?.workouts || !Array.isArray(res.routine.workouts) || res.routine.workouts.length === 0) {
+        throw new Error("A IA não conseguiu retornar a estrutura de treinos. Tente novamente.");
+      }
+
       setRoutine(res.routine);
-      setDiagnosisText(res.diagnosis);
+      setDiagnosisText(res.diagnosis || "");
       // Abre todos os treinos no preview
       const exp: Record<number, boolean> = {};
       res.routine.workouts.forEach((_, idx) => (exp[idx] = true));
       setExpandedWorkouts(exp);
       toast.success("Proposta de treino gerada com sucesso!");
     } catch (err: any) {
+      console.error("Erro ao gerar treino IA:", err);
       toast.error(err?.message || "Erro ao consultar a IA");
     } finally {
       setIsGenerating(false);
@@ -197,7 +229,10 @@ function WorkoutAiAssistantPage() {
 
   // Aplicar a rotina gerada no app
   const handleConfirmApply = async () => {
-    if (!routine || !user) return;
+    if (!routine?.workouts || !user) {
+      toast.error("Nenhuma rotina gerada para aplicar.");
+      return;
+    }
     setIsApplying(true);
 
     try {
@@ -248,49 +283,39 @@ function WorkoutAiAssistantPage() {
             .from("exercises")
             .insert({
               workout_id: createdW.id,
-              user_id: user.id,
               name: ex.name,
               position: j + 1,
-              notes: ex.notes || (ex.rest_seconds ? `Descanso: ${ex.rest_seconds}s` : null),
             })
             .select("id")
             .single();
 
           if (exErr || !createdEx) continue;
 
-          // Inserir séries sugeridas
-          const setsToInsert = [];
-          const numSets = ex.sets || 3;
-          const defaultReps = parseInt(ex.reps_range?.split(/[-–]/)[0] || "10", 10) || 10;
+          // Inserir séries padrão sugeridas
+          const setsCount = ex.sets || 3;
+          const setsPayload = Array.from({ length: setsCount }).map((_, sIdx) => ({
+            exercise_id: createdEx.id,
+            set_number: sIdx + 1,
+            reps: null,
+            weight_kg: null,
+            completed: false,
+          }));
 
-          for (let s = 1; s <= numSets; s++) {
-            setsToInsert.push({
-              exercise_id: createdEx.id,
-              user_id: user.id,
-              set_number: s,
-              reps: defaultReps,
-              weight_kg: 0,
-              completed: false,
-            });
-          }
-
-          if (setsToInsert.length > 0) {
-            await supabase.from("sets").insert(setsToInsert);
-          }
+          await supabase.from("sets").insert(setsPayload);
         }
       }
 
-      // 4. Se houver letras de divisão, atualizar a rotação ativa
+      // Salvar a rotação com as novas letras se houver
       if (newSplitLetters.length > 0) {
         saveSplitRotation(newSplitLetters);
       }
 
+      toast.success("Nova rotina aplicada com sucesso na sua grade ativa!");
       setApplyDialogOpen(false);
-      toast.success("Nova ficha de treinos aplicada com sucesso no app!");
-      await loadInitialData();
       navigate({ to: "/app/treinos" });
     } catch (err: any) {
-      toast.error(err?.message || "Erro ao aplicar nova ficha");
+      console.error("Erro ao aplicar rotina:", err);
+      toast.error(err?.message || "Erro ao aplicar nova rotina");
     } finally {
       setIsApplying(false);
     }
@@ -298,7 +323,10 @@ function WorkoutAiAssistantPage() {
 
   // Salvar apenas como Template (alternativa que não toca na grade ativa)
   const handleSaveAsTemplates = async () => {
-    if (!routine || !user) return;
+    if (!routine?.workouts || !user) {
+      toast.error("Nenhuma rotina gerada para salvar como template.");
+      return;
+    }
     try {
       for (const w of routine.workouts) {
         const { data: tpl, error: tplErr } = await supabase
@@ -327,7 +355,10 @@ function WorkoutAiAssistantPage() {
 
   // Restaurar treino original a partir do backup
   const handleConfirmRestore = async () => {
-    if (!backupInfo || !user) return;
+    if (!backupInfo?.workouts || !user) {
+      toast.error("Nenhum backup disponível para restauração.");
+      return;
+    }
     setIsRestoring(true);
 
     try {
@@ -643,7 +674,7 @@ function WorkoutAiAssistantPage() {
 
           {/* Lista de Treinos da Proposta */}
           <div className="space-y-3">
-            {routine.workouts.map((w, wIdx) => {
+            {routine?.workouts?.map((w, wIdx) => {
               const isExpanded = expandedWorkouts[wIdx] ?? false;
               return (
                 <Card key={wIdx} className="rounded-2xl border-border/60 overflow-hidden">
@@ -663,7 +694,7 @@ function WorkoutAiAssistantPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground hidden sm:inline">
-                        {w.exercises.length} exercícios
+                        {w.exercises?.length ?? 0} exercícios
                       </span>
                       {isExpanded ? (
                         <ChevronUp className="h-4 w-4 text-muted-foreground" />
@@ -675,7 +706,7 @@ function WorkoutAiAssistantPage() {
 
                   {isExpanded && (
                     <div className="p-3.5 sm:p-4 pt-0 border-t border-border/40 space-y-2">
-                      {w.exercises.map((ex, exIdx) => (
+                      {(w.exercises ?? []).map((ex, exIdx) => (
                         <div
                           key={exIdx}
                           className="flex items-center justify-between p-2.5 rounded-xl bg-secondary/20 border border-border/30 text-xs"
