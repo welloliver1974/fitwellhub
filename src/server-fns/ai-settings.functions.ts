@@ -170,12 +170,9 @@ export async function callAiChatCompletion(options: {
   let maxTokens = options.maxTokens;
 
   // Proteções e calibragens automáticas para o provedor GROQ:
-  // 1. O limite do plano gratuito do Groq é de 1000 OTPM (output tokens/min). Limitamos a 500-600 para nunca estourar rate limit.
-  // 2. Substituir modelos descontinuados/inacessíveis (ex: llama-3.3-70b-versatile, llama-3.1-8b-instant, etc.)
+  // 1. Substituir modelos descontinuados/inacessíveis (ex: llama-3.3-70b-versatile, llama-3.1-8b-instant, etc.)
+  // 2. Apenas modelos qwen possuem teto baixo de 1000 OTPM no free tier; modelos como gpt-oss-120b e compound suportam 2000-4000 tokens com folga.
   if (options.provider === "groq") {
-    if (!maxTokens || maxTokens > 600) {
-      maxTokens = 600;
-    }
     const deprecated = [
       "llama-3.3-70b-versatile",
       "llama-3.1-8b-instant",
@@ -185,6 +182,14 @@ export async function callAiChatCompletion(options: {
     ];
     if (!model || deprecated.includes(model)) {
       model = "openai/gpt-oss-120b";
+    }
+
+    if (model.includes("qwen")) {
+      if (!maxTokens || maxTokens > 700) {
+        maxTokens = 700;
+      }
+    } else if (!maxTokens) {
+      maxTokens = 2000;
     }
   }
 

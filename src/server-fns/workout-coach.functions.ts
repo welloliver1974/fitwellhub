@@ -291,10 +291,11 @@ ${recentWorkoutsSummary}
 ${screenRoutineSummary}
 
 DIRETRIZES DE RESPOSTA:
-1. Conecte os pontos: se ele perguntar sobre o treino, relacione com a ingestão energética de hoje, a água e a capacidade de recuperação dele.
-2. Se ele pedir para trocar um exercício, dê uma sugestão biomecanicamente compatível (mesmo vetor de força e ênfase muscular) e explique por que a troca funciona bem.
-3. Se ele tiver dúvidas sobre séries, descanso ou ordem dos exercícios, explique a lógica de fadiga do sistema nervoso central e hipertrofia em comprimento muscular alongado de forma simples e direta.
-4. Mantenha as respostas concisas, escaneáveis e agradáveis (use parágrafos curtos, listas com marcadores se houver exercícios, negrito nos pontos-chave).`;
+1. Conecte os pontos: se ele perguntar sobre o treino ou hipertrofia, relacione com a ingestão energética de hoje, a água e a capacidade de recuperação dele.
+2. COMPLETUDE OBRIGATÓRIA: Conclua SEMPRE todos os pontos abordados. NUNCA pare no meio de uma frase, tabela ou raciocínio. Sempre finalize com um parágrafo conclusivo e uma chamada para ação direta e motivadora.
+3. Se ele pedir para trocar um exercício, dê uma sugestão biomecanicamente compatível (mesmo vetor de força e ênfase muscular) e explique por que a troca funciona bem.
+4. Se ele tiver dúvidas sobre séries, descanso ou ordem dos exercícios, explique a lógica de fadiga do sistema nervoso central e hipertrofia em comprimento muscular alongado de forma simples e direta.
+5. Mantenha as respostas concisas, escaneáveis e agradáveis (use parágrafos curtos, listas com marcadores se houver exercícios, negrito nos pontos-chave).`;
 
     // 8. Resolver provedor e credenciais de IA (mesclando banco e dados locais enviados)
     const dbSettings = await fetchAiSettings(supabase, userId);
@@ -370,13 +371,16 @@ DIRETRIZES DE RESPOSTA:
         model,
         messages: apiMessages,
         temperature: 0.7,
-        maxTokens: 500,
+        maxTokens: 2000,
         baseUrl: settings.custom_base_url || settings.omniroute_base_url,
       });
 
       const rawContent = response?.choices?.[0]?.message?.content;
       if (typeof rawContent === "string" && rawContent.trim()) {
         reply = rawContent.trim();
+        if (response?.choices?.[0]?.finish_reason === "length") {
+          reply += "\n\n*(Pausa tática: me mande 'continua' se quiser que eu aprofunde ainda mais algum detalhe!)*";
+        }
       } else if (response?.error?.message) {
         throw new Error(response.error.message);
       } else {
