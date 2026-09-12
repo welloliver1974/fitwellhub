@@ -22,6 +22,7 @@ const coachInputSchema = z.object({
     .optional()
     .default([]),
   routine: z.any().optional(), // Rotina atualmente visível na tela
+  userName: z.string().optional(),
   clientProvider: z.string().optional(),
   clientApiKey: z.string().optional(),
   clientModel: z.string().optional(),
@@ -158,11 +159,12 @@ export const consultWorkoutCoach = createServerFn({ method: "POST" })
     // 4. Parâmetros antropométricos e metabólicos (TMB + TDEE)
     const claims = (context as any).claims;
     const rawName =
+      data.userName?.trim() ||
       profile?.display_name?.trim() ||
       claims?.user_metadata?.full_name ||
       claims?.user_metadata?.display_name ||
       claims?.user_metadata?.name ||
-      "Atleta";
+      "Well";
     const displayName = rawName.trim().split(" ")[0];
     const height = profile?.height_cm ? Number(profile.height_cm) : null;
     const age = profile?.birth_date ? calculateAge(profile.birth_date) : null;
@@ -312,8 +314,36 @@ DIRETRIZES DE RESPOSTA:
     };
 
     const provider = resolveAiProvider(settings);
-    const apiKey = resolveAiApiKey(settings, provider);
+    let apiKey = resolveAiApiKey(settings, provider);
+    if (!apiKey && provider === "groq") {
+      apiKey = process.env.GROQ_API_KEY ?? null;
+    }
     const model = getTextModel(provider, settings);
+
+    if (!apiKey && provider !== "omniroute") {
+      return {
+        reply: `Fala, ${displayName}! Sua chave do provedor ${provider.toUpperCase()} não foi encontrada. Vá na aba Configurações de IA (/app/ia), insira sua chave e clique em "Salvar Configurações" para ativarmos nossa conversa.`,
+        providerUsed: `${provider} (sem chave)`,
+        userStats: {
+          displayName,
+          weight: latestWeight,
+          height,
+          age,
+          sex,
+          bmr,
+          tdee,
+          todayKcal: Math.round(todayKcal),
+          targetKcal,
+          todayProtein: Math.round(todayProtein),
+          targetProtein,
+          todayCarbs: Math.round(todayCarbs),
+          targetCarbs,
+          todayFat: Math.round(todayFat),
+          targetFat,
+          todayWater: Math.round(todayWater),
+        },
+      };
+    }
 
     // 9. Montar histórico de mensagens para a IA
     const apiMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
@@ -340,7 +370,7 @@ DIRETRIZES DE RESPOSTA:
         model,
         messages: apiMessages,
         temperature: 0.7,
-        maxTokens: 1000,
+        maxTokens: 500,
         baseUrl: settings.custom_base_url || settings.omniroute_base_url,
       });
 
@@ -354,12 +384,8 @@ DIRETRIZES DE RESPOSTA:
       }
     } catch (err: any) {
       console.error("[WorkoutCoach] Erro ao chamar IA:", err);
-      // Fallback humanizado inteligente caso a chave ou modelo falhem
-      reply = `Fala, ${displayName}! Tive uma oscilação momentânea na conexão com o modelo de inteligência (${provider}), mas já estou de olho em todos os seus dados.
-
-Seu dia hoje: ${Math.round(todayKcal)} kcal e ${Math.round(todayProtein)}g de proteína ingeridos. Com o seu TDEE estimado em ${tdee || 2200} kcal, você está no caminho certo para a recuperação muscular!
-
-Se você tiver dúvidas sobre a rotina da tela, verifique a chave na aba /app/ia ou teste reenviar sua pergunta. Estou por aqui para ajustar cada detalhe com você!`;
+      const errMsg = err?.message || String(err);
+      reply = `Fala, ${displayName}! Tive um retorno inesperado ao conectar com a IA (${provider} - ${model}): "${errMsg}".\n\nPor favor, confira o modelo e a chave na aba /app/ia no botão "Testar Conexão e Modelo 🧪".`;
     }
 
     return {

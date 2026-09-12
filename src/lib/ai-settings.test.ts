@@ -79,9 +79,9 @@ describe("resolveAiProvider", () => {
 
 describe("getTextModel", () => {
   it("usa modelo padrão por provider quando não houver customização", () => {
-    expect(getTextModel("groq")).toBe("llama-3.3-70b-versatile");
+    expect(getTextModel("groq")).toBe("openai/gpt-oss-120b");
     expect(getTextModel("openrouter")).toBe("meta-llama/llama-3.3-70b-instruct");
-    expect(getTextModel("omniroute")).toBe("llama-3.3-70b-versatile");
+    expect(getTextModel("omniroute")).toBe("openai/gpt-oss-120b");
     expect(getTextModel("nvidia")).toBe("nvidia/llama-3.1-nemotron-70b-instruct");
   });
 

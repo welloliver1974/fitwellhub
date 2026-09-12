@@ -264,8 +264,11 @@ export const generateAiWorkoutRoutine = createServerFn({ method: "POST" })
     };
 
     const provider = resolveAiProvider(settings);
-    const apiKey = resolveAiApiKey(provider, settings);
-    const model = getTextModel(settings, provider);
+    let apiKey = resolveAiApiKey(settings, provider);
+    if (!apiKey && provider === "groq") {
+      apiKey = process.env.GROQ_API_KEY ?? null;
+    }
+    const model = getTextModel(provider, settings);
 
     // Montar diagnóstico
     let diagnosis = "";

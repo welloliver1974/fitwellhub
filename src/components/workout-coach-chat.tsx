@@ -159,6 +159,9 @@ Quer entender o porquê de cada exercício, ajustar alguma série ou tirar qualq
       if (localProvider === "groq") {
         localApiKey = localSettings?.groq_api_key || "";
         localModel = localSettings?.groq_model || "";
+        if (!localModel || localModel === "llama-3.3-70b-versatile" || localModel === "llama-3.1-8b-instant") {
+          localModel = "openai/gpt-oss-120b";
+        }
       } else if (localProvider === "openrouter") {
         localApiKey = localSettings?.openrouter_api_key || "";
         localModel = localSettings?.openrouter_model || "";
@@ -183,6 +186,7 @@ Quer entender o porquê de cada exercício, ajustar alguma série ou tirar qualq
           message: text,
           history: historyForApi,
           routine: routine || undefined,
+          userName: firstName || undefined,
           clientProvider: localProvider,
           clientApiKey: localApiKey || undefined,
           clientModel: localModel || undefined,

@@ -35,9 +35,9 @@ export type AiSettingsRow = {
 };
 
 export const DEFAULT_TEXT_MODELS: Record<AiProvider, string> = {
-  groq: "llama-3.3-70b-versatile",
+  groq: "openai/gpt-oss-120b",
   openrouter: "meta-llama/llama-3.3-70b-instruct",
-  omniroute: "llama-3.3-70b-versatile",
+  omniroute: "openai/gpt-oss-120b",
   nvidia: "nvidia/llama-3.1-nemotron-70b-instruct",
 };
 
@@ -208,7 +208,10 @@ export function saveAiSettingsLocal(settings: AiSettings): void {
 export function getAiSettingsLocal(): AiSettings | null {
   if (typeof window === "undefined" || !window.localStorage) return null;
   try {
-    const raw = window.localStorage.getItem(AI_SETTINGS_STORAGE_KEY);
+    const raw =
+      window.localStorage.getItem(AI_SETTINGS_STORAGE_KEY) ||
+      window.localStorage.getItem("fitwell_ai_settings_v1") ||
+      window.localStorage.getItem("fitwell_ai_settings");
     if (!raw) return null;
     return JSON.parse(raw) as AiSettings;
   } catch {

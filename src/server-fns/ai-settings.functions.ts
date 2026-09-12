@@ -68,7 +68,13 @@ export const fetchGroqModels = createServerFn({ method: "POST" })
       .map((m) => m.id as string);
 
     // Ordena colocando os recomendados no topo
-    const priority = ["llama-3.3-70b-versatile", "deepseek-r1-distill-llama-70b", "llama-3.1-8b-instant", "mixtral-8x7b-32768"];
+    const priority = [
+      "openai/gpt-oss-120b",
+      "qwen/qwen3.8-27b",
+      "groq/compound-mini",
+      "openai/gpt-oss-20b",
+      "qwen/qwen3.6-27b",
+    ];
     filtered.sort((a, b) => {
       const idxA = priority.indexOf(a);
       const idxB = priority.indexOf(b);
@@ -160,6 +166,28 @@ export async function callAiChatCompletion(options: {
   maxTokens?: number;
   baseUrl?: string | null;
 }) {
+  let model = options.model;
+  let maxTokens = options.maxTokens;
+
+  // Proteções e calibragens automáticas para o provedor GROQ:
+  // 1. O limite do plano gratuito do Groq é de 1000 OTPM (output tokens/min). Limitamos a 500-600 para nunca estourar rate limit.
+  // 2. Substituir modelos descontinuados/inacessíveis (ex: llama-3.3-70b-versatile, llama-3.1-8b-instant, etc.)
+  if (options.provider === "groq") {
+    if (!maxTokens || maxTokens > 600) {
+      maxTokens = 600;
+    }
+    const deprecated = [
+      "llama-3.3-70b-versatile",
+      "llama-3.1-8b-instant",
+      "deepseek-r1-distill-llama-70b",
+      "mixtral-8x7b-32768",
+      "gemma2-9b-it",
+    ];
+    if (!model || deprecated.includes(model)) {
+      model = "openai/gpt-oss-120b";
+    }
+  }
+
   const endpoint = resolveAiChatEndpoint(options.provider, options.baseUrl);
 
   const headers: Record<string, string> = {
@@ -173,14 +201,14 @@ export async function callAiChatCompletion(options: {
   }
 
   const body: Record<string, unknown> = {
-    model: options.model,
+    model,
     messages: options.messages,
   };
 
   if (options.tools?.length) body.tools = options.tools;
   if (options.toolChoice !== undefined) body.tool_choice = options.toolChoice;
   if (options.temperature !== undefined) body.temperature = options.temperature;
-  if (options.maxTokens !== undefined) body.max_tokens = options.maxTokens;
+  if (maxTokens !== undefined) body.max_tokens = maxTokens;
 
   const response = await fetch(endpoint, {
     method: "POST",
@@ -188,7 +216,26 @@ export async function callAiChatCompletion(options: {
     body: JSON.stringify(body),
   });
 
-  return response.json();
+  let data = await response.json();
+
+  // Se der model_not_found ou rate_limit no Groq, tenta fallback transparente com modelo alternativo funcional
+  if (
+    options.provider === "groq" &&
+    data?.error &&
+    (data.error.code === "model_not_found" || data.error.code === "rate_limit_exceeded")
+  ) {
+    const fallbackModel = model === "openai/gpt-oss-120b" ? "qwen/qwen3.8-27b" : "openai/gpt-oss-120b";
+    body.model = fallbackModel;
+    body.max_tokens = 500;
+    const retryRes = await fetch(endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+    data = await retryRes.json();
+  }
+
+  return data;
 }
 
 const testInputSchema = z.object({

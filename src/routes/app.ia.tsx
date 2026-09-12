@@ -63,11 +63,11 @@ export const Route = createFileRoute("/app/ia")({
 });
 
 const DEFAULT_GROQ_MODELS = [
-  "llama-3.3-70b-versatile",
-  "deepseek-r1-distill-llama-70b",
-  "llama-3.1-8b-instant",
-  "mixtral-8x7b-32768",
-  "gemma2-9b-it",
+  "openai/gpt-oss-120b",
+  "qwen/qwen3.8-27b",
+  "groq/compound-mini",
+  "openai/gpt-oss-20b",
+  "qwen/qwen3.6-27b",
 ];
 
 const DEFAULT_OPENROUTER_MODELS = [
@@ -94,7 +94,7 @@ function AiSettingsPage() {
 
   // Chaves e Modelos por Provedor
   const [groqKey, setGroqKey] = useState("");
-  const [groqModel, setGroqModel] = useState("llama-3.3-70b-versatile");
+  const [groqModel, setGroqModel] = useState("openai/gpt-oss-120b");
   const [groqModels, setGroqModels] = useState<string[]>(DEFAULT_GROQ_MODELS);
   const [loadingGroqModels, setLoadingGroqModels] = useState(false);
 
@@ -549,13 +549,13 @@ function AiSettingsPage() {
                 <SelectContent>
                   {groqModels.map((m) => (
                     <SelectItem key={m} value={m} className="text-xs">
-                      {m === "llama-3.3-70b-versatile" ? "⭐ " : ""}{m}
+                      {m === "openai/gpt-oss-120b" ? "⭐ " : ""}{m}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <p className="text-[11px] text-muted-foreground">
-                Recomendado: <strong>llama-3.3-70b-versatile</strong> ou <strong>deepseek-r1-distill-llama-70b</strong>.
+                Recomendado: <strong>openai/gpt-oss-120b</strong> ou <strong>qwen/qwen3.8-27b</strong>.
               </p>
             </div>
 
