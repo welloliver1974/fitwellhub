@@ -2,6 +2,22 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [11/09/2026] - Antigravity (Visão 360° Metabólica e Nutricional Injetada no Gerador de Treinos com IA)
+- **Motivação**:
+  - O usuário identificou que o gerador de treinos (`generateAiWorkoutRoutine`) precisava também considerar todos os seus dados biológicos e nutricionais na hora de prescrever a rotina, e não apenas no chat do coach.
+- **Mudanças realizadas**:
+  - **Injeção de Perfil 360 no Motor do Gerador (`generateAiWorkoutRoutine` em `src/server-fns/workout-generator.functions.ts`)**:
+    - Leitura em paralelo de `profiles` (nome, idade, sexo, altura), `body_weights` (peso recente), `goals` (metas de calorias e proteínas), `meals`/`meal_items` (ingestão real de hoje), `water_logs` (hidratação de hoje) e `workout_sessions` (últimos 28 dias para estimar frequência semanal).
+    - Cálculo automatizado da Taxa Metabólica Basal (**TMB** via fórmula Mifflin-St Jeor) e do Gasto Energético Total Diário (**TDEE** baseado no fator de atividade real).
+    - Avaliação do balanço energético atual: detecção se o atleta está em **Déficit Calórico** (cutting), **Superávit Calórico** (bulking) ou **Manutenção**.
+    - Calibração do prompt do sistema com diretrizes estritas de periodização baseadas na literatura:
+      - Em déficit calórico: redução estratégica para 12-14 séries/sessão, priorizando intensidade de carga para reter massa muscular sem sobrecarregar o SNC ou catabolizar.
+      - Em superávit calórico: permissão para volume ótimo de 15-18 séries/sessão com descansos completos (90-120s em compostos) aproveitando a plenitude de glicogênio.
+    - O diagnóstico retornado na tela agora exibe o peso do atleta, TMB e TDEE calculados.
+- **Validação**:
+  - `npx vitest run`: **25 arquivos e 201 testes aprovados (100% de sucesso)**.
+  - `npm run build`: Compilação de cliente e SSR concluídas com sucesso.
+
 ## [11/09/2026] - Antigravity (Coach Interativo com Visão 360° no Assistente de Treinos)
 - **Motivação**:
   - O usuário solicitou um Coach integrado diretamente na página do assistente de treinos (`/app/treinos/ia`) acessível via botão flutuante amigável, com balões de conversa modernos e limpos, comunicação humanizada e natural (sem clichês de robô) e visão 360° completa de todos os dados do usuário no aplicativo (o que come, o que bebe, peso, TMB, TDEE, histórico de treinos e a rotina proposta ativa na tela).

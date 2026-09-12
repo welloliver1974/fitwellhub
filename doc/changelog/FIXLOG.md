@@ -29,6 +29,10 @@
      - Visão 360° total do usuário: idade, sexo, altura, peso recente, TMB (Mifflin-St Jeor), TDEE (gasto calórico total diário calculado por frequência dos últimos 28 dias), calorias e macros consumidos hoje vs. metas, hidratação de hoje, histórico recente de cargas levantadas e a rotina proposta ativa na tela.
      - Comunicação 100% humanizada, empática e científica (sem clichês robóticos), chamando o usuário pelo nome e orientando sobre exercícios, ordem, descanso e adequação à nutrição do dia.
      - Chips de perguntas rápidas de 1 toque para dúvidas biomecânicas e nutricionais comuns.
+4. `src/server-fns/workout-generator.functions.ts`:
+   - **Injeção de Visão 360° Fisiológica e Nutricional no Gerador de Treinos**:
+     - O motor que prescreve a rotina (`generateAiWorkoutRoutine`) agora lê em paralelo: nome, idade, sexo, altura, peso recente, TMB (Mifflin-St Jeor), TDEE real (frequência de 28 dias), metas e ingestão de calorias e proteínas de hoje, além de água.
+     - Detecta automaticamente se o usuário está em Déficit Calórico (cutting) ou Superávit (bulking) para calibrar o volume de séries (12-14 séries vs 15-18 séries) prevenindo perda de massa magra e fadiga neural excessiva.
 
 ---
 

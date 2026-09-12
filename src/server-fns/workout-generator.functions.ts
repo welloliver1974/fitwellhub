@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { getLocalDate, getLocalDateMinusDays } from "@/lib/utils";
 import {
   callAiChatCompletion,
   fetchAiSettings,
@@ -34,19 +35,95 @@ export interface WorkoutGeneratorResult {
   providerUsed: string;
 }
 
+function calculateAge(birthDateStr: string): number {
+  const birthDate = new Date(birthDateStr);
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
+}
+
 export const generateAiWorkoutRoutine = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => generatorInputSchema.parse(data))
   .handler(async ({ data, context }): Promise<WorkoutGeneratorResult> => {
     const { supabase, userId } = context;
+    const today = getLocalDate();
+    const twentyEightDaysAgo = getLocalDateMinusDays(28);
 
-    // 1. Coletar dados reais do usuário (treinos atuais, exercícios e histórico)
-    const { data: currentWorkouts } = await supabase
-      .from("workouts")
-      .select("id, name, workout_date")
-      .eq("user_id", userId)
-      .order("name");
+    // 1. Coletar dados reais 360 do usuário em paralelo
+    const [
+      { data: currentWorkouts },
+      { data: recentSessions },
+      { data: catalogSample },
+      { data: profile },
+      { data: weights },
+      { data: goals },
+      { data: todayMeals },
+      { data: waterLogs },
+      { data: workouts28d },
+    ] = await Promise.all([
+      supabase
+        .from("workouts")
+        .select("id, name, workout_date")
+        .eq("user_id", userId)
+        .order("name"),
+      supabase
+        .from("workout_sessions")
+        .select(`
+          id,
+          name,
+          completed_at,
+          workout_session_sets (
+            exercise_name,
+            reps,
+            weight_kg
+          )
+        `)
+        .eq("user_id", userId)
+        .order("completed_at", { ascending: false })
+        .limit(6),
+      supabase
+        .from("exercise_catalog")
+        .select("name")
+        .limit(60),
+      supabase
+        .from("profiles")
+        .select("display_name, sex, height_cm, birth_date")
+        .eq("id", userId)
+        .maybeSingle(),
+      supabase
+        .from("body_weights")
+        .select("weight_kg, log_date")
+        .eq("user_id", userId)
+        .order("log_date", { ascending: false })
+        .limit(3),
+      supabase
+        .from("goals")
+        .select("calories, protein_g, carbs_g, fat_g, protein_factor")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("meals")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("meal_date", today),
+      supabase
+        .from("water_logs")
+        .select("ml")
+        .eq("user_id", userId)
+        .eq("log_date", today),
+      supabase
+        .from("workout_sessions")
+        .select("id")
+        .eq("user_id", userId)
+        .gte("completed_at", twentyEightDaysAgo + "T00:00:00"),
+    ]);
 
+    // Mapear exercícios atuais
     const workoutIds = (currentWorkouts ?? []).map((w: any) => w.id);
     let exercisesByWorkout: Record<string, string[]> = {};
 
@@ -65,19 +142,7 @@ export const generateAiWorkoutRoutine = createServerFn({ method: "POST" })
       });
     }
 
-    // Coletar histórico recente de sessões (últimas 8)
-    const { data: recentSessions } = await supabase
-      .from("workout_sessions")
-      .select("id, name, completed_at")
-      .order("completed_at", { ascending: false })
-      .limit(8);
-
-    // Amostra do catálogo de exercícios para a IA preferir nomes conhecidos
-    const { data: catalogSample } = await supabase
-      .from("exercise_catalog")
-      .select("name")
-      .limit(60);
-
+    // Amostra do catálogo de exercícios
     const catalogNames = (catalogSample ?? []).map((c: any) => c.name).join(", ");
 
     // Montar resumo textual do que o usuário já faz
@@ -86,11 +151,95 @@ export const generateAiWorkoutRoutine = createServerFn({ method: "POST" })
       return `${w.name}: ${exs.length > 0 ? exs.join(", ") : "Sem exercícios cadastrados"}`;
     });
 
-    const recentSessionsSummary = (recentSessions ?? []).map(
-      (s: any) => `${s.name} (${new Date(s.completed_at).toLocaleDateString("pt-BR")})`
+    // Montar resumo do histórico recente com cargas
+    const recentSessionsSummary = (recentSessions ?? []).map((s: any) => {
+      const dateStr = s.completed_at
+        ? new Date(s.completed_at).toLocaleDateString("pt-BR")
+        : "recente";
+      const sets = s.workout_session_sets ?? [];
+      const exMap = new Map<string, { reps: number; weight: number }>();
+      for (const set of sets) {
+        if (!exMap.has(set.exercise_name)) {
+          exMap.set(set.exercise_name, { reps: Number(set.reps || 0), weight: Number(set.weight_kg || 0) });
+        } else {
+          const cur = exMap.get(set.exercise_name)!;
+          if (Number(set.weight_kg || 0) > cur.weight) {
+            cur.weight = Number(set.weight_kg || 0);
+            cur.reps = Number(set.reps || 0);
+          }
+        }
+      }
+      const topExs = Array.from(exMap.entries())
+        .slice(0, 4)
+        .map(([name, data]) => `${name} (${data.weight}kg x ${data.reps}reps)`)
+        .join("; ");
+      return `${s.name} (${dateStr}): ${topExs || "sem cargas detalhadas"}`;
+    });
+
+    // 2. Extrair dados fisiológicos, antropométricos e metabólicos (TMB + TDEE)
+    const displayName = profile?.display_name?.trim() || "Atleta";
+    const height = profile?.height_cm ? Number(profile.height_cm) : null;
+    const age = profile?.birth_date ? calculateAge(profile.birth_date) : null;
+    const sex = profile?.sex || null;
+    const latestWeight = weights && weights.length > 0 ? Number(weights[0].weight_kg) : null;
+
+    let bmr: number | null = null;
+    let tdee: number | null = null;
+
+    if (latestWeight && height && age) {
+      if (sex === "female") {
+        bmr = Math.round(10 * latestWeight + 6.25 * height - 5 * age - 161);
+      } else {
+        bmr = Math.round(10 * latestWeight + 6.25 * height - 5 * age + 5);
+      }
+
+      const totalWorkouts = workouts28d?.length ?? 0;
+      const sessionsPerWeek = totalWorkouts / 4;
+      let activityFactor = 1.2;
+      if (sessionsPerWeek >= 1 && sessionsPerWeek < 3) {
+        activityFactor = 1.375;
+      } else if (sessionsPerWeek >= 3 && sessionsPerWeek < 5) {
+        activityFactor = 1.55;
+      } else if (sessionsPerWeek >= 5) {
+        activityFactor = 1.725;
+      }
+      tdee = Math.round(bmr * activityFactor);
+    }
+
+    // Nutrição e hidratação
+    let todayKcal = 0;
+    let todayProtein = 0;
+    const mealIds = (todayMeals ?? []).map((m: any) => m.id);
+    if (mealIds.length > 0) {
+      const { data: items } = await supabase
+        .from("meal_items")
+        .select("calories, protein_g")
+        .in("meal_id", mealIds);
+      (items ?? []).forEach((item: any) => {
+        todayKcal += Number(item.calories || 0);
+        todayProtein += Number(item.protein_g || 0);
+      });
+    }
+
+    const todayWater = (waterLogs ?? []).reduce(
+      (sum: number, w: any) => sum + Number(w.ml || 0),
+      0
     );
 
-    // 2. Resolver provedor e credenciais de IA (mesclando banco e dados enviados pelo cliente)
+    const targetKcal = goals?.calories ?? 2000;
+    const targetProtein = goals?.protein_g ?? 140;
+
+    let energyBalance = "Manutenção Energética / Recomposição Corporal";
+    if (tdee) {
+      const diff = targetKcal - tdee;
+      if (diff <= -250) {
+        energyBalance = `Déficit Calórico (~${Math.abs(Math.round(diff))} kcal abaixo do gasto diário: TDEE ${tdee} kcal vs Meta ${targetKcal} kcal) — Foco: Manter carga alta com menor volume de séries (12-14 séries/sessão) para preservar massa magra sem fadiga excessiva do SNC`;
+      } else if (diff >= 200) {
+        energyBalance = `Superávit Calórico (~+${Math.round(diff)} kcal acima do gasto diário: TDEE ${tdee} kcal vs Meta ${targetKcal} kcal) — Plena disponibilidade de glicogênio para suportar volume ideal de hipertrofia (15-18 séries/sessão) e sobrecarga progressiva`;
+      }
+    }
+
+    // 3. Resolver provedor e credenciais de IA (mesclando banco e dados enviados pelo cliente)
     const dbSettings = await fetchAiSettings(supabase, userId);
     const chosenProvider = (data.clientProvider as any) || resolveAiProvider(dbSettings);
 
@@ -111,12 +260,12 @@ export const generateAiWorkoutRoutine = createServerFn({ method: "POST" })
     const apiKey = resolveAiApiKey(provider, settings);
     const model = getTextModel(settings, provider);
 
-    // 3. Montar diagnóstico
+    // Montar diagnóstico
     let diagnosis = "";
     if (currentWorkoutsSummary.length > 0) {
-      diagnosis = `Detectados ${currentWorkoutsSummary.length} treinos ativos (${currentWorkoutsSummary.length} divisões). Histórico com ${recentSessionsSummary.length} sessões recentes registradas.`;
+      diagnosis = `Detectados ${currentWorkoutsSummary.length} treinos ativos (${currentWorkoutsSummary.length} divisões). Histórico com ${recentSessionsSummary.length} sessões. Calibrado para ${displayName} (${latestWeight ? `${latestWeight}kg` : "peso atual"}, TMB ${bmr || 1800}kcal, TDEE ${tdee || 2400}kcal).`;
     } else {
-      diagnosis = "Nenhum treino anterior encontrado. A IA montará uma estrutura ideal do zero baseada no seu objetivo.";
+      diagnosis = `Montando rotina sob medida para ${displayName} (${latestWeight ? `${latestWeight}kg` : "peso atual"}, TMB ${bmr || 1800}kcal, TDEE ${tdee || 2400}kcal).`;
     }
 
     if (!apiKey && provider !== "omniroute") {
@@ -132,13 +281,13 @@ export const generateAiWorkoutRoutine = createServerFn({ method: "POST" })
     // 4. Prompt estruturado com instruções fisiológicas de elite
     const systemPrompt = `Você é um Mestre em Fisiologia do Exercício, Biomecânica Aplicada e Treinador de Força & Hipertrofia de Elite com mais de 15 anos de experiência prática em sala de musculação e total domínio da literatura científica contemporânea (Schoenfeld, Israetel, Beardsley, Renaissance Periodization).
 
-Sua missão é prescrever ou otimizar uma rotina de treinos hiper-eficiente, segura e baseada em evidências científicas.
+Sua missão é prescrever ou otimizar uma rotina de treinos hiper-eficiente, segura e estritamente calibrada para a fisiologia, nutrição e capacidade de recuperação deste atleta específico.
 
 FORMATO DE SAÍDA OBRIGATÓRIO:
 Responda ESTRITAMENTE com um objeto JSON válido, sem texto introdutório, sem explicações antes ou depois, sem blocos de texto fora das chaves, seguindo esta estrutura exata:
 {
   "title": "Nome da Rotina de Elite (ex: Divisão BCDA Otimizada de Alta Densidade)",
-  "description": "Explicação fisiológica concisa (2-3 frases) sobre a sinergia dos estímulos, distribuição de volume e recuperação neuromuscular.",
+  "description": "Explicação fisiológica concisa (2-3 frases) conectando o estímulo ao balanço energético, recuperação neuromuscular e hipertrofia.",
   "split_type": "BCDA",
   "weekly_frequency": 4,
   "workouts": [
@@ -161,7 +310,7 @@ Responda ESTRITAMENTE com um objeto JSON válido, sem texto introdutório, sem e
   "coach_tips": [
     "Sobrecarga Progressiva Dupla: suba a carga em 1-2kg apenas após alcançar o teto de repetições em todas as séries com execução impecável.",
     "Gestão de Fadiga e Esforço: treine a maioria das séries a RIR 1-2 (1 a 2 repetições da falha), reservando a falha concêntrica apenas para a última série de isoladores.",
-    "Hidratação e Recuperação: consuma ao menos 500-750ml de água intra-treino para manter a volemia e o transporte de nutrientes."
+    "Hidratação e Nutrição: beba ao menos 500-750ml de água durante o treino e garanta sua ingestão proteica diária para apoiar a síntese proteica pós-estímulo."
   ]
 }
 
@@ -169,8 +318,9 @@ PRINCÍPIOS FISIOLÓGICOS E BIOMECÂNICOS DE ELITE:
 1. ORDEM DO ESFORÇO E FADIGA DO SNC:
    - Os exercícios compostos pesados e multiarticulares de maior demanda neural (ex: Supino, Agachamento, Leg Press, Puxada, Remada Curvada/Apoiada) DEVEM abrir a sessão quando o sistema neuromuscular está 100% descansado.
    - Exercícios isoladores em cabos e máquinas entram na segunda metade para estresse metabólico seguro sem risco de colapso de estabilizadores.
-2. VOLUME EFETIVO E QUALIDADE (ANTI-JUNK VOLUME):
+2. VOLUME EFETIVO E CALIBRAÇÃO METABÓLICA (ANTI-JUNK VOLUME):
    - Mantenha exatamente entre 4 e 6 exercícios por sessão (volume ideal entre 14 e 18 séries totais de trabalho por treino). Mais do que isso gera 'junk volume' e eleva o estresse sistêmico sem ganho muscular adicional.
+   - Se o atleta estiver em Déficit Calórico, calibre o volume para a faixa inferior (12-14 séries) para proteger contra perda muscular e burnout do SNC.
    - Grupos grandes: 3 a 4 séries por exercício. Grupos pequenos (Bíceps, Tríceps, Deltoide Lateral/Posterior): 3 séries cirúrgicas.
 3. CURVA DE RESISTÊNCIA E HIPERTROFIA MEDIADA POR ALONGAMENTO:
    - Combine movimentos que desafiam o músculo na posição alongada (ex: Supino com halteres, Puxada alta, Stiff/RDL, Tríceps na polia acima da cabeça) com exercícios de pico de contração (ex: Crossover, Remada baixa, Cadeira extensora).
@@ -185,8 +335,18 @@ PRINCÍPIOS FISIOLÓGICOS E BIOMECÂNICOS DE ELITE:
 7. NOMENCLATURA PADRONIZADA:
    - Prefira nomes em português padronizados presentes no catálogo da academia: ${catalogNames || "Supino Reto com Barra, Puxada Frontal, Leg Press 45, Cadeira Extensora, Elevação Lateral, Rosca Direta, Tríceps Pulley"}.`;
 
-    const userPrompt = `DADOS DO ATLETA:
-- MODO SOLICITADO: ${data.mode === "optimize" ? "Otimizar Meus Treinos Atuais (Refinar biomecânica, ordem e lacunas, preservando a essência que já faço)" : "Criar Nova Divisão Sob Medida (Periodização completa do zero)"}
+    const userPrompt = `DADOS BIOLÓGICOS, METABÓLICOS E NUTRICIONAIS DO ATLETA:
+- Nome: ${displayName}
+- Idade: ${age ? `${age} anos` : "Não informada"} | Sexo: ${sex === "female" ? "Feminino" : sex === "male" ? "Masculino" : "Não informado"} | Altura: ${height ? `${height} cm` : "Não informada"}
+- Peso Atual: ${latestWeight ? `${latestWeight} kg` : "Não informado"}
+- Taxa Metabólica Basal (TMB): ${bmr ? `${bmr} kcal/dia` : "Não calculada"}
+- Gasto Energético Total Diário (TDEE): ${tdee ? `${tdee} kcal/dia` : "Não calculado"} (Média de ~${((workouts28d?.length ?? 0) / 4).toFixed(1)} treinos/semana nos últimos 28 dias)
+- Balanço Energético Atual: ${energyBalance}
+- Metas Diárias: ${targetKcal} kcal | ${targetProtein}g de proteína (${latestWeight ? (targetProtein / latestWeight).toFixed(1) : "2.0"} g/kg)
+- Ingestão Registrada Hoje: ${Math.round(todayKcal)} kcal, ${Math.round(todayProtein)}g proteína, ${Math.round(todayWater)} ml de água
+
+PREFERÊNCIAS DA ROTINA SOLICITADA:
+- MODO: ${data.mode === "optimize" ? "Otimizar Meus Treinos Atuais (Refinar biomecânica, ordem e lacunas, preservando a base que já executo)" : "Criar Nova Divisão Sob Medida (Periodização completa do zero)"}
 - OBJETIVO PRINCIPAL: ${data.goal.toUpperCase()}
 - FREQUÊNCIA SEMANAL: ${data.frequency} dias por semana
 - AMBIENTE / EQUIPAMENTOS: ${data.equipment.toUpperCase()}
@@ -195,10 +355,10 @@ PRINCÍPIOS FISIOLÓGICOS E BIOMECÂNICOS DE ELITE:
 TREINOS ATUAIS CADASTRADOS NO APP:
 ${currentWorkoutsSummary.length > 0 ? currentWorkoutsSummary.join("\n") : "Nenhum treino prévio cadastrado."}
 
-ÚLTIMAS SESSÕES DE TREINO REALIZADAS PELO ATLETA:
+HISTÓRICO RECENTE DE SESSÕES E CARGAS MÁXIMAS REGISTRADAS:
 ${recentSessionsSummary.length > 0 ? recentSessionsSummary.join("\n") : "Sem sessões recentes registradas."}
 
-Prescreva agora a rotina de treinos completa de nível elite em formato JSON puro.`;
+Prescreva agora a rotina de treinos completa de nível elite em formato JSON puro, levando em consideração todos esses dados biológicos e metabólicos do atleta.`;
 
     try {
       const response = await callAiChatCompletion({
