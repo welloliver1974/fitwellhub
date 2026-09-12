@@ -2,6 +2,31 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [11/09/2026] - Antigravity (Coach Interativo com Visão 360° no Assistente de Treinos)
+- **Motivação**:
+  - O usuário solicitou um Coach integrado diretamente na página do assistente de treinos (`/app/treinos/ia`) acessível via botão flutuante amigável, com balões de conversa modernos e limpos, comunicação humanizada e natural (sem clichês de robô) e visão 360° completa de todos os dados do usuário no aplicativo (o que come, o que bebe, peso, TMB, TDEE, histórico de treinos e a rotina proposta ativa na tela).
+- **Mudanças realizadas**:
+  - **Server Function de Fisiologista e Personal de Elite (`consultWorkoutCoach` em `src/server-fns/workout-coach.functions.ts`)**:
+    - Agrega perfil completo (`display_name`, idade, sexo, altura).
+    - Calcula TMB (Taxa Metabólica Basal via equação Mifflin-St Jeor).
+    - Avalia frequência de treinos nos últimos 28 dias para estabelecer o fator de atividade e calcular o TDEE (Gasto Energético Total Diário).
+    - Agrega calorias e macronutrientes (P, C, G) consumidos hoje vs. metas diárias cadastradas.
+    - Agrega consumo de água de hoje (ml) vs. meta recomendada.
+    - Coleta histórico das últimas sessões de treino com cargas reais registradas (kg) e repetições.
+    - Recebe o objeto da rotina ativa na tela para responder e orientar sobre qualquer exercício, ordem, descanso ou estratégia de sobrecarga progressiva.
+    - Persona humanizada, afetuosa e cientificamente de elite, chamando o usuário pelo nome próprio e estabelecendo conexões reais entre dieta, água, recuperação e hipertrofia.
+  - **Componente de Chat com Botão Flutuante Amigável (`WorkoutCoachChat` em `src/components/workout-coach-chat.tsx`)**:
+    - Botão flutuante estilizado no canto inferior (`fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-40`) com indicador pulsante de status online verde, ícone com efeito de brilho e badge de Coach FitWell.
+    - Modal/drawer moderno com cabeçalho contendo pílulas em tempo real de TMB, Gasto Diário (TDEE), Proteína ingerida vs meta, Água e Peso.
+    - Balões de conversa modernos e limpos com tipografia elegante e diferenciação clara entre usuário e coach.
+    - Chips de perguntas rápidas de 1 toque (*"Como adequar esse treino ao que comi hoje?"*, *"Por que essa ordem específica de exercícios?"*, *"Posso substituir algum exercício por desconforto?"*, *"Esse volume está compatível com minha TMB e gasto diário?"*).
+    - Campo de envio com suporte a Enter e feedback de digitação do coach.
+  - **Integração na Rota (`src/routes/app.treinos.ia.tsx`)**:
+    - Montado o `<WorkoutCoachChat routine={routine} />` com repasse da rotina gerada e cabeçalhos de autenticação de sessão.
+- **Validação**:
+  - `npx vitest run`: **25 arquivos de teste e 201 testes aprovados (100% de sucesso)**.
+  - `npm run build`: Compilação de cliente e SSR concluídas com sucesso.
+
 ## [11/09/2026] - Antigravity (Prompt de Nível Treinador e Fisiologista de Elite para Geração de Treinos IA)
 - **Motivação**:
   - O usuário solicitou que a inteligência que elabora os treinos atue com o conhecimento profundo de um personal trainer altamente experiente em sala de musculação e, simultaneamente, de um fisiologista do exercício atualizado com a literatura científica contemporânea.

@@ -43,6 +43,7 @@ import {
 import { generateAiWorkoutRoutine } from "@/server-fns/workout-generator.functions";
 import { saveSplitRotation } from "@/lib/workout-rotation";
 import { getAiSettingsLocal } from "@/lib/ai-settings";
+import { WorkoutCoachChat } from "@/components/workout-coach-chat";
 
 export const Route = createFileRoute("/app/treinos/ia")({
   component: WorkoutAiAssistantPage,
@@ -876,6 +877,9 @@ function WorkoutAiAssistantPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Coach Interativo com Visão 360° */}
+      <WorkoutCoachChat routine={routine} />
     </div>
   );
 }

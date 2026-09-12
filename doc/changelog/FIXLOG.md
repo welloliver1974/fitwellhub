@@ -22,6 +22,13 @@
    - **Upgrade de Prompt (Fisiologia e Treinador de Elite)**:
      - Injeção de diretrizes da literatura contemporânea de hipertrofia (Schoenfeld, Israetel, Beardsley).
      - Gestão de fadiga do SNC (compostos primeiro com descanso 75-120s, isoladores ao final), hipertrofia mediada por alongamento, controle de junk volume (4 a 6 exercícios por sessão) e notas biomecânicas cirúrgicas de execução.
+3. `src/components/workout-coach-chat.tsx` + `src/server-fns/workout-coach.functions.ts` + `src/routes/app.treinos.ia.tsx`:
+   - **Coach Interativo com Visão 360° no Assistente de Treinos**:
+     - Botão flutuante amigável posicionado no canto inferior direito com indicador de status online pulsante e badge de Coach FitWell.
+     - Modal de conversa moderno e limpo com balões estilizados para usuário e treinador.
+     - Visão 360° total do usuário: idade, sexo, altura, peso recente, TMB (Mifflin-St Jeor), TDEE (gasto calórico total diário calculado por frequência dos últimos 28 dias), calorias e macros consumidos hoje vs. metas, hidratação de hoje, histórico recente de cargas levantadas e a rotina proposta ativa na tela.
+     - Comunicação 100% humanizada, empática e científica (sem clichês robóticos), chamando o usuário pelo nome e orientando sobre exercícios, ordem, descanso e adequação à nutrição do dia.
+     - Chips de perguntas rápidas de 1 toque para dúvidas biomecânicas e nutricionais comuns.
 
 ---
 
