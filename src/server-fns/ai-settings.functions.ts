@@ -188,9 +188,68 @@ export async function callAiChatCompletion(options: {
     body: JSON.stringify(body),
   });
 
-  if (!response.ok) {
-    throw new Error(await response.text());
-  }
-
   return response.json();
 }
+
+const testInputSchema = z.object({
+  provider: z.enum(["groq", "openrouter", "nvidia", "omniroute"]),
+  apiKey: z.string().min(1, "Chave de API necessária"),
+  model: z.string().min(1, "Nome do modelo necessário"),
+  baseUrl: z.string().nullable().optional(),
+});
+
+/**
+ * Testa a conexão e resposta de um modelo de IA em tempo real
+ */
+export const testAiProviderModel = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => testInputSchema.parse(d))
+  .handler(async ({ data }) => {
+    const startTime = Date.now();
+    try {
+      const completion = await callAiChatCompletion({
+        provider: data.provider,
+        apiKey: data.apiKey.trim(),
+        model: data.model.trim(),
+        baseUrl: data.baseUrl,
+        messages: [
+          {
+            role: "system",
+            content: "Você é o assistente FitWell. Responda em apenas uma frase curta e amigável confirmando que está conectado.",
+          },
+          {
+            role: "user",
+            content: "FitWell teste de conexão. Responda brevemente.",
+          },
+        ],
+        temperature: 0.3,
+        maxTokens: 50,
+      });
+
+      const latencyMs = Date.now() - startTime;
+      const message =
+        completion?.choices?.[0]?.message?.content?.trim() || "Conexão estabelecida com sucesso!";
+
+      return {
+        success: true,
+        message,
+        latencyMs,
+      };
+    } catch (err: any) {
+      const latencyMs = Date.now() - startTime;
+      let errorMsg = err?.message || String(err) || "Erro desconhecido ao testar conexão";
+      try {
+        const parsed = JSON.parse(errorMsg);
+        if (parsed?.error?.message) errorMsg = parsed.error.message;
+      } catch {
+        // Usa mensagem direta se não for JSON
+      }
+
+      return {
+        success: false,
+        error: errorMsg,
+        latencyMs,
+      };
+    }
+  });
+

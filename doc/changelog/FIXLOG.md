@@ -9,6 +9,9 @@
    - Suporte completo a Provedor Manual/Customizado compatível com OpenAI (Ollama, LM Studio, vLLM, proxies).
    - Eliminação completa do Google Gemini devido a erros recorrentes de cota (429).
    - Persistência dupla das credenciais e preferências em Supabase (`ai_settings`) e `localStorage`, resolvendo a perda de chaves no Cloudflare Pages a cada deploy do GitHub.
+   - **Botão de Teste em Tempo Real ("Testar Conexão e Modelo 🧪")**:
+     - Implementado teste imediato com cálculo de latência (ms) em cada card de provedor e para o modelo ativo.
+     - Diagnóstico visual de sucesso com mensagem ou exibição clara do erro de API se a chave/modelo falharem.
 2. `src/routes/app.treinos.ia.tsx` + `src/lib/workout-ai-utils.ts` + `src/server-fns/workout-generator.functions.ts`:
    - Assistente de Treinos IA em aba isolada com diagnóstico de rotina existente (divisão BCDA).
    - Mecanismo de segurança com criação automática de Snapshot e restauração em 1 clique ("Restaurar Treino Original ↩️").

@@ -33,11 +33,14 @@ import {
   Cpu,
   Wrench,
   Camera,
+  FlaskConical,
+  XCircle,
 } from "lucide-react";
 import {
   fetchNvidiaModels,
   fetchGroqModels,
   fetchOpenRouterModels,
+  testAiProviderModel,
 } from "@/server-fns/ai-settings.functions";
 import {
   encodeAiExtraMeta,
@@ -115,6 +118,12 @@ function AiSettingsPage() {
 
   // Visualização de Chaves
   const [showKeys, setShowKeys] = useState(false);
+
+  // Testes de modelos e conexão
+  const [testingProvider, setTestingProvider] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<
+    Record<string, { success: boolean; message?: string; error?: string; latencyMs: number }>
+  >({});
 
   // Estados de página
   const [loading, setLoading] = useState(true);
@@ -242,6 +251,66 @@ function AiSettingsPage() {
       toast.error(err?.message || "Erro ao consultar modelos da NVIDIA");
     } finally {
       setLoadingNvidiaModels(false);
+    }
+  };
+
+  // Testar conexão e modelo do provedor escolhido
+  const handleTestProvider = async (targetProvider: AiProvider) => {
+    let apiKey = "";
+    let model = "";
+    let baseUrl: string | null = null;
+
+    if (targetProvider === "groq") {
+      apiKey = groqKey.trim();
+      model = groqModel.trim() || DEFAULT_GROQ_MODELS[0];
+    } else if (targetProvider === "openrouter") {
+      apiKey = openrouterKey.trim();
+      model = openrouterModel.trim() || DEFAULT_OPENROUTER_MODELS[0];
+    } else if (targetProvider === "nvidia") {
+      apiKey = nvidiaKey.trim() || openrouterKey.trim();
+      model = nvidiaModel.trim() || DEFAULT_NVIDIA_MODELS[0];
+    } else if (targetProvider === "omniroute") {
+      apiKey = omniKey.trim() || "local";
+      model = customModel.trim() || "default";
+      baseUrl = customBaseUrl.trim() || null;
+    }
+
+    if (!apiKey && targetProvider !== "omniroute") {
+      return toast.error(`Preencha a chave de API de ${targetProvider.toUpperCase()} antes de testar.`);
+    }
+
+    if (!model) {
+      return toast.error(`Selecione ou informe um modelo para ${targetProvider.toUpperCase()}.`);
+    }
+
+    setTestingProvider(targetProvider);
+    try {
+      const res = await testAiProviderModel({
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+        data: {
+          provider: targetProvider,
+          apiKey,
+          model,
+          baseUrl,
+        },
+      });
+
+      setTestResults((prev) => ({ ...prev, [targetProvider]: res }));
+      if (res.success) {
+        toast.success(`${targetProvider.toUpperCase()}: Conectado em ${res.latencyMs}ms!`);
+      } else {
+        toast.error(`${targetProvider.toUpperCase()}: ${res.error || "Falha na conexão"}`);
+      }
+    } catch (err: any) {
+      const errRes = {
+        success: false,
+        error: err?.message || "Erro inesperado ao testar o modelo",
+        latencyMs: 0,
+      };
+      setTestResults((prev) => ({ ...prev, [targetProvider]: errRes }));
+      toast.error(errRes.error);
+    } finally {
+      setTestingProvider(null);
     }
   };
 
@@ -489,6 +558,60 @@ function AiSettingsPage() {
                 Recomendado: <strong>llama-3.3-70b-versatile</strong> ou <strong>deepseek-r1-distill-llama-70b</strong>.
               </p>
             </div>
+
+            {/* Teste do Modelo Groq */}
+            <div className="pt-2 border-t border-border/40">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleTestProvider("groq")}
+                  disabled={testingProvider !== null || !groqKey.trim()}
+                  className="h-8 text-xs gap-1.5 rounded-lg border-amber-500/30 hover:bg-amber-500/10 text-amber-300"
+                >
+                  {testingProvider === "groq" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />
+                  ) : (
+                    <FlaskConical className="h-3.5 w-3.5 text-amber-400" />
+                  )}
+                  {testingProvider === "groq" ? "Testando resposta..." : "Testar Conexão e Modelo 🧪"}
+                </Button>
+                {testResults["groq"] && (
+                  <span className="text-[11px] font-mono text-muted-foreground">
+                    Latência: {testResults["groq"].latencyMs}ms
+                  </span>
+                )}
+              </div>
+
+              {testResults["groq"] && (
+                <div
+                  className={`mt-2.5 p-2.5 rounded-lg text-xs border flex items-start gap-2.5 ${
+                    testResults["groq"].success
+                      ? "bg-emerald-950/30 border-emerald-500/40 text-emerald-200"
+                      : "bg-rose-950/30 border-rose-500/40 text-rose-200"
+                  }`}
+                >
+                  {testResults["groq"].success ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+                  )}
+                  <div className="space-y-0.5 min-w-0 flex-1">
+                    <p className="font-semibold text-xs">
+                      {testResults["groq"].success
+                        ? "Modelo Groq conectado com sucesso! 🎉"
+                        : "Falha na comunicação com a Groq"}
+                    </p>
+                    <p className="text-[11px] opacity-90 break-words">
+                      {testResults["groq"].success
+                        ? `"${testResults["groq"].message}"`
+                        : testResults["groq"].error}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -545,6 +668,60 @@ function AiSettingsPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Teste do Modelo OpenRouter */}
+            <div className="pt-2 border-t border-border/40">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleTestProvider("openrouter")}
+                  disabled={testingProvider !== null || !openrouterKey.trim()}
+                  className="h-8 text-xs gap-1.5 rounded-lg border-blue-500/30 hover:bg-blue-500/10 text-blue-300"
+                >
+                  {testingProvider === "openrouter" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />
+                  ) : (
+                    <FlaskConical className="h-3.5 w-3.5 text-blue-400" />
+                  )}
+                  {testingProvider === "openrouter" ? "Testando resposta..." : "Testar Conexão e Modelo 🧪"}
+                </Button>
+                {testResults["openrouter"] && (
+                  <span className="text-[11px] font-mono text-muted-foreground">
+                    Latência: {testResults["openrouter"].latencyMs}ms
+                  </span>
+                )}
+              </div>
+
+              {testResults["openrouter"] && (
+                <div
+                  className={`mt-2.5 p-2.5 rounded-lg text-xs border flex items-start gap-2.5 ${
+                    testResults["openrouter"].success
+                      ? "bg-emerald-950/30 border-emerald-500/40 text-emerald-200"
+                      : "bg-rose-950/30 border-rose-500/40 text-rose-200"
+                  }`}
+                >
+                  {testResults["openrouter"].success ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+                  )}
+                  <div className="space-y-0.5 min-w-0 flex-1">
+                    <p className="font-semibold text-xs">
+                      {testResults["openrouter"].success
+                        ? "Modelo OpenRouter conectado com sucesso! 🎉"
+                        : "Falha na comunicação com o OpenRouter"}
+                    </p>
+                    <p className="text-[11px] opacity-90 break-words">
+                      {testResults["openrouter"].success
+                        ? `"${testResults["openrouter"].message}"`
+                        : testResults["openrouter"].error}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -606,6 +783,60 @@ function AiSettingsPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Teste do Modelo NVIDIA */}
+            <div className="pt-2 border-t border-border/40">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleTestProvider("nvidia")}
+                  disabled={testingProvider !== null || (!nvidiaKey.trim() && !openrouterKey.trim())}
+                  className="h-8 text-xs gap-1.5 rounded-lg border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-300"
+                >
+                  {testingProvider === "nvidia" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" />
+                  ) : (
+                    <FlaskConical className="h-3.5 w-3.5 text-emerald-400" />
+                  )}
+                  {testingProvider === "nvidia" ? "Testando resposta..." : "Testar Conexão e Modelo 🧪"}
+                </Button>
+                {testResults["nvidia"] && (
+                  <span className="text-[11px] font-mono text-muted-foreground">
+                    Latência: {testResults["nvidia"].latencyMs}ms
+                  </span>
+                )}
+              </div>
+
+              {testResults["nvidia"] && (
+                <div
+                  className={`mt-2.5 p-2.5 rounded-lg text-xs border flex items-start gap-2.5 ${
+                    testResults["nvidia"].success
+                      ? "bg-emerald-950/30 border-emerald-500/40 text-emerald-200"
+                      : "bg-rose-950/30 border-rose-500/40 text-rose-200"
+                  }`}
+                >
+                  {testResults["nvidia"].success ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+                  )}
+                  <div className="space-y-0.5 min-w-0 flex-1">
+                    <p className="font-semibold text-xs">
+                      {testResults["nvidia"].success
+                        ? "Modelo NVIDIA NIM conectado com sucesso! 🎉"
+                        : "Falha na comunicação com a NVIDIA NIM"}
+                    </p>
+                    <p className="text-[11px] opacity-90 break-words">
+                      {testResults["nvidia"].success
+                        ? `"${testResults["nvidia"].message}"`
+                        : testResults["nvidia"].error}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -651,6 +882,60 @@ function AiSettingsPage() {
                   className="text-xs h-9"
                 />
               </div>
+            </div>
+
+            {/* Teste do Provedor Manual */}
+            <div className="pt-2 border-t border-border/40">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleTestProvider("omniroute")}
+                  disabled={testingProvider !== null || !customBaseUrl.trim()}
+                  className="h-8 text-xs gap-1.5 rounded-lg border-purple-500/30 hover:bg-purple-500/10 text-purple-300"
+                >
+                  {testingProvider === "omniroute" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+                  ) : (
+                    <FlaskConical className="h-3.5 w-3.5 text-purple-400" />
+                  )}
+                  {testingProvider === "omniroute" ? "Testando resposta..." : "Testar Endpoint Manual 🧪"}
+                </Button>
+                {testResults["omniroute"] && (
+                  <span className="text-[11px] font-mono text-muted-foreground">
+                    Latência: {testResults["omniroute"].latencyMs}ms
+                  </span>
+                )}
+              </div>
+
+              {testResults["omniroute"] && (
+                <div
+                  className={`mt-2.5 p-2.5 rounded-lg text-xs border flex items-start gap-2.5 ${
+                    testResults["omniroute"].success
+                      ? "bg-emerald-950/30 border-emerald-500/40 text-emerald-200"
+                      : "bg-rose-950/30 border-rose-500/40 text-rose-200"
+                  }`}
+                >
+                  {testResults["omniroute"].success ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+                  )}
+                  <div className="space-y-0.5 min-w-0 flex-1">
+                    <p className="font-semibold text-xs">
+                      {testResults["omniroute"].success
+                        ? "Endpoint manual respondeu com sucesso! 🎉"
+                        : "Falha ao conectar no endpoint manual"}
+                    </p>
+                    <p className="text-[11px] opacity-90 break-words">
+                      {testResults["omniroute"].success
+                        ? `"${testResults["omniroute"].message}"`
+                        : testResults["omniroute"].error}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -703,24 +988,43 @@ function AiSettingsPage() {
         </div>
       </Card>
 
-      {/* Botão de Salvar Geral */}
-      <Button
-        onClick={save}
-        disabled={saving}
-        className="w-full rounded-full py-5 text-sm font-semibold shadow-md gap-2"
-      >
-        {saving ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Gravando no banco de dados e no aparelho...
-          </>
-        ) : (
-          <>
-            <CheckCircle2 className="h-4 w-4" />
-            Salvar Configurações de IA Permanentemente
-          </>
-        )}
-      </Button>
+      {/* Ações Gerais: Teste do Provedor Ativo + Salvar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => handleTestProvider(provider)}
+          disabled={testingProvider !== null}
+          className="rounded-full py-5 text-sm font-semibold border-border gap-2"
+        >
+          {testingProvider === provider ? (
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          ) : (
+            <FlaskConical className="h-4 w-4 text-amber-400" />
+          )}
+          {testingProvider === provider
+            ? "Testando modelo ativo..."
+            : `Testar Modelo Ativo (${provider.toUpperCase()}) 🧪`}
+        </Button>
+
+        <Button
+          onClick={save}
+          disabled={saving}
+          className="flex-1 rounded-full py-5 text-sm font-semibold shadow-md gap-2"
+        >
+          {saving ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Gravando no banco de dados e no aparelho...
+            </>
+          ) : (
+            <>
+              <CheckCircle2 className="h-4 w-4" />
+              Salvar Configurações de IA Permanentemente
+            </>
+          )}
+        </Button>
+      </div>
 
       {/* Integração Google Fit / Smartwatch */}
       <Card className="p-4 sm:p-5 rounded-2xl border-border/60 space-y-4">

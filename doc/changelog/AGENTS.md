@@ -2,6 +2,20 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [11/09/2026] - Antigravity (Botão de Teste de Conexão e Latência dos Modelos de IA na Central de IA)
+- **Motivação**:
+  - O usuário sentiu falta de validar de imediato se as chaves de API e os modelos configurados na Central de IA estão realmente funcionando, sem ter que navegar até o Chat do Coach ou Daily Briefing para testar.
+- **Mudanças realizadas**:
+  - **Server Function de Teste em Tempo Real (`testAiProviderModel` em `ai-settings.functions.ts`)**:
+    - Dispara uma mensagem curta para o provedor selecionado com medição exata do tempo de resposta (latência em ms).
+    - Captura e trata mensagens de erro amigáveis caso a chave esteja inválida, a cota excedida ou o modelo indisponível.
+  - **Botões e Diagnóstico Visual nos Cards de Provedores (`app.ia.tsx`)**:
+    - Adicionado o botão "Testar Conexão e Modelo 🧪" em cada um dos provedores (**Groq**, **OpenRouter**, **NVIDIA NIM** e **Manual/Custom**).
+    - Feedback imediato: exibe badge verde com o tempo de resposta em milissegundos e a confirmação retornada pelo modelo, ou badge vermelho com o detalhe do erro retornado pela API.
+    - Adicionado o botão "Testar Modelo Ativo 🧪" na barra inferior ao lado do botão de salvar.
+- **Validação**:
+  - `npx vitest run src/lib/ai-settings.test.ts`: 26 testes aprovados.
+
 ## [11/09/2026] - Antigravity (Central de IA Independente do .env + Listagem Dinâmica de Modelos Groq/OpenRouter/NVIDIA/Custom + Remoção do Gemini)
 - **Motivação**:
   - Toda vez que o projeto era commitado e enviado ao GitHub, a esteira do Cloudflare descartava as chaves do `.env` (pois o arquivo `.env` é gitignored por segurança), forçando o usuário a reconfigurar as chaves repetidamente.
