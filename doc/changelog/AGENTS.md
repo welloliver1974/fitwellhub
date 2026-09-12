@@ -2,6 +2,21 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [11/09/2026] - Antigravity (Prompt de Nível Treinador e Fisiologista de Elite para Geração de Treinos IA)
+- **Motivação**:
+  - O usuário solicitou que a inteligência que elabora os treinos atue com o conhecimento profundo de um personal trainer altamente experiente em sala de musculação e, simultaneamente, de um fisiologista do exercício atualizado com a literatura científica contemporânea.
+- **Mudanças realizadas**:
+  - **Refinamento Avançado do System Prompt (`workout-generator.functions.ts`)**:
+    - **Persona de Elite**: Fisiologista do exercício e treinador de força com 15+ anos de vivência prática e embasamento científico em hipertrofia (Schoenfeld, Israetel, Beardsley).
+    - **Gestão de Fadiga do SNC & Ordem de Movimento**: Compostos pesados multiarticulares (Supino, Agachamento, Puxadas, Leg Press) abrem a sessão quando o sistema nervoso está revigorado (descanso 75-120s); isoladores e cabos entram na segunda metade para estresse metabólico sem risco de falha estabilizadora (descanso 45-60s).
+    - **Anti-Junk Volume**: Volume calibrado estritamente entre 4 e 6 exercícios por sessão (14 a 18 séries efetivas de trabalho por treino), eliminando o volume lixo que apenas eleva cortisol e retarda a recuperação.
+    - **Hipertrofia Mediada por Alongamento**: Combinação intencional de exercícios com sobrecarga na posição alongada (Supino halter, Puxada alta, Stiff/RDL) com pico de contração em cabos/máquinas.
+    - **Sinergia da Divisão e Prevenção de Overtraining**: Respeito estrito à divisão habitual do usuário (ex: rotação BCDA), impedindo exaustão de músculos sinergistas na véspera de treinos primários.
+    - **Notas Cirúrgicas de Execução (`notes`)**: Instruções acionáveis de ângulo, cadência excêntrica (2-3s) e postura para cada exercício da lista.
+    - **Dicas de Ouro do Coach (`coach_tips`)**: Instruções práticas de sobrecarga progressiva dupla, RIR 1-2 e hidratação intra-treino.
+- **Validação**:
+  - `npx vitest run src/lib/workout-ai-utils.test.ts`: 6 testes aprovados.
+
 ## [11/09/2026] - Antigravity (Correção do Erro 'Cannot read properties of undefined (reading workouts)' no Assistente de Treinos)
 - **Causa Raiz**:
   - A server function `generateAiWorkoutRoutine` exigia autenticação (`requireSupabaseAuth`), porém a chamada na rota `app.treinos.ia.tsx` não estava enviando o cabeçalho `Authorization: Bearer ${session.access_token}` e `session` não havia sido desestruturado do hook `useAuth()`.

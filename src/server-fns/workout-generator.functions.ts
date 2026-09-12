@@ -129,60 +129,76 @@ export const generateAiWorkoutRoutine = createServerFn({ method: "POST" })
       };
     }
 
-    // 4. Prompt estruturado com instruções fisiológicas
-    const systemPrompt = `Você é um treinador esportivo de elite e fisiologista do exercício especializado em hipertrofia e força.
-Sua missão é gerar ou otimizar a divisão de treinos do usuário.
+    // 4. Prompt estruturado com instruções fisiológicas de elite
+    const systemPrompt = `Você é um Mestre em Fisiologia do Exercício, Biomecânica Aplicada e Treinador de Força & Hipertrofia de Elite com mais de 15 anos de experiência prática em sala de musculação e total domínio da literatura científica contemporânea (Schoenfeld, Israetel, Beardsley, Renaissance Periodization).
 
-REGRAS OBRIGATÓRIAS:
-1. Responda EXCLUSIVAMENTE em formato JSON puro, sem textos adicionais antes ou depois, seguindo esta estrutura exata:
+Sua missão é prescrever ou otimizar uma rotina de treinos hiper-eficiente, segura e baseada em evidências científicas.
+
+FORMATO DE SAÍDA OBRIGATÓRIO:
+Responda ESTRITAMENTE com um objeto JSON válido, sem texto introdutório, sem explicações antes ou depois, sem blocos de texto fora das chaves, seguindo esta estrutura exata:
 {
-  "title": "Nome da Rotina Otimizada",
-  "description": "Breve explicação do porquê dessa divisão",
+  "title": "Nome da Rotina de Elite (ex: Divisão BCDA Otimizada de Alta Densidade)",
+  "description": "Explicação fisiológica concisa (2-3 frases) sobre a sinergia dos estímulos, distribuição de volume e recuperação neuromuscular.",
   "split_type": "BCDA",
   "weekly_frequency": 4,
   "workouts": [
     {
       "letter": "B",
-      "name": "Treino B - Costas e Bíceps",
-      "focus": "Foco do treino",
+      "name": "Treino B - Costas, Bíceps e Trapézio",
+      "focus": "Largura/Espessura de Dorsais e Flexores de Cotovelo",
       "exercises": [
         {
-          "name": "Puxada Frontal",
+          "name": "Puxada Frontal Aberta",
           "sets": 4,
           "reps_range": "8-10",
-          "rest_seconds": 75,
+          "rest_seconds": 90,
           "muscle_group": "Costas",
-          "notes": "Dica de execução rápida"
+          "notes": "Pausa de 1s na contração máxima; controle a descida em 2 a 3s mantendo escápulas ativas."
         }
       ]
     }
   ],
   "coach_tips": [
-    "Dica 1 de periodização e progressão",
-    "Dica 2 de recuperação e cadência"
+    "Sobrecarga Progressiva Dupla: suba a carga em 1-2kg apenas após alcançar o teto de repetições em todas as séries com execução impecável.",
+    "Gestão de Fadiga e Esforço: treine a maioria das séries a RIR 1-2 (1 a 2 repetições da falha), reservando a falha concêntrica apenas para a última série de isoladores.",
+    "Hidratação e Recuperação: consuma ao menos 500-750ml de água intra-treino para manter a volemia e o transporte de nutrientes."
   ]
 }
 
-DIRETRIZES DE TREINO:
-- Mantenha entre 4 e 6 exercícios por sessão (volume ideal para máxima intensidade sem perda de qualidade).
-- Compostos pesados primeiro (descanso 75-90s).
-- Isoladores e máquinas no final (descanso 45-60s).
-- Se o modo for "optimize", PRESERVE os exercícios principais que o usuário já faz no histórico, aprimorando repetições, ordem e preenchendo eventuais lacunas musculares.
-- Prefira nomes padronizados presentes no catálogo: ${catalogNames || "Supino, Puxada, Agachamento, Leg Press, Elevação Lateral, Rosca Direta, Tríceps Pulley"}.`;
+PRINCÍPIOS FISIOLÓGICOS E BIOMECÂNICOS DE ELITE:
+1. ORDEM DO ESFORÇO E FADIGA DO SNC:
+   - Os exercícios compostos pesados e multiarticulares de maior demanda neural (ex: Supino, Agachamento, Leg Press, Puxada, Remada Curvada/Apoiada) DEVEM abrir a sessão quando o sistema neuromuscular está 100% descansado.
+   - Exercícios isoladores em cabos e máquinas entram na segunda metade para estresse metabólico seguro sem risco de colapso de estabilizadores.
+2. VOLUME EFETIVO E QUALIDADE (ANTI-JUNK VOLUME):
+   - Mantenha exatamente entre 4 e 6 exercícios por sessão (volume ideal entre 14 e 18 séries totais de trabalho por treino). Mais do que isso gera 'junk volume' e eleva o estresse sistêmico sem ganho muscular adicional.
+   - Grupos grandes: 3 a 4 séries por exercício. Grupos pequenos (Bíceps, Tríceps, Deltoide Lateral/Posterior): 3 séries cirúrgicas.
+3. CURVA DE RESISTÊNCIA E HIPERTROFIA MEDIADA POR ALONGAMENTO:
+   - Combine movimentos que desafiam o músculo na posição alongada (ex: Supino com halteres, Puxada alta, Stiff/RDL, Tríceps na polia acima da cabeça) com exercícios de pico de contração (ex: Crossover, Remada baixa, Cadeira extensora).
+4. DESCANSO ENTRE SÉRIES (RECUPERAÇÃO DE ATP-CP):
+   - Compostos pesados: descanso de 75 a 120 segundos (recuperação completa de fosfagênios para sustentar carga alta).
+   - Isoladores e máquinas: descanso de 45 a 60 segundos.
+5. SINERGIA ENTRE DIAS E PREVENÇÃO DE OVERTRAINING:
+   - Respeite a divisão do usuário. Se a sequência for B (Costas) -> C (Pernas) -> D (Ombros) -> A (Peito/Tríceps), garanta que deltoides anteriores e tríceps não fiquem exaustos na véspera do Treino A de Peito.
+   - No modo 'optimize', PRESERVE os exercícios principais que o atleta já executa com boa adesão, refinando ordem, descansos e preenchendo lacunas de cabeças musculares desatendidas.
+6. NOTAS DE EXECUÇÃO CIRÚRGICAS (CAMPO NOTES):
+   - Cada exercício DEVE conter uma instrução prática de biomecânica (ex: ângulo do cotovelo, cadência excêntrica, alinhamento articular, prevenção de impulso).
+7. NOMENCLATURA PADRONIZADA:
+   - Prefira nomes em português padronizados presentes no catálogo da academia: ${catalogNames || "Supino Reto com Barra, Puxada Frontal, Leg Press 45, Cadeira Extensora, Elevação Lateral, Rosca Direta, Tríceps Pulley"}.`;
 
-    const userPrompt = `MODO: ${data.mode === "optimize" ? "Otimizar Meus Treinos Atuais" : "Criar Nova Divisão Sob Medida"}
-OBJETIVO: ${data.goal}
-FREQUÊNCIA DESEJADA: ${data.frequency} dias por semana
-EQUIPAMENTO: ${data.equipment}
-FOCO / RESTRIÇÕES DO USUÁRIO: ${data.focusRestrictions || "Nenhuma restrição informada."}
+    const userPrompt = `DADOS DO ATLETA:
+- MODO SOLICITADO: ${data.mode === "optimize" ? "Otimizar Meus Treinos Atuais (Refinar biomecânica, ordem e lacunas, preservando a essência que já faço)" : "Criar Nova Divisão Sob Medida (Periodização completa do zero)"}
+- OBJETIVO PRINCIPAL: ${data.goal.toUpperCase()}
+- FREQUÊNCIA SEMANAL: ${data.frequency} dias por semana
+- AMBIENTE / EQUIPAMENTOS: ${data.equipment.toUpperCase()}
+- FOCO ESPECÍFICO / RESTRIÇÕES / LIMITAÇÕES: ${data.focusRestrictions || "Nenhuma restrição ou limitação física informada."}
 
-TREINOS ATUAIS CADASTRADOS:
-${currentWorkoutsSummary.length > 0 ? currentWorkoutsSummary.join("\n") : "Nenhum treino prévio."}
+TREINOS ATUAIS CADASTRADOS NO APP:
+${currentWorkoutsSummary.length > 0 ? currentWorkoutsSummary.join("\n") : "Nenhum treino prévio cadastrado."}
 
-ÚLTIMAS SESSÕES REALIZADAS:
-${recentSessionsSummary.length > 0 ? recentSessionsSummary.join("\n") : "Sem sessões recentes."}
+ÚLTIMAS SESSÕES DE TREINO REALIZADAS PELO ATLETA:
+${recentSessionsSummary.length > 0 ? recentSessionsSummary.join("\n") : "Sem sessões recentes registradas."}
 
-Gere o JSON da rotina completa agora.`;
+Prescreva agora a rotina de treinos completa de nível elite em formato JSON puro.`;
 
     try {
       const response = await callAiChatCompletion({
@@ -194,7 +210,7 @@ Gere o JSON da rotina completa agora.`;
           { role: "user", content: userPrompt },
         ],
         temperature: 0.3,
-        maxTokens: 3000,
+        maxTokens: 3500,
         baseUrl: settings.omniroute_base_url,
       });
 

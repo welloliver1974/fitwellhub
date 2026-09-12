@@ -19,6 +19,9 @@
    - **Correção de Bug (TypeError reading 'workouts')**:
      - Causa: Falta de repasse do cabeçalho `Authorization: Bearer ${session.access_token}` para o middleware `requireSupabaseAuth` da server function.
      - Solução: Injeção de `session.access_token`, envio de configurações locais de IA (`clientProvider`, `clientApiKey`, `clientModel`) como fallback e blindagem com optional chaining em todas as referências a `routine?.workouts`.
+   - **Upgrade de Prompt (Fisiologia e Treinador de Elite)**:
+     - Injeção de diretrizes da literatura contemporânea de hipertrofia (Schoenfeld, Israetel, Beardsley).
+     - Gestão de fadiga do SNC (compostos primeiro com descanso 75-120s, isoladores ao final), hipertrofia mediada por alongamento, controle de junk volume (4 a 6 exercícios por sessão) e notas biomecânicas cirúrgicas de execução.
 
 ---
 
