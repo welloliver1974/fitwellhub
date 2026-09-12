@@ -287,27 +287,26 @@ DIRETRIZES DE RESPOSTA:
 3. Se ele tiver dúvidas sobre séries, descanso ou ordem dos exercícios, explique a lógica de fadiga do sistema nervoso central e hipertrofia em comprimento muscular alongado de forma simples e direta.
 4. Mantenha as respostas concisas, escaneáveis e agradáveis (use parágrafos curtos, listas com marcadores se houver exercícios, negrito nos pontos-chave).`;
 
-    // 8. Resolver provedor e credenciais de IA
-    const dbSettings = await fetchAiSettings(supabase);
-    const resolvedProvider = resolveAiProvider(
-      dbSettings,
-      data.clientProvider
-    );
-    const apiKey = resolveAiApiKey(
-      dbSettings,
-      resolvedProvider,
-      data.clientApiKey
-    );
-    const model = getTextModel(
-      dbSettings,
-      resolvedProvider,
-      data.clientModel
-    );
+    // 8. Resolver provedor e credenciais de IA (mesclando banco e dados locais enviados)
+    const dbSettings = await fetchAiSettings(supabase, userId);
+    const chosenProvider = (data.clientProvider as any) || resolveAiProvider(dbSettings);
 
-    const customBaseUrl =
-      resolvedProvider === "custom"
-        ? data.clientBaseUrl || dbSettings?.omniroute_base_url
-        : undefined;
+    const settings = {
+      ...dbSettings,
+      provider: chosenProvider,
+      groq_api_key: (chosenProvider === "groq" && data.clientApiKey) ? data.clientApiKey : dbSettings.groq_api_key,
+      openrouter_api_key: ((chosenProvider === "openrouter" || chosenProvider === "nvidia") && data.clientApiKey) ? data.clientApiKey : dbSettings.openrouter_api_key,
+      omniroute_api_key: (chosenProvider === "omniroute" && data.clientApiKey) ? data.clientApiKey : dbSettings.omniroute_api_key,
+      groq_model: (chosenProvider === "groq" && data.clientModel) ? data.clientModel : dbSettings.groq_model,
+      openrouter_model: (chosenProvider === "openrouter" && data.clientModel) ? data.clientModel : dbSettings.openrouter_model,
+      nvidia_model: (chosenProvider === "nvidia" && data.clientModel) ? data.clientModel : dbSettings.nvidia_model,
+      custom_model: (chosenProvider === "omniroute" && data.clientModel) ? data.clientModel : dbSettings.custom_model,
+      custom_base_url: (chosenProvider === "omniroute" && data.clientBaseUrl) ? data.clientBaseUrl : dbSettings.custom_base_url,
+    };
+
+    const provider = resolveAiProvider(settings);
+    const apiKey = resolveAiApiKey(settings, provider);
+    const model = getTextModel(provider, settings);
 
     // 9. Montar histórico de mensagens para a IA
     const apiMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
@@ -328,28 +327,37 @@ DIRETRIZES DE RESPOSTA:
 
     let reply = "";
     try {
-      reply = await callAiChatCompletion({
-        provider: resolvedProvider,
-        apiKey,
+      const response = await callAiChatCompletion({
+        provider,
+        apiKey: apiKey || "",
         model,
         messages: apiMessages,
         temperature: 0.7,
         maxTokens: 1000,
-        customBaseUrl,
+        baseUrl: settings.custom_base_url || settings.omniroute_base_url,
       });
+
+      const rawContent = response?.choices?.[0]?.message?.content;
+      if (typeof rawContent === "string" && rawContent.trim()) {
+        reply = rawContent.trim();
+      } else if (response?.error?.message) {
+        throw new Error(response.error.message);
+      } else {
+        throw new Error("Resposta da IA sem texto legível.");
+      }
     } catch (err: any) {
       console.error("[WorkoutCoach] Erro ao chamar IA:", err);
-      // Fallback humanizado inteligente
-      reply = `Fala, ${displayName}! Tive uma oscilação momentânea na conexão com o modelo de inteligência (${resolvedProvider}), mas já estou de olho em todos os seus dados.
-      
+      // Fallback humanizado inteligente caso a chave ou modelo falhem
+      reply = `Fala, ${displayName}! Tive uma oscilação momentânea na conexão com o modelo de inteligência (${provider}), mas já estou de olho em todos os seus dados.
+
 Seu dia hoje: ${Math.round(todayKcal)} kcal e ${Math.round(todayProtein)}g de proteína ingeridos. Com o seu TDEE estimado em ${tdee || 2200} kcal, você está no caminho certo para a recuperação muscular!
 
-Se você tiver dúvidas sobre a rotina da tela, teste reenviar a pergunta em alguns segundos ou verifique a chave na aba /app/ia. Estou por aqui para ajustar cada detalhe com você!`;
+Se você tiver dúvidas sobre a rotina da tela, verifique a chave na aba /app/ia ou teste reenviar sua pergunta. Estou por aqui para ajustar cada detalhe com você!`;
     }
 
     return {
       reply,
-      providerUsed: `${resolvedProvider} (${model})`,
+      providerUsed: `${provider} (${model})`,
       userStats: {
         displayName,
         weight: latestWeight,

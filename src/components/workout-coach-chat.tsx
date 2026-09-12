@@ -143,6 +143,13 @@ Quer entender o porquê de cada exercício, ajustar alguma série ou tirar qualq
     setIsLoading(true);
 
     try {
+      const token = session?.access_token;
+      if (!token) {
+        toast.error("Sua sessão expirou ou não está autenticada. Atualize a página.");
+        setIsLoading(false);
+        return;
+      }
+
       const local = getAiSettingsLocal();
       const historyForApi = messages
         .filter((m) => m.id !== "welcome-coach")
@@ -162,18 +169,25 @@ Quer entender o porquê de cada exercício, ajustar alguma série ou tirar qualq
           clientBaseUrl: local.baseUrl,
         },
         headers: {
-          Authorization: `Bearer ${session?.access_token}`,
+          Authorization: `Bearer ${token}`,
         },
       });
 
-      if (res.userStats) {
+      if (res?.userStats) {
         setUserStats(res.userStats);
+      }
+
+      let replyContent = "Fala! Tive uma breve oscilação na resposta, pode repetir?";
+      if (typeof res?.reply === "string") {
+        replyContent = res.reply;
+      } else if (typeof (res?.reply as any)?.choices?.[0]?.message?.content === "string") {
+        replyContent = (res.reply as any).choices[0].message.content;
       }
 
       const coachMsg: Message = {
         id: `coach-${Date.now()}`,
         role: "assistant",
-        content: res.reply,
+        content: String(replyContent),
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
 

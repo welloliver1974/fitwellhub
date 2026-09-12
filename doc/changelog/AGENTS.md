@@ -2,6 +2,24 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [11/09/2026] - Antigravity (Correção de Erro 'Something went wrong' no Chat do Coach)
+- **Causa Raiz**:
+  - `callAiChatCompletion` retorna o objeto JSON completo retornado pela API OpenAI (`response.json()`), contendo `{ id, choices: [{ message: { content } }] }` ou `{ error }`.
+  - No `workout-coach.functions.ts`, a variável `reply` recebeu o objeto JSON bruto ao invés da string `response.choices[0].message.content`.
+  - Quando a resposta chegava ao React, a renderização de `{m.content}` tentava renderizar um objeto em vez de texto (`Objects are not valid as a React child`), estourando o Error Boundary do TanStack Router (`Something went wrong`).
+  - Além disso, faltava passar `userId` para `fetchAiSettings(supabase, userId)` e a ordem dos argumentos em `getTextModel` e `resolveAiApiKey` estava desajustada.
+- **Correções Realizadas**:
+  - **Extração estrita de texto no backend (`workout-coach.functions.ts`)**:
+    - Passado `userId` para `fetchAiSettings(supabase, userId)` e mescladas credenciais de fallback do cliente.
+    - Ordem correta de argumentos: `resolveAiApiKey(settings, provider)` e `getTextModel(provider, settings)`.
+    - Extração segura do conteúdo textual: `reply = rawContent.trim()`.
+  - **Blindagem no cliente (`workout-coach-chat.tsx`)**:
+    - Validação de `session.access_token` antes da chamada RPC para prevenir exceções não tratadas de 401.
+    - Sanitização de `replyContent` garantindo que `content` seja sempre uma string pura antes de entrar no estado de mensagens do React.
+- **Validação**:
+  - `npx vitest run`: **25 arquivos e 201 testes aprovados (100% de sucesso)**.
+  - `npm run build`: Compilação concluída com sucesso.
+
 ## [11/09/2026] - Antigravity (Visão 360° Metabólica e Nutricional Injetada no Gerador de Treinos com IA)
 - **Motivação**:
   - O usuário identificou que o gerador de treinos (`generateAiWorkoutRoutine`) precisava também considerar todos os seus dados biológicos e nutricionais na hora de prescrever a rotina, e não apenas no chat do coach.
