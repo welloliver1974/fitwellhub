@@ -43,6 +43,11 @@ import {
   testAiProviderModel,
 } from "@/server-fns/ai-settings.functions";
 import {
+  getTelegramIntegrationStatus,
+  generateTelegramLinkToken,
+  unlinkTelegramAccount,
+} from "@/server-fns/telegram.functions";
+import {
   encodeAiExtraMeta,
   normalizeAiSettings,
   saveAiSettingsLocal,
@@ -1026,6 +1031,22 @@ function AiSettingsPage() {
         </Button>
       </div>
 
+      {/* Integração Telegram & Hermes Agent */}
+      <Card className="p-4 sm:p-5 rounded-2xl border-border/60 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <h3 className="text-sm font-semibold flex items-center gap-1.5">
+              <span>🤖</span> Telegram & Hermes Agent (Treino por Voz)
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Conclua treinos inteiros ("Terminei o Treino A, marca tudo e salva") ou gere fichas por áudio direto no Telegram.
+            </p>
+          </div>
+        </div>
+
+        <TelegramIntegrationSection />
+      </Card>
+
       {/* Integração Google Fit / Smartwatch */}
       <Card className="p-4 sm:p-5 rounded-2xl border-border/60 space-y-4">
         <div className="flex items-center justify-between">
@@ -1668,3 +1689,255 @@ CREATE INDEX IF NOT EXISTS idx_daily_steps_logs_user_date ON public.daily_steps_
     </div>
   );
 }
+
+function TelegramIntegrationSection() {
+  const { session } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<{
+    isLinked: boolean;
+    telegramChatId: string | null;
+    telegramUsername: string | null;
+    activeToken: string | null;
+    linkedAt: string | null;
+  }>({
+    isLinked: false,
+    telegramChatId: null,
+    telegramUsername: null,
+    activeToken: null,
+    linkedAt: null,
+  });
+
+  const [generating, setGenerating] = useState(false);
+  const [unlinking, setUnlinking] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [copiedToken, setCopiedToken] = useState(false);
+  const [copiedCurl, setCopiedCurl] = useState(false);
+  const [copiedHermesPrompt, setCopiedHermesPrompt] = useState(false);
+
+  const fetchStatus = async () => {
+    if (!session?.access_token) return;
+    try {
+      setLoading(true);
+      const res = await getTelegramIntegrationStatus({
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      setStatus(res);
+      if (res.activeToken) {
+        setToken(res.activeToken);
+      }
+    } catch (e: any) {
+      console.warn("Status Telegram:", e?.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStatus();
+  }, [session]);
+
+  const handleGenerateToken = async () => {
+    if (!session?.access_token) return;
+    try {
+      setGenerating(true);
+      const res = await generateTelegramLinkToken({
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      setToken(res.token);
+      toast.success("Código gerado! Envie-o para o seu bot no Telegram.");
+      fetchStatus();
+    } catch (e: any) {
+      toast.error(`Erro ao gerar código: ${e?.message}`);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleUnlink = async () => {
+    if (!confirm("Deseja realmente desvincular seu Telegram desta conta?")) return;
+    if (!session?.access_token) return;
+    try {
+      setUnlinking(true);
+      await unlinkTelegramAccount({
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      toast.success("Telegram desvinculado com sucesso.");
+      setToken(null);
+      fetchStatus();
+    } catch (e: any) {
+      toast.error(`Erro: ${e?.message}`);
+    } finally {
+      setUnlinking(false);
+    }
+  };
+
+  const handleCopyToken = () => {
+    if (!token) return;
+    navigator.clipboard.writeText(`/start ${token}`);
+    setCopiedToken(true);
+    toast.success("Comando copiado! Cole no chat do seu bot Telegram.");
+    setTimeout(() => setCopiedToken(false), 2500);
+  };
+
+  const hermesToolCurl = `curl -X POST "${typeof window !== "undefined" ? window.location.origin : ""}/_serverFn/executeHermesAction" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "telegramChatId": "SEU_CHAT_ID",
+    "action": "complete_workout",
+    "payload": { "routine_name": "A" }
+  }'`;
+
+  const hermesSystemInstruction = `Você é o Personal Trainer e Assistente FitWell Hub do usuário no Telegram.
+Quando o usuário disser que terminou um treino (ex: "terminei o treino A", "marca o treino de peito", "treino feito"), use a ferramenta 'fitwell_action' com action='complete_workout' e routine_name='Treino A'.
+Quando o usuário pedir para prescrever ou criar um treino por voz (ex: "hoje meu treino é o A, cria aí focado em peito e ombro"), use a ferramenta 'fitwell_action' com action='create_workout', name='Treino A' e focus='Peito e Ombro'.`;
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+        <span>Verificando status de pareamento do Telegram...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 pt-1">
+      {/* Status Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-secondary/50 border border-border/50">
+        <div>
+          <p className="text-xs font-semibold text-foreground flex items-center gap-2">
+            <span>Status da Conexão:</span>
+            <span className={status.isLinked ? "text-emerald-500 font-bold" : "text-amber-500 font-medium"}>
+              {status.isLinked ? "🟢 Conectado e Ativo" : "🟡 Aguardando Vinculação"}
+            </span>
+          </p>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            {status.isLinked
+              ? `Vinculado ao Chat ID: ${status.telegramChatId}${status.telegramUsername ? ` (@${status.telegramUsername})` : ""}`
+              : "Gere um código de 6 dígitos e envie para o seu Bot no Telegram para ativar o registro por voz."}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          {status.isLinked ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleUnlink}
+              disabled={unlinking}
+              className="h-8 text-xs text-destructive hover:bg-destructive/10"
+            >
+              {unlinking ? "Desvinculando..." : "Desconectar Bot"}
+            </Button>
+          ) : (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleGenerateToken}
+              disabled={generating}
+              className="h-8 text-xs font-medium gap-1.5 bg-primary text-primary-foreground"
+            >
+              {generating ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <KeyRound className="h-3.5 w-3.5" />
+              )}
+              {token ? "Gerar Novo Código" : "Gerar Código de Vinculação"}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Caixa do Código de Pareamento */}
+      {!status.isLinked && (
+        <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 space-y-3">
+          <div className="space-y-1">
+            <h4 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <span>📲</span> Como conectar em 1 minuto:
+            </h4>
+            <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-1">
+              <li>Clique em <strong>Gerar Código de Vinculação</strong> acima se ainda não tiver gerado.</li>
+              <li>Copie o comando abaixo com o código gerado.</li>
+              <li>Envie essa mensagem para o seu <strong>Bot no Telegram</strong>. Pronto!</li>
+            </ol>
+          </div>
+
+          {token && (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
+              <div className="px-3 py-2 bg-background rounded-lg border border-border font-mono text-sm font-bold tracking-wider text-primary text-center sm:text-left flex-1 select-all">
+                /start {token}
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleCopyToken}
+                className="h-9 gap-1.5 text-xs shrink-0"
+              >
+                {copiedToken ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                {copiedToken ? "Copiado!" : "Copiar Comando"}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Instruções para o Hermes Agent / Webhook */}
+      <div className="p-4 rounded-xl bg-secondary/30 border border-border/40 space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+            <Wrench className="h-4 w-4 text-primary" /> Configuração do Hermes Agent (Tools / Ações)
+          </span>
+          <span className="text-[10px] text-muted-foreground">Endpoints e Prompts Prontos</span>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          O Hermes Agent pode enviar requisições HTTP para a ação <code>executeHermesAction</code> do FitWell Hub com as seguintes ações suportadas:
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+          <div className="p-2.5 rounded-lg bg-background border border-border/60 space-y-1">
+            <div className="font-semibold text-foreground">1. Concluir Treino ("Check-in")</div>
+            <div className="text-[11px] text-muted-foreground">
+              Ação: <code>action: "complete_workout"</code><br />
+              Exemplo: <em>"Terminei o Treino A, marca tudo e salva"</em>. O sistema grava a sessão e todas as séries habituais.
+            </div>
+          </div>
+          <div className="p-2.5 rounded-lg bg-background border border-border/60 space-y-1">
+            <div className="font-semibold text-foreground">2. Criar Treino por Voz</div>
+            <div className="text-[11px] text-muted-foreground">
+              Ação: <code>action: "create_workout"</code><br />
+              Exemplo: <em>"Hoje meu treino é o A, cria aí focado em peitoral e tríceps"</em>. O sistema prescreve e salva a rotina.
+            </div>
+          </div>
+        </div>
+
+        {/* Prompt pronto para copiar */}
+        <div className="space-y-1 pt-1">
+          <div className="flex items-center justify-between">
+            <Label className="text-[11px] text-muted-foreground">Prompt de Sistema sugerido para o Hermes Agent:</Label>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                navigator.clipboard.writeText(hermesSystemInstruction);
+                setCopiedHermesPrompt(true);
+                toast.success("Prompt copiado!");
+                setTimeout(() => setCopiedHermesPrompt(false), 2000);
+              }}
+              className="h-6 text-[10px] gap-1 text-muted-foreground hover:text-foreground"
+            >
+              {copiedHermesPrompt ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+              {copiedHermesPrompt ? "Copiado" : "Copiar Prompt"}
+            </Button>
+          </div>
+          <Textarea
+            readOnly
+            value={hermesSystemInstruction}
+            className="font-mono text-[11px] h-20 resize-none bg-background/60"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+

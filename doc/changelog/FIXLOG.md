@@ -1,5 +1,28 @@
 # FIXLOG — FitWell Hub
 
+## Sessão: 13/09/2026 — Integração Telegram & Hermes Agent (Treino por Voz e Check-in Instantâneo)
+
+### 🎯 Funcionalidades trabalhadas
+1. `src/server-fns/telegram.functions.ts`:
+   - **Check-in Instantâneo de Treino ("Terminei o Treino A, marca tudo e salva")**:
+     - Localiza a ficha correspondente do usuário no Supabase (`workouts`).
+     - Cria o registro da sessão em `workout_sessions` com data/hora em fuso local.
+     - Replica automaticamente todos os exercícios e séries cadastradas na ficha modelo em `workout_session_sets` como concluídos (`completed: true`) com as cargas e repetições habituais.
+     - Atualiza os gráficos de sobrecarga progressiva e histórico do app sem fricção.
+   - **Criação / Prescrição de Treino por Voz ("Hoje meu treino é o A, cria aí focado em peito e ombro")**:
+     - Criação da rotina no banco com exercícios, séries e repetições personalizadas via chamada do Hermes ou da IA interna do FitWell.
+   - **Mapeamento e Pareamento Seguro**:
+     - Gestão de tokens de pareamento temporários (`FIT-XXXXXX`) e vinculação unívoca entre `telegram_chat_id` e o `user_id` do Supabase.
+   - **Endpoint Unificado para o Hermes Agent (`executeHermesAction`)**:
+     - Suporte a ações `pair`, `status`, `complete_workout` e `create_workout`.
+2. `src/routes/app.ia.tsx`:
+   - Novo card dedicado **"🤖 Telegram & Hermes Agent (Treino por Voz)"**.
+   - Geração de código de pareamento com botão de cópia de 1 clique (`/start FIT-XXXXXX`).
+   - Indicador de status em tempo real (🟢 Conectado / 🟡 Aguardando vinculação).
+   - Guia visual de configuração do Hermes Agent com prompts de sistema e exemplos de requisição.
+3. `supabase/migrations/20260913_telegram_integrations.sql`:
+   - Criação da tabela `telegram_integrations` com RLS habilitado e índices para `telegram_chat_id` e `link_token`.
+
 ## Sessão: 11/09/2026 — Central de IA Desacoplada do .env + Busca Dinâmica de Modelos + Assistente de Treinos IA com Snapshot
 
 ### 🎯 Funcionalidades trabalhadas
