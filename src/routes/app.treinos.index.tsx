@@ -252,83 +252,98 @@ function WorkoutsPage() {
   };
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Treinos</h1>
-        <div className="flex gap-2">
+    <div className="space-y-4 sm:space-y-5 w-full max-w-full overflow-hidden">
+      {/* Header Responsivo Mobile-First */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Treinos</h1>
+          {/* Botão Novo em destaque no mobile */}
+          <div className="sm:hidden">
+            <Button size="sm" onClick={() => setOpen(true)} className="rounded-full h-8 px-3 text-xs gap-1 shadow-sm">
+              <Plus className="h-3.5 w-3.5" />
+              Novo
+            </Button>
+          </div>
+        </div>
+
+        {/* Barra de atalhos e ações */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <Link to="/app/treinos/ia">
-            <Button size="sm" variant="outline" className="rounded-full border-primary/40 bg-primary/5 hover:bg-primary/10 text-primary">
-              <Sparkles className="h-4 w-4 mr-1 text-primary" />
-              Assistente IA
+            <Button size="sm" variant="outline" className="rounded-full h-8 px-2.5 sm:px-3 text-xs border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary">
+              <Sparkles className="h-3.5 w-3.5 mr-1 text-primary shrink-0" />
+              <span className="sm:inline">Assistente IA</span>
             </Button>
           </Link>
           <Link to="/app/templates">
-            <Button size="sm" variant="outline" className="rounded-full">
-              <Layers className="h-4 w-4 mr-1" />
-              Templates
+            <Button size="sm" variant="outline" className="rounded-full h-8 px-2.5 sm:px-3 text-xs">
+              <Layers className="h-3.5 w-3.5 mr-1 shrink-0" />
+              <span>Templates</span>
             </Button>
           </Link>
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="rounded-full">
-                <Plus className="h-4 w-4 mr-1" />
-                Novo
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Novo treino</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-3">
-                <Label>Nome</Label>
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Peito e tríceps"
-                  autoFocus
-                />
-              </div>
-              <DialogFooter>
-                <Button onClick={create} className="rounded-full">
-                  Criar
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <div className="hidden sm:block">
+            <Button size="sm" onClick={() => setOpen(true)} className="rounded-full h-8 px-3.5 text-xs">
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              Novo
+            </Button>
+          </div>
         </div>
       </div>
 
-      <Tabs defaultValue="workouts" className="w-full space-y-4">
-        <TabsList className="grid w-full grid-cols-2 p-1 rounded-2xl bg-secondary/50 border border-border/40">
+      {/* Dialog de Novo Treino */}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Novo treino</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <Label>Nome</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ex: Peito e tríceps"
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button onClick={create} className="rounded-full w-full sm:w-auto">
+              Criar treino
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Tabs defaultValue="workouts" className="w-full space-y-3 sm:space-y-4">
+        <TabsList className="grid w-full grid-cols-2 p-1 rounded-2xl bg-secondary/40 border border-border/40 h-auto">
           <TabsTrigger
             value="workouts"
-            className="rounded-xl font-medium gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+            className="rounded-xl py-2 px-1.5 sm:px-3 text-xs sm:text-sm font-medium gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm min-w-0"
           >
-            <Dumbbell className="h-4 w-4 text-primary" />
-            <span>Minhas Fichas</span>
-            <Badge variant="secondary" className="px-1.5 py-0 text-[11px] h-5 rounded-full ml-1">
+            <Dumbbell className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary shrink-0" />
+            <span className="truncate">Minhas Fichas</span>
+            <Badge variant="secondary" className="px-1.5 py-0 text-[10px] sm:text-[11px] h-4 sm:h-5 rounded-full shrink-0">
               {workouts.length}
             </Badge>
           </TabsTrigger>
           <TabsTrigger
             value="history"
-            className="rounded-xl font-medium gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+            className="rounded-xl py-2 px-1.5 sm:px-3 text-xs sm:text-sm font-medium gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm min-w-0"
           >
-            <History className="h-4 w-4 text-primary" />
-            <span>Histórico Concluído</span>
-            <Badge variant="secondary" className="px-1.5 py-0 text-[11px] h-5 rounded-full ml-1">
+            <History className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary shrink-0" />
+            <span className="truncate sm:hidden">Histórico</span>
+            <span className="hidden sm:inline truncate">Histórico Concluído</span>
+            <Badge variant="secondary" className="px-1.5 py-0 text-[10px] sm:text-[11px] h-4 sm:h-5 rounded-full shrink-0">
               {sessions.length}
             </Badge>
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="workouts" className="space-y-4 mt-0 focus-visible:outline-none">
+        <TabsContent value="workouts" className="space-y-3 sm:space-y-4 mt-0 focus-visible:outline-none">
           {workouts.length > 0 && splitOrder.length > 0 && (
-            <div className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-secondary/40 text-xs border border-border/50">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-2.5 sm:px-3.5 sm:py-2.5 rounded-2xl bg-secondary/30 text-xs border border-border/50">
+              <div className="flex items-center gap-2 min-w-0">
                 <RotateCw className="h-3.5 w-3.5 text-primary shrink-0" />
-                <span className="text-muted-foreground">
-                  Divisão ativa:{" "}
+                <span className="text-muted-foreground truncate">
+                  Divisão:{" "}
                   <strong className="text-foreground font-semibold tracking-wide">
                     {splitOrder.join(" ➔ ")}
                   </strong>
@@ -339,12 +354,12 @@ function WorkoutsPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 px-2 text-xs text-primary hover:text-primary hover:bg-primary/10 rounded-full"
+                    className="h-6 px-2 text-xs text-primary hover:text-primary hover:bg-primary/10 rounded-full self-start sm:self-auto shrink-0"
                   >
                     Ajustar divisão
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="sm:max-w-md">
                   <DialogHeader>
                     <DialogTitle>Ordem da Divisão de Treinos</DialogTitle>
                   </DialogHeader>
@@ -364,7 +379,7 @@ function WorkoutsPage() {
                     </p>
                   </div>
                   <DialogFooter>
-                    <Button onClick={handleSaveSplit} className="rounded-full">
+                    <Button onClick={handleSaveSplit} className="rounded-full w-full sm:w-auto">
                       Salvar sequência
                     </Button>
                   </DialogFooter>
@@ -374,15 +389,15 @@ function WorkoutsPage() {
           )}
 
           {workouts.length === 0 ? (
-            <Card className="p-10 text-center">
-              <Dumbbell className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-              <p className="text-muted-foreground">Nenhum treino ainda. Crie o primeiro!</p>
+            <Card className="p-8 sm:p-10 text-center">
+              <Dumbbell className="h-8 w-8 sm:h-10 sm:w-10 mx-auto text-muted-foreground mb-3 opacity-60" />
+              <p className="text-sm sm:text-base text-muted-foreground">Nenhum treino ainda. Crie o primeiro!</p>
             </Card>
           ) : (
             <div className="space-y-2">
               {workouts.map((w) => (
                 <Link key={w.id} to="/app/treinos/$id" params={{ id: w.id }} className="block">
-                  <Card className="p-4 flex items-center justify-between hover:bg-secondary/50 transition-colors">
+                  <Card className="p-3 sm:p-4 flex items-center justify-between hover:bg-secondary/50 transition-colors gap-2 overflow-hidden">
                     <div className="flex-1 min-w-0">
                       {editingId === w.id ? (
                         <div className="flex items-center gap-2">
@@ -400,8 +415,8 @@ function WorkoutsPage() {
                           />
                         </div>
                       ) : (
-                        <div className="flex items-center gap-1.5">
-                          <p className="font-medium truncate">{w.name}</p>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <p className="font-medium text-sm sm:text-base truncate">{w.name}</p>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -412,23 +427,30 @@ function WorkoutsPage() {
                           </Button>
                         </div>
                       )}
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-[11px] sm:text-xs text-muted-foreground">
                         {formatLocalDate(w.workout_date)}
                       </p>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
                       <Button
                         variant="ghost"
                         size="icon"
+                        className="h-8 w-8"
                         onClick={(e) => duplicate(w, e)}
                         title="Duplicar para hoje"
                       >
-                        <Copy className="h-4 w-4 text-muted-foreground" />
+                        <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={(e) => remove(w.id, e)}>
-                        <Trash2 className="h-4 w-4 text-muted-foreground" />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={(e) => remove(w.id, e)}
+                        title="Excluir treino"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                       </Button>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                     </div>
                   </Card>
                 </Link>
@@ -439,12 +461,12 @@ function WorkoutsPage() {
 
         <TabsContent value="history" className="space-y-3 mt-0 focus-visible:outline-none">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <History className="h-4 w-4 text-primary" />
-              <h2 className="text-base font-semibold">Treinos Concluídos</h2>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <History className="h-4 w-4 text-primary shrink-0" />
+              <h2 className="text-sm sm:text-base font-semibold">Treinos Concluídos</h2>
             </div>
-            <span className="text-xs text-muted-foreground">
-              {sessions.length} {sessions.length === 1 ? "sessão registrada" : "sessões registradas"}
+            <span className="text-[11px] sm:text-xs text-muted-foreground">
+              {sessions.length} {sessions.length === 1 ? "sessão" : "sessões"}
             </span>
           </div>
           <p className="text-xs text-muted-foreground text-pretty">
@@ -452,27 +474,27 @@ function WorkoutsPage() {
             registro de teste ou duplicado, use o botão de excluir ao lado — as fichas ativas não são afetadas.
           </p>
           {sessions.length === 0 ? (
-            <Card className="p-8 text-center border-dashed">
-              <History className="h-8 w-8 mx-auto text-muted-foreground mb-2 opacity-50" />
+            <Card className="p-6 sm:p-8 text-center border-dashed">
+              <History className="h-7 w-7 sm:h-8 sm:w-8 mx-auto text-muted-foreground mb-2 opacity-50" />
               <p className="text-sm font-medium text-muted-foreground">Nenhuma sessão concluída ainda</p>
               <p className="text-xs text-muted-foreground mt-1">Conclua um treino pelo app ou avise o Hermes no Telegram para salvar!</p>
             </Card>
           ) : (
             <div className="space-y-2">
               {sessions.map((s) => (
-                <Card key={s.id} className="p-3 flex items-center justify-between hover:bg-secondary/30 transition-colors">
-                  <div className="min-w-0">
-                    <p className="font-medium truncate text-sm">{s.name}</p>
-                    <p className="text-xs text-muted-foreground">{formatSessionWhen(s.completed_at)}</p>
+                <Card key={s.id} className="p-2.5 sm:p-3 flex items-center justify-between hover:bg-secondary/30 transition-colors gap-2 overflow-hidden">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium truncate text-xs sm:text-sm">{s.name}</p>
+                    <p className="text-[11px] sm:text-xs text-muted-foreground">{formatSessionWhen(s.completed_at)}</p>
                   </div>
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => removeSession(s.id)}
                     title="Excluir sessão do histórico"
-                    className="hover:text-destructive hover:bg-destructive/10"
+                    className="h-8 w-8 shrink-0 hover:text-destructive hover:bg-destructive/10"
                   >
-                    <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive transition-colors" />
+                    <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground hover:text-destructive transition-colors" />
                   </Button>
                 </Card>
               ))}
