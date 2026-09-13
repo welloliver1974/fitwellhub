@@ -278,11 +278,12 @@ export const executeHermesAction = createServerFn({ method: "POST" })
       const routineNameQuery = String(data.payload.routine_name || data.payload.workout || "").trim();
       const notes = data.payload.notes ? String(data.payload.notes) : "Registrado via Telegram";
 
-      // Busca todos os treinos do usuário para encontrar a melhor correspondência
+      // Busca todos os treinos do usuário ordenados pelos mais recentes primeiro
       const { data: userWorkouts } = await supabase
         .from("workouts")
-        .select("id, name")
-        .eq("user_id", userId);
+        .select("id, name, workout_date")
+        .eq("user_id", userId)
+        .order("workout_date", { ascending: false });
 
       if (!userWorkouts || userWorkouts.length === 0) {
         return {
@@ -291,27 +292,40 @@ export const executeHermesAction = createServerFn({ method: "POST" })
         };
       }
 
-      // Algoritmo de correspondência de nome (ex: "A" -> "Treino A", "peito" -> "Treino A - Peito")
+      // Algoritmo refinado de correspondência de nome
+      const cleanQuery = routineNameQuery.toLowerCase().replace(/^treino\s+/i, "").trim();
+
+      // 1. Match exato no nome completo
       let matchedWorkout = userWorkouts.find(
         (w) => w.name.toLowerCase() === routineNameQuery.toLowerCase()
       );
 
+      // 2. Se pediu apenas uma letra ("B", "Treino B"), priorizar treinos que começam com essa letra
+      if (!matchedWorkout && (cleanQuery.length === 1 || /^treino\s+[a-z]$/i.test(routineNameQuery))) {
+        const letter = cleanQuery.length === 1 ? cleanQuery : cleanQuery.slice(-1);
+        matchedWorkout = userWorkouts.find((w) => {
+          const lower = w.name.toLowerCase();
+          return (
+            lower.startsWith(`treino ${letter}`) ||
+            lower.startsWith(`${letter} -`) ||
+            lower.startsWith(`${letter} `) ||
+            new RegExp(`\\b${letter}\\b`, "i").test(w.name)
+          );
+        });
+      }
+
+      // 3. Match parcial por substring
       if (!matchedWorkout && routineNameQuery) {
         matchedWorkout = userWorkouts.find((w) =>
           w.name.toLowerCase().includes(routineNameQuery.toLowerCase())
         );
       }
 
-      // Se o usuário só falou "A", procurar por "Treino A" ou começar com "A"
-      if (!matchedWorkout && routineNameQuery.length === 1) {
-        matchedWorkout = userWorkouts.find((w) =>
-          new RegExp(`\\b${routineNameQuery}\\b`, "i").test(w.name)
-        );
-      }
-
-      // Se ainda não encontrou e o usuário não especificou, tenta pegar o primeiro ou pedir desambiguação
+      // 4. Se ainda não encontrou, desambiguação
       if (!matchedWorkout) {
-        const availableNames = userWorkouts.map((w) => `• ${w.name}`).join("\n");
+        const availableNames = Array.from(new Set(userWorkouts.map((w) => w.name)))
+          .map((n) => `• ${n}`)
+          .join("\n");
         return {
           success: false,
           error: `Não encontrei o treino "${routineNameQuery}". Seus treinos disponíveis são:\n${availableNames}\n\nQual deles você realizou?`,
@@ -407,11 +421,12 @@ export const executeHermesAction = createServerFn({ method: "POST" })
       const routineNameQuery = String(data.payload.routine_name || data.payload.workout || "A").trim();
       const targetDate = data.payload.date ? String(data.payload.date) : getLocalDate();
 
-      // Busca os treinos do usuário para encontrar a ficha modelo
+      // Busca os treinos do usuário ordenados pelos mais recentes primeiro
       const { data: userWorkouts } = await supabase
         .from("workouts")
-        .select("id, name, notes")
-        .eq("user_id", userId);
+        .select("id, name, notes, workout_date")
+        .eq("user_id", userId)
+        .order("workout_date", { ascending: false });
 
       if (!userWorkouts || userWorkouts.length === 0) {
         return {
@@ -420,25 +435,38 @@ export const executeHermesAction = createServerFn({ method: "POST" })
         };
       }
 
-      // Procura correspondência do nome (ex: "A", "Treino A", "Costas")
+      const cleanQuery = routineNameQuery.toLowerCase().replace(/^treino\s+/i, "").trim();
+
+      // 1. Match exato
       let sourceWorkout = userWorkouts.find(
         (w) => w.name.toLowerCase() === routineNameQuery.toLowerCase()
       );
 
+      // 2. Se pediu apenas uma letra ("B", "Treino B"), priorizar treinos que começam com essa letra
+      if (!sourceWorkout && (cleanQuery.length === 1 || /^treino\s+[a-z]$/i.test(routineNameQuery))) {
+        const letter = cleanQuery.length === 1 ? cleanQuery : cleanQuery.slice(-1);
+        sourceWorkout = userWorkouts.find((w) => {
+          const lower = w.name.toLowerCase();
+          return (
+            lower.startsWith(`treino ${letter}`) ||
+            lower.startsWith(`${letter} -`) ||
+            lower.startsWith(`${letter} `) ||
+            new RegExp(`\\b${letter}\\b`, "i").test(w.name)
+          );
+        });
+      }
+
+      // 3. Match parcial por substring
       if (!sourceWorkout && routineNameQuery) {
         sourceWorkout = userWorkouts.find((w) =>
           w.name.toLowerCase().includes(routineNameQuery.toLowerCase())
         );
       }
 
-      if (!sourceWorkout && routineNameQuery.length === 1) {
-        sourceWorkout = userWorkouts.find((w) =>
-          new RegExp(`\\b${routineNameQuery}\\b`, "i").test(w.name)
-        );
-      }
-
       if (!sourceWorkout) {
-        const names = userWorkouts.map((w) => `• ${w.name}`).join("\n");
+        const names = Array.from(new Set(userWorkouts.map((w) => w.name)))
+          .map((n) => `• ${n}`)
+          .join("\n");
         return {
           success: false,
           error: `Não encontrei o treino "${routineNameQuery}". Suas fichas são:\n${names}\n\nQual delas você quer duplicar?`,
