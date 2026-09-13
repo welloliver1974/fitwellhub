@@ -399,6 +399,8 @@ const hermesActionSchema = z.object({
     "delete_meal_item",
     "delete_meal",
     "adjust_water",
+    "get_day",
+    "list_meals",
   ]),
   payload: z.record(z.any()).default({}),
 });
@@ -501,10 +503,49 @@ export const executeHermesAction = createServerFn({ method: "POST" })
         .eq("user_id", userId)
         .order("name");
 
+      const today = getLocalDate();
+      const { data: todayMeals } = await supabase
+        .from("meals")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("meal_date", today);
+      const mealIds = (todayMeals || []).map((m) => m.id);
+      let dayKcal = 0;
+      let dayP = 0;
+      let dayC = 0;
+      let dayF = 0;
+      if (mealIds.length > 0) {
+        const { data: dayItems } = await supabase
+          .from("meal_items")
+          .select("calories, protein_g, carbs_g, fat_g")
+          .in("meal_id", mealIds);
+        (dayItems || []).forEach((it) => {
+          dayKcal += it.calories || 0;
+          dayP += Number(it.protein_g || 0);
+          dayC += Number(it.carbs_g || 0);
+          dayF += Number(it.fat_g || 0);
+        });
+      }
+
+      const { data: waterEntries } = await supabase
+        .from("water_logs")
+        .select("ml")
+        .eq("user_id", userId)
+        .eq("log_date", today);
+      const totalWaterMl = (waterEntries || []).reduce((acc, w) => acc + (w.ml || 0), 0);
+
       return {
         success: true,
         userName: profile?.display_name || "Atleta",
         workouts: (workouts || []).map((w) => w.name),
+        todayNutrition: {
+          calories: dayKcal,
+          protein_g: Math.round(dayP * 10) / 10,
+          carbs_g: Math.round(dayC * 10) / 10,
+          fat_g: Math.round(dayF * 10) / 10,
+          water_ml: totalWaterMl,
+          mealsCount: (todayMeals || []).length,
+        },
       };
     }
 
@@ -1538,6 +1579,160 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
         success: true,
         undoneWorkout: sessionToUndo.name,
         message: `↩️ Conclusão do treino **"${sessionToUndo.name}"** desfeita com sucesso! Os registros de séries de hoje foram removidos.`,
+      };
+    }
+
+    // 13. AÇÃO: CONSULTAR DIÁRIO DO DIA / LISTAR REFEIÇÕES ("get_day", "list_meals")
+    if (data.action === "get_day" || data.action === "list_meals") {
+      const targetDate = data.payload.date ? String(data.payload.date) : getLocalDate();
+
+      // 1. Buscar refeições do dia
+      const { data: meals } = await supabase
+        .from("meals")
+        .select("id, meal_type, created_at")
+        .eq("user_id", userId)
+        .eq("meal_date", targetDate)
+        .order("created_at", { ascending: true });
+
+      const mealIds = (meals || []).map((m) => m.id);
+      let items: any[] = [];
+      if (mealIds.length > 0) {
+        const { data: mealItems } = await supabase
+          .from("meal_items")
+          .select("id, meal_id, name, grams, calories, protein_g, carbs_g, fat_g, created_at")
+          .in("meal_id", mealIds)
+          .order("created_at", { ascending: true });
+        items = mealItems || [];
+      }
+
+      // Agrupar itens por refeição
+      const structuredMeals = (meals || []).map((m) => {
+        const mItems = items.filter((it) => it.meal_id === m.id);
+        const mealCalories = mItems.reduce((acc, it) => acc + (it.calories || 0), 0);
+        const mealProtein = Math.round(mItems.reduce((acc, it) => acc + (it.protein_g || 0), 0) * 10) / 10;
+        const mealCarbs = Math.round(mItems.reduce((acc, it) => acc + (it.carbs_g || 0), 0) * 10) / 10;
+        const mealFat = Math.round(mItems.reduce((acc, it) => acc + (it.fat_g || 0), 0) * 10) / 10;
+
+        return {
+          id: m.id,
+          meal_type: m.meal_type,
+          calories: mealCalories,
+          protein_g: mealProtein,
+          carbs_g: mealCarbs,
+          fat_g: mealFat,
+          items: mItems.map((it) => ({
+            id: it.id,
+            name: it.name,
+            grams: it.grams,
+            calories: it.calories,
+            protein_g: it.protein_g,
+            carbs_g: it.carbs_g,
+            fat_g: it.fat_g,
+          })),
+        };
+      });
+
+      // 2. Buscar água do dia
+      const { data: waterEntries } = await supabase
+        .from("water_logs")
+        .select("ml")
+        .eq("user_id", userId)
+        .eq("log_date", targetDate);
+      const totalWaterMl = (waterEntries || []).reduce((acc, w) => acc + (w.ml || 0), 0);
+
+      // 3. Totais consumidos no dia
+      const totalCalories = items.reduce((acc, it) => acc + (it.calories || 0), 0);
+      const totalProtein = Math.round(items.reduce((acc, it) => acc + (it.protein_g || 0), 0) * 10) / 10;
+      const totalCarbs = Math.round(items.reduce((acc, it) => acc + (it.carbs_g || 0), 0) * 10) / 10;
+      const totalFat = Math.round(items.reduce((acc, it) => acc + (it.fat_g || 0), 0) * 10) / 10;
+
+      // 4. Metas do usuário
+      const { data: userGoals } = await supabase
+        .from("goals")
+        .select("calories, protein_g, carbs_g, fat_g, water_ml")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      const goals = {
+        calories: Number(userGoals?.calories || 2000),
+        protein_g: Number(userGoals?.protein_g || 140),
+        carbs_g: Number(userGoals?.carbs_g || 220),
+        fat_g: Number(userGoals?.fat_g || 65),
+        water_ml: Number(userGoals?.water_ml || 2500),
+      };
+
+      const remaining = {
+        calories: Math.max(0, goals.calories - totalCalories),
+        protein_g: Math.max(0, Math.round((goals.protein_g - totalProtein) * 10) / 10),
+        carbs_g: Math.max(0, Math.round((goals.carbs_g - totalCarbs) * 10) / 10),
+        fat_g: Math.max(0, Math.round((goals.fat_g - totalFat) * 10) / 10),
+        water_ml: Math.max(0, goals.water_ml - totalWaterMl),
+      };
+
+      // 5. Treinos concluídos hoje
+      const bounds = todayBoundsSaoPaulo();
+      const { data: workouts } = await supabase
+        .from("workout_sessions")
+        .select("id, name, completed_at")
+        .eq("user_id", userId)
+        .gte("completed_at", bounds.start)
+        .lte("completed_at", bounds.end)
+        .order("completed_at", { ascending: false });
+
+      // 6. Texto formatado
+      let summaryText = `📅 **Diário de Hoje (${targetDate})**\n\n`;
+
+      if (structuredMeals.length === 0) {
+        summaryText += `🍽️ **Refeições:** Nenhuma refeição cadastrada hoje ainda.\n\n`;
+      } else {
+        summaryText += `🍽️ **Refeições (${structuredMeals.length}):**\n`;
+        structuredMeals.forEach((m) => {
+          summaryText += `• **${m.meal_type}** (${m.calories} kcal | ${m.protein_g}g P | ${m.carbs_g}g C | ${m.fat_g}g G):\n`;
+          if (m.items.length === 0) {
+            summaryText += `  *(sem itens)*\n`;
+          } else {
+            m.items.forEach((it) => {
+              summaryText += `  - ${it.name} (${it.grams}g): ${it.calories} kcal, ${it.protein_g}g P, ${it.carbs_g}g C, ${it.fat_g}g G\n`;
+            });
+          }
+        });
+        summaryText += `\n`;
+      }
+
+      summaryText += `💧 **Água:** ${totalWaterMl.toLocaleString("pt-BR")} ml / Meta: ${goals.water_ml.toLocaleString("pt-BR")} ml (Faltam ${remaining.water_ml.toLocaleString("pt-BR")} ml)\n\n`;
+
+      summaryText += `📊 **Totais vs Metas:**\n`;
+      summaryText += `• Calorias: ${totalCalories} / ${goals.calories} kcal (Restam: ${remaining.calories} kcal)\n`;
+      summaryText += `• Proteínas: ${totalProtein}g / ${goals.protein_g}g (Restam: ${remaining.protein_g}g)\n`;
+      summaryText += `• Carboidratos: ${totalCarbs}g / ${goals.carbs_g}g (Restam: ${remaining.carbs_g}g)\n`;
+      summaryText += `• Gorduras: ${totalFat}g / ${goals.fat_g}g (Restam: ${remaining.fat_g}g)\n\n`;
+
+      if (workouts && workouts.length > 0) {
+        summaryText += `🏋️‍♂️ **Treinos Concluídos Hoje:**\n`;
+        workouts.forEach((w) => {
+          summaryText += `• ${w.name}\n`;
+        });
+      } else {
+        summaryText += `🏋️‍♂️ Nenhum treino concluído hoje.\n`;
+      }
+
+      return {
+        success: true,
+        date: targetDate,
+        meals: structuredMeals,
+        water_ml: totalWaterMl,
+        totals: {
+          calories: totalCalories,
+          protein_g: totalProtein,
+          carbs_g: totalCarbs,
+          fat_g: totalFat,
+          water_ml: totalWaterMl,
+        },
+        goals,
+        remaining,
+        workouts: workouts || [],
+        summaryText,
+        message: summaryText,
       };
     }
 
