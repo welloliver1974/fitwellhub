@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth-context";
 import { formatLocalDate, getLocalDate } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ function formatSessionWhen(iso: string): string {
 }
 
 function WorkoutsPage() {
+  const { user } = useAuth();
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [name, setName] = useState("");
   const [open, setOpen] = useState(false);
@@ -50,28 +52,33 @@ function WorkoutsPage() {
   const [splitInput, setSplitInput] = useState("");
 
   const load = async () => {
+    if (!user) return;
     const { data } = await supabase
       .from("workouts")
       .select("id,name,workout_date")
+      .eq("user_id", user.id)
       .order("workout_date", { ascending: false })
       .limit(50);
     setWorkouts(data ?? []);
   };
   const loadSessions = async () => {
+    if (!user) return;
     const { data } = await supabase
       .from("workout_sessions")
       .select("id,name,completed_at")
+      .eq("user_id", user.id)
       .order("completed_at", { ascending: false })
       .limit(30);
     setSessions(data ?? []);
   };
   useEffect(() => {
+    if (!user) return;
     load();
     loadSessions();
     const saved = getSavedSplitRotation();
     setSplitOrder(saved);
     setSplitInput(saved.join(", "));
-  }, []);
+  }, [user?.id]);
 
   const handleSaveSplit = () => {
     const items = splitInput

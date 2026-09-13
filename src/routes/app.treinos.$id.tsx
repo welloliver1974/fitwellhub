@@ -207,11 +207,14 @@ function WorkoutDetail() {
   };
 
   const load = async () => {
-    const { data: w } = await supabase
+    let q = supabase
       .from("workouts")
       .select("id,name,workout_date")
-      .eq("id", id)
-      .maybeSingle();
+      .eq("id", id);
+    if (user?.id) {
+      q = q.eq("user_id", user.id);
+    }
+    const { data: w } = await q.maybeSingle();
     setWorkout(w as Workout | null);
 
     const { data: ex } = await supabase
