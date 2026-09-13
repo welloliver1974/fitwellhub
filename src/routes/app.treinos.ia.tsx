@@ -61,6 +61,7 @@ function WorkoutAiAssistantPage() {
     exercises: string[];
   };
   const [currentWorkouts, setCurrentWorkouts] = useState<CurrentWorkoutInfo[]>([]);
+  const [showWorkoutsCard, setShowWorkoutsCard] = useState(false);
   const [showWorkoutsDetails, setShowWorkoutsDetails] = useState(false);
   const [loadingCurrent, setLoadingCurrent] = useState(true);
   const [backupInfo, setBackupInfo] = useState<BackupSnapshot | null>(null);
@@ -93,9 +94,9 @@ function WorkoutAiAssistantPage() {
 
       const { data: workoutsData } = await supabase
         .from("workouts")
-        .select("id, name")
+        .select("id, name, workout_date")
         .eq("user_id", user.id)
-        .order("name");
+        .order("workout_date", { ascending: false });
 
       if (workoutsData && workoutsData.length > 0) {
         const wIds = workoutsData.map((w) => w.id);
@@ -112,11 +113,20 @@ function WorkoutAiAssistantPage() {
           byW[e.workout_id].push(e.name);
         });
 
-        const items: CurrentWorkoutInfo[] = workoutsData.map((w) => ({
-          id: w.id,
-          name: w.name,
-          exercises: byW[w.id] ?? [],
-        }));
+        // Deduplica treinos pelo nome (ex: se "Treino B" tiver duplicatas de dias anteriores, pega a mais recente)
+        const uniqueMap = new Map<string, CurrentWorkoutInfo>();
+        for (const w of workoutsData) {
+          const key = w.name.trim().toLowerCase();
+          if (!uniqueMap.has(key)) {
+            uniqueMap.set(key, {
+              id: w.id,
+              name: w.name.trim(),
+              exercises: byW[w.id] ?? [],
+            });
+          }
+        }
+
+        const items: CurrentWorkoutInfo[] = Array.from(uniqueMap.values());
         setCurrentWorkouts(items);
       } else {
         setCurrentWorkouts([]);
@@ -501,9 +511,12 @@ function WorkoutAiAssistantPage() {
         </div>
       </Card>
 
-      {/* Card: O que a IA detectou nos seus treinos atuais - Compacto & Retrátil */}
-      <Card className="p-3.5 sm:p-4 rounded-2xl border-border/60 bg-card/60 backdrop-blur-sm space-y-2.5">
-        <div className="flex items-center justify-between gap-2">
+      {/* Card: O que a IA detectou nos seus treinos atuais - Compacto & Totalmente Retrátil */}
+      <Card className="rounded-2xl border-border/60 bg-card/60 backdrop-blur-sm overflow-hidden transition-all">
+        <div
+          onClick={() => currentWorkouts.length > 0 && setShowWorkoutsCard(!showWorkoutsCard)}
+          className={`p-3.5 sm:p-4 flex items-center justify-between gap-2 transition-colors ${currentWorkouts.length > 0 ? "cursor-pointer hover:bg-secondary/20" : ""}`}
+        >
           <div className="flex items-center gap-2 min-w-0">
             <Dumbbell className="h-4 w-4 text-primary shrink-0" />
             <h2 className="text-sm font-semibold truncate">Seus Treinos Atuais</h2>
@@ -518,24 +531,37 @@ function WorkoutAiAssistantPage() {
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => setShowWorkoutsDetails(!showWorkoutsDetails)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowWorkoutsCard(!showWorkoutsCard);
+              }}
               className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground gap-1 shrink-0 rounded-lg"
             >
-              <span>{showWorkoutsDetails ? "Ocultar" : "Ver exercícios"}</span>
-              {showWorkoutsDetails ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              <span>{showWorkoutsCard ? "Ocultar treinos" : "Exibir treinos"}</span>
+              {showWorkoutsCard ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             </Button>
           )}
         </div>
 
-        {loadingCurrent ? (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground py-1">
+        {loadingCurrent && (
+          <div className="px-3.5 pb-3.5 sm:px-4 sm:pb-4 flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
             Consultando fichas ativas...
           </div>
-        ) : currentWorkouts.length > 0 ? (
-          <div className="space-y-2.5">
+        )}
+
+        {!loadingCurrent && currentWorkouts.length === 0 && (
+          <div className="px-3.5 pb-3.5 sm:px-4 sm:pb-4">
+            <p className="text-xs text-muted-foreground italic">
+              Nenhum treino cadastrado ainda. A IA montará uma divisão completa para você.
+            </p>
+          </div>
+        )}
+
+        {!loadingCurrent && showWorkoutsCard && currentWorkouts.length > 0 && (
+          <div className="px-3.5 pb-3.5 sm:px-4 sm:pb-4 pt-0 space-y-2.5 border-t border-border/30 mt-1">
             {/* Visualização limpa e compacta em chips/tags */}
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1.5 pt-2.5">
               {currentWorkouts.map((w) => (
                 <div
                   key={w.id}
@@ -549,7 +575,21 @@ function WorkoutAiAssistantPage() {
               ))}
             </div>
 
-            {/* Gaveta retrátil com exercícios detalhados (abre apenas se o usuário quiser ver) */}
+            {/* Alternar detalhes de exercícios */}
+            <div className="pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowWorkoutsDetails(!showWorkoutsDetails)}
+                className="h-7 px-2.5 text-[11px] text-muted-foreground hover:text-foreground gap-1 rounded-lg"
+              >
+                <span>{showWorkoutsDetails ? "Esconder lista de exercícios" : "Ver nomes dos exercícios"}</span>
+                {showWorkoutsDetails ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              </Button>
+            </div>
+
+            {/* Gaveta retrátil com exercícios detalhados */}
             {showWorkoutsDetails && (
               <div className="pt-2 border-t border-border/40 max-h-60 overflow-y-auto space-y-2 pr-1">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -568,15 +608,11 @@ function WorkoutAiAssistantPage() {
               </div>
             )}
 
-            <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 pt-0.5">
+            <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 pt-1">
               <Lightbulb className="h-3.5 w-3.5 text-amber-400 shrink-0" />
               A IA usa essas fichas como referência para otimizar séries, volumes e descansos.
             </p>
           </div>
-        ) : (
-          <p className="text-xs text-muted-foreground italic py-1">
-            Nenhum treino cadastrado ainda. A IA montará uma divisão completa para você.
-          </p>
         )}
       </Card>
 
