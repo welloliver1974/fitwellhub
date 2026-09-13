@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -54,7 +55,13 @@ function WorkoutAiAssistantPage() {
   const navigate = useNavigate();
 
   // Estados de dados atuais
-  const [currentSummary, setCurrentSummary] = useState<string[]>([]);
+  type CurrentWorkoutInfo = {
+    id: string;
+    name: string;
+    exercises: string[];
+  };
+  const [currentWorkouts, setCurrentWorkouts] = useState<CurrentWorkoutInfo[]>([]);
+  const [showWorkoutsDetails, setShowWorkoutsDetails] = useState(false);
   const [loadingCurrent, setLoadingCurrent] = useState(true);
   const [backupInfo, setBackupInfo] = useState<BackupSnapshot | null>(null);
 
@@ -79,20 +86,23 @@ function WorkoutAiAssistantPage() {
 
   // Carregar estado atual e backup existente
   const loadInitialData = async () => {
+    if (!user?.id) return;
     setLoadingCurrent(true);
     try {
       setBackupInfo(getWorkoutBackup());
 
-      const { data: currentWorkouts } = await supabase
+      const { data: workoutsData } = await supabase
         .from("workouts")
         .select("id, name")
+        .eq("user_id", user.id)
         .order("name");
 
-      if (currentWorkouts && currentWorkouts.length > 0) {
-        const wIds = currentWorkouts.map((w) => w.id);
+      if (workoutsData && workoutsData.length > 0) {
+        const wIds = workoutsData.map((w) => w.id);
         const { data: exs } = await supabase
           .from("exercises")
           .select("workout_id, name")
+          .eq("user_id", user.id)
           .in("workout_id", wIds)
           .order("position");
 
@@ -102,13 +112,14 @@ function WorkoutAiAssistantPage() {
           byW[e.workout_id].push(e.name);
         });
 
-        const summary = currentWorkouts.map((w) => {
-          const list = byW[w.id] ?? [];
-          return `${w.name}: ${list.length > 0 ? list.join(", ") : "Sem exercícios"}`;
-        });
-        setCurrentSummary(summary);
+        const items: CurrentWorkoutInfo[] = workoutsData.map((w) => ({
+          id: w.id,
+          name: w.name,
+          exercises: byW[w.id] ?? [],
+        }));
+        setCurrentWorkouts(items);
       } else {
-        setCurrentSummary([]);
+        setCurrentWorkouts([]);
       }
     } catch (err) {
       console.error("Erro ao carregar dados atuais:", err);
@@ -118,8 +129,10 @@ function WorkoutAiAssistantPage() {
   };
 
   useEffect(() => {
-    loadInitialData();
-  }, []);
+    if (user?.id) {
+      loadInitialData();
+    }
+  }, [user?.id]);
 
   // Disparar geração pela IA
   const handleGenerate = async () => {
@@ -488,41 +501,76 @@ function WorkoutAiAssistantPage() {
         </div>
       </Card>
 
-      {/* Card: O que a IA detectou nos seus treinos atuais */}
-      <Card className="p-4 rounded-2xl border-border/60 bg-card/60 backdrop-blur-sm space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold flex items-center gap-2">
-            <Dumbbell className="h-4 w-4 text-primary" />
-            Seus Treinos Atuais no App
-          </h2>
-          <span className="text-xs text-muted-foreground">
-            {loadingCurrent ? "Lendo banco..." : `${currentSummary.length} divisões encontradas`}
-          </span>
+      {/* Card: O que a IA detectou nos seus treinos atuais - Compacto & Retrátil */}
+      <Card className="p-3.5 sm:p-4 rounded-2xl border-border/60 bg-card/60 backdrop-blur-sm space-y-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <Dumbbell className="h-4 w-4 text-primary shrink-0" />
+            <h2 className="text-sm font-semibold truncate">Seus Treinos Atuais</h2>
+            {currentWorkouts.length > 0 && (
+              <Badge variant="secondary" className="px-1.5 py-0 text-[10px] h-4 rounded-full font-normal">
+                {currentWorkouts.length} {currentWorkouts.length === 1 ? "ficha" : "fichas"}
+              </Badge>
+            )}
+          </div>
+          {currentWorkouts.length > 0 && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowWorkoutsDetails(!showWorkoutsDetails)}
+              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground gap-1 shrink-0 rounded-lg"
+            >
+              <span>{showWorkoutsDetails ? "Ocultar" : "Ver exercícios"}</span>
+              {showWorkoutsDetails ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </Button>
+          )}
         </div>
 
         {loadingCurrent ? (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground py-1">
             <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-            Consultando histórico e rotinas cadastradas...
+            Consultando fichas ativas...
           </div>
-        ) : currentSummary.length > 0 ? (
-          <div className="space-y-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {currentSummary.map((item, idx) => (
+        ) : currentWorkouts.length > 0 ? (
+          <div className="space-y-2.5">
+            {/* Visualização limpa e compacta em chips/tags */}
+            <div className="flex flex-wrap gap-1.5">
+              {currentWorkouts.map((w) => (
                 <div
-                  key={idx}
-                  className="p-2.5 rounded-xl bg-secondary/30 border border-border/40 text-xs"
+                  key={w.id}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-secondary/40 border border-border/50 text-xs font-medium text-foreground"
                 >
-                  <p className="font-medium text-foreground">{item.split(":")[0]}</p>
-                  <p className="text-muted-foreground text-[11px] line-clamp-2 mt-0.5">
-                    {item.split(":")[1] || "Sem exercícios"}
-                  </p>
+                  <span className="truncate max-w-[180px] sm:max-w-[260px]">{w.name}</span>
+                  <span className="text-[10px] text-muted-foreground font-normal shrink-0">
+                    ({w.exercises.length} exs)
+                  </span>
                 </div>
               ))}
             </div>
-            <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 pt-1">
+
+            {/* Gaveta retrátil com exercícios detalhados (abre apenas se o usuário quiser ver) */}
+            {showWorkoutsDetails && (
+              <div className="pt-2 border-t border-border/40 max-h-60 overflow-y-auto space-y-2 pr-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {currentWorkouts.map((w) => (
+                    <div
+                      key={w.id}
+                      className="p-2.5 rounded-xl bg-secondary/25 border border-border/40 text-xs space-y-1"
+                    >
+                      <p className="font-semibold text-foreground truncate">{w.name}</p>
+                      <p className="text-muted-foreground text-[11px] leading-relaxed">
+                        {w.exercises.length > 0 ? w.exercises.join(" • ") : "Nenhum exercício cadastrado"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 pt-0.5">
               <Lightbulb className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-              A IA usa essa lista como referência para sugerir melhorias personalizadas.
+              A IA usa essas fichas como referência para otimizar séries, volumes e descansos.
             </p>
           </div>
         ) : (
