@@ -164,7 +164,7 @@ const hermesActionSchema = z.object({
   secretKey: z.string().optional(),
   telegramChatId: z.union([z.string(), z.number()]),
   telegramUsername: z.string().optional(),
-  action: z.enum(["pair", "complete_workout", "create_workout", "log_voice", "status"]),
+  action: z.enum(["pair", "complete_workout", "duplicate_workout", "create_workout", "log_voice", "status"]),
   payload: z.record(z.any()).default({}),
 });
 
@@ -402,7 +402,125 @@ export const executeHermesAction = createServerFn({ method: "POST" })
       };
     }
 
-    // 4. AÇÃO: CRIAR/PRESCREVER TREINO POR VOZ ("Cria o treino A focado em peito")
+    // 4. AÇÃO: DUPLICAR TREINO EXISTENTE ("Hoje meu treino é o A, duplica ele para mim")
+    if (data.action === "duplicate_workout") {
+      const routineNameQuery = String(data.payload.routine_name || data.payload.workout || "A").trim();
+      const targetDate = data.payload.date ? String(data.payload.date) : getLocalDate();
+
+      // Busca os treinos do usuário para encontrar a ficha modelo
+      const { data: userWorkouts } = await supabase
+        .from("workouts")
+        .select("id, name, notes")
+        .eq("user_id", userId);
+
+      if (!userWorkouts || userWorkouts.length === 0) {
+        return {
+          success: false,
+          error: "Você não possui nenhuma ficha de treino cadastrada no FitWell Hub para duplicar.",
+        };
+      }
+
+      // Procura correspondência do nome (ex: "A", "Treino A", "Costas")
+      let sourceWorkout = userWorkouts.find(
+        (w) => w.name.toLowerCase() === routineNameQuery.toLowerCase()
+      );
+
+      if (!sourceWorkout && routineNameQuery) {
+        sourceWorkout = userWorkouts.find((w) =>
+          w.name.toLowerCase().includes(routineNameQuery.toLowerCase())
+        );
+      }
+
+      if (!sourceWorkout && routineNameQuery.length === 1) {
+        sourceWorkout = userWorkouts.find((w) =>
+          new RegExp(`\\b${routineNameQuery}\\b`, "i").test(w.name)
+        );
+      }
+
+      if (!sourceWorkout) {
+        const names = userWorkouts.map((w) => `• ${w.name}`).join("\n");
+        return {
+          success: false,
+          error: `Não encontrei o treino "${routineNameQuery}". Suas fichas são:\n${names}\n\nQual delas você quer duplicar?`,
+        };
+      }
+
+      // Carregar exercícios e séries da ficha modelo
+      const { data: sourceExercises } = await supabase
+        .from("exercises")
+        .select("id, name, position, notes")
+        .eq("workout_id", sourceWorkout.id)
+        .order("position");
+
+      const exIds = (sourceExercises || []).map((e) => e.id);
+      const { data: sourceSets } = exIds.length
+        ? await supabase
+            .from("sets")
+            .select("exercise_id, set_number, reps, weight_kg")
+            .in("exercise_id", exIds)
+        : { data: [] };
+
+      // Criar a nova ficha duplicada com a data de hoje
+      const { data: duplicatedWorkout, error: dupErr } = await supabase
+        .from("workouts")
+        .insert({
+          user_id: userId,
+          name: sourceWorkout.name,
+          workout_date: targetDate,
+          notes: sourceWorkout.notes || `Duplicado para o dia ${targetDate} via Telegram`,
+        })
+        .select()
+        .single();
+
+      if (dupErr || !duplicatedWorkout) {
+        return {
+          success: false,
+          error: `Erro ao duplicar treino: ${dupErr?.message}`,
+        };
+      }
+
+      // Duplicar exercícios e séries associados
+      for (const ex of sourceExercises || []) {
+        const { data: newEx } = await supabase
+          .from("exercises")
+          .insert({
+            workout_id: duplicatedWorkout.id,
+            user_id: userId,
+            name: ex.name,
+            position: ex.position,
+            notes: ex.notes,
+          })
+          .select()
+          .single();
+
+        if (newEx) {
+          const setsOfThisEx = (sourceSets || []).filter((s) => s.exercise_id === ex.id);
+          if (setsOfThisEx.length > 0) {
+            const newSets = setsOfThisEx.map((s) => ({
+              exercise_id: newEx.id,
+              user_id: userId,
+              set_number: s.set_number,
+              reps: s.reps,
+              weight_kg: s.weight_kg,
+            }));
+            await supabase.from("sets").insert(newSets);
+          }
+        }
+      }
+
+      const totalExs = sourceExercises?.length || 0;
+
+      return {
+        success: true,
+        workoutId: duplicatedWorkout.id,
+        workoutName: duplicatedWorkout.name,
+        workoutDate: targetDate,
+        totalExercises: totalExs,
+        message: `📋 Treino "${duplicatedWorkout.name}" duplicado e preparado para hoje (${targetDate}) com sucesso!\n• ${totalExs} exercícios importados com suas cargas e repetições habituais.\nBora treinar! Quando terminar, é só me avisar. 💪`,
+      };
+    }
+
+    // 5. AÇÃO: CRIAR/PRESCREVER NOVO TREINO POR VOZ ("Cria o treino A focado em peito")
     if (data.action === "create_workout") {
       const workoutName = String(data.payload.name || "Treino Personalizado").trim();
       const focus = String(data.payload.focus || "Hipertrofia e Força").trim();

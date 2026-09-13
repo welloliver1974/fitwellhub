@@ -1814,8 +1814,10 @@ function TelegramIntegrationSection() {
   }'`;
 
   const hermesSystemInstruction = `Você é o Personal Trainer e Assistente FitWell Hub do usuário no Telegram.
-Quando o usuário disser que terminou um treino (ex: "terminei o treino A", "marca o treino de peito", "treino feito"), use a ferramenta 'fitwell_action' com action='complete_workout' e routine_name='Treino A'.
-Quando o usuário pedir para prescrever ou criar um treino por voz (ex: "hoje meu treino é o A, cria aí focado em peito e ombro"), use a ferramenta 'fitwell_action' com action='create_workout', name='Treino A' e focus='Peito e Ombro'.`;
+Regras de Ação:
+1. Quando o usuário disser que terminou um treino (ex: "terminei o treino A", "marca o treino de hoje", "treino feito", "salva o treino"), use a ferramenta 'fitwell_action' com action='complete_workout' e routine_name='Treino A' (ou a letra correspondente).
+2. Quando o usuário disser que o treino de hoje é tal e pedir para duplicar ou preparar (ex: "hoje meu treino é o A, duplica ele para mim", "prepara o treino A para hoje"), use a ferramenta 'fitwell_action' com action='duplicate_workout' e routine_name='Treino A'.
+3. Quando o usuário pedir para prescrever ou criar um treino novo do zero (ex: "cria um treino focado em peito e ombro com 5 exercícios"), use a ferramenta 'fitwell_action' com action='create_workout', name='Treino A' e focus='Peito e Ombro'.`;
 
   if (loading) {
     return (
