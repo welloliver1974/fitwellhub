@@ -1813,11 +1813,13 @@ function TelegramIntegrationSection() {
     "payload": { "routine_name": "A" }
   }'`;
 
-  const hermesSystemInstruction = `Você é o Personal Trainer e Assistente FitWell Hub do usuário no Telegram.
+  const hermesSystemInstruction = `Você é o Personal Trainer e Assistente Nutricional FitWell Hub do usuário no Telegram.
 Regras de Ação:
-1. Quando o usuário disser que terminou um treino (ex: "terminei o treino A", "marca o treino de hoje", "treino feito", "salva o treino"), use a ferramenta 'fitwell_action' com action='complete_workout' e routine_name='Treino A' (ou a letra correspondente).
-2. Quando o usuário disser que o treino de hoje é tal e pedir para duplicar ou preparar (ex: "hoje meu treino é o A, duplica ele para mim", "prepara o treino A para hoje"), use a ferramenta 'fitwell_action' com action='duplicate_workout' e routine_name='Treino A'.
-3. Quando o usuário pedir para prescrever ou criar um treino novo do zero (ex: "cria um treino focado em peito e ombro com 5 exercícios"), use a ferramenta 'fitwell_action' com action='create_workout', name='Treino A' e focus='Peito e Ombro'.`;
+1. Concluir Treino: Quando o usuário disser que terminou um treino (ex: "terminei o treino A", "marca o treino de hoje", "treino feito", "salva o treino"), use a ferramenta 'fitwell_action' com action='complete_workout' e routine_name='Treino A' (ou a letra correspondente).
+2. Duplicar Treino: Quando o usuário disser que o treino de hoje é tal e pedir para duplicar ou preparar (ex: "hoje meu treino é o A, duplica ele para mim", "prepara o treino A para hoje"), use a ferramenta 'fitwell_action' com action='duplicate_workout' e routine_name='Treino A'.
+3. Criar Treino: Quando o usuário pedir para prescrever ou criar um treino novo do zero (ex: "cria um treino focado em peito e ombro com 5 exercícios"), use a ferramenta 'fitwell_action' com action='create_workout', name='Treino A' e focus='Peito e Ombro'.
+4. Registrar Refeição & Água por Voz: Quando o usuário relatar o que comeu ou bebeu (ex: "almocei 150g de frango e 100g de arroz integral e tomei 400ml de água", "comi 2 ovos com pão de manhã", "tomei 500ml de água"), use a ferramenta 'fitwell_action' com action='log_meal'. Envie raw_text com a fala do usuário ou envie os items estruturados (name, grams) e water_ml. O FitWell Hub consulta automaticamente a biblioteca real (favoritos, OpenFoodFacts e tabela TACO) para calcular os macros e salvar no diário.
+5. Consultar Alimento na Biblioteca: Quando o usuário perguntar os macros de algum alimento (ex: "quantas calorias tem 150g de patinho moído?"), use a ferramenta 'fitwell_action' com action='search_food', query='patinho moído' e grams=150.`;
 
   if (loading) {
     return (
@@ -1977,6 +1979,20 @@ Regras de Ação:
               Exemplo: <em>"Hoje meu treino é o A, cria aí focado em peitoral e tríceps"</em>. O sistema prescreve e salva a rotina.
             </div>
           </div>
+          <div className="p-2.5 rounded-lg bg-background border border-border/60 space-y-1">
+            <div className="font-semibold text-foreground">3. Registrar Refeição & Água</div>
+            <div className="text-[11px] text-muted-foreground">
+              Ação: <code>action: "log_meal"</code><br />
+              Exemplo: <em>"Almocei 150g de frango e 100g de arroz integral e tomei 400ml de água"</em>. Busca dados reais na biblioteca oficial e atualiza o diário.
+            </div>
+          </div>
+          <div className="p-2.5 rounded-lg bg-background border border-border/60 space-y-1">
+            <div className="font-semibold text-foreground">4. Consultar Alimento na Biblioteca</div>
+            <div className="text-[11px] text-muted-foreground">
+              Ação: <code>action: "search_food"</code><br />
+              Exemplo: <em>"Quantas calorias tem 150g de salmão grelhado?"</em>. Consulta favoritos, OpenFoodFacts e Tabela TACO.
+            </div>
+          </div>
         </div>
 
         {/* Prompt pronto para copiar */}
@@ -2001,7 +2017,7 @@ Regras de Ação:
           <Textarea
             readOnly
             value={hermesSystemInstruction}
-            className="font-mono text-[11px] h-20 resize-none bg-background/60"
+            className="font-mono text-[11px] h-32 resize-none bg-background/60"
           />
         </div>
       </div>

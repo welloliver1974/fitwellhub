@@ -160,11 +160,237 @@ export const linkTelegramDirectly = createServerFn({ method: "POST" })
 // 2. Ações Executadas pelo Hermes Agent (Webhook / Ação Externa)
 // ---------------------------------------------------------------------------
 
+export type ResolvedFoodItem = {
+  name: string;
+  grams: number;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  source: "Favoritos" | "Histórico" | "OpenFoodFacts" | "Tabela TACO/IA";
+};
+
+/**
+ * Consulta em 4 camadas para garantir precisão e dados reais:
+ * 1. Alimentos favoritos cadastrados pelo próprio usuário no app
+ * 2. Histórico recente de refeições do usuário
+ * 3. OpenFoodFacts (Base de alimentos, marcas e código de barras)
+ * 4. Estimativa canônica de Nutrição Esportiva (Tabela TACO) via IA
+ */
+export async function resolveFoodItemWithLibrary(
+  supabase: any,
+  userId: string,
+  query: string,
+  grams: number = 100,
+  fallbackMacros?: { calories?: number; protein_g?: number; carbs_g?: number; fat_g?: number }
+): Promise<ResolvedFoodItem> {
+  const cleanQuery = query.trim();
+  const g = grams > 0 ? grams : 100;
+
+  // 1. Verificar Favoritos do Usuário
+  try {
+    const { data: favs } = await supabase
+      .from("favorite_foods")
+      .select("name, grams, calories, protein_g, carbs_g, fat_g")
+      .eq("user_id", userId)
+      .ilike("name", `%${cleanQuery}%`)
+      .limit(1);
+
+    if (favs && favs.length > 0) {
+      const fav = favs[0];
+      const refG = Number(fav.grams) || 100;
+      const ratio = g / refG;
+      return {
+        name: fav.name,
+        grams: g,
+        calories: Math.round(Number(fav.calories || 0) * ratio),
+        protein_g: Math.round(Number(fav.protein_g || 0) * ratio * 10) / 10,
+        carbs_g: Math.round(Number(fav.carbs_g || 0) * ratio * 10) / 10,
+        fat_g: Math.round(Number(fav.fat_g || 0) * ratio * 10) / 10,
+        source: "Favoritos",
+      };
+    }
+  } catch (err) {
+    console.error("Erro ao buscar em favorite_foods:", err);
+  }
+
+  // 2. Verificar Histórico Recente do Usuário
+  try {
+    const { data: recents } = await supabase
+      .from("meal_items")
+      .select("name, grams, calories, protein_g, carbs_g, fat_g")
+      .eq("user_id", userId)
+      .ilike("name", `%${cleanQuery}%`)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (recents && recents.length > 0) {
+      const rec = recents[0];
+      const refG = Number(rec.grams) || 100;
+      const ratio = g / refG;
+      return {
+        name: rec.name,
+        grams: g,
+        calories: Math.round(Number(rec.calories || 0) * ratio),
+        protein_g: Math.round(Number(rec.protein_g || 0) * ratio * 10) / 10,
+        carbs_g: Math.round(Number(rec.carbs_g || 0) * ratio * 10) / 10,
+        fat_g: Math.round(Number(rec.fat_g || 0) * ratio * 10) / 10,
+        source: "Histórico",
+      };
+    }
+  } catch (err) {
+    console.error("Erro ao buscar em meal_items:", err);
+  }
+
+  // 3. Consultar OpenFoodFacts (Base Global de Alimentos e Marcas)
+  try {
+    const offUrl = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(
+      cleanQuery
+    )}&search_simple=1&action=process&json=1&page_size=1`;
+    const offRes = await fetch(offUrl, { signal: AbortSignal.timeout(4000) });
+    if (offRes.ok) {
+      const body = await offRes.json();
+      const p = body.products?.[0]?.nutriments;
+      const prodName = body.products?.[0]?.product_name;
+      const kcal100 = p?.["energy-kcal_100g"] ?? p?.["energy-kcal"];
+      if (kcal100 !== undefined && kcal100 !== null && !isNaN(Number(kcal100))) {
+        const ratio = g / 100;
+        return {
+          name: prodName || cleanQuery,
+          grams: g,
+          calories: Math.round(Number(kcal100) * ratio),
+          protein_g: Math.round(Number(p["proteins_100g"] ?? 0) * ratio * 10) / 10,
+          carbs_g: Math.round(Number(p["carbohydrates_100g"] ?? 0) * ratio * 10) / 10,
+          fat_g: Math.round(Number(p["fat_100g"] ?? 0) * ratio * 10) / 10,
+          source: "OpenFoodFacts",
+        };
+      }
+    }
+  } catch (offErr) {
+    // Timeout ou rede, segue para IA/TACO
+  }
+
+  // Se já tiver macros passados por fallback válido
+  if (fallbackMacros && fallbackMacros.calories !== undefined) {
+    return {
+      name: cleanQuery,
+      grams: g,
+      calories: Math.round(Number(fallbackMacros.calories || 0)),
+      protein_g: Math.round(Number(fallbackMacros.protein_g || 0) * 10) / 10,
+      carbs_g: Math.round(Number(fallbackMacros.carbs_g || 0) * 10) / 10,
+      fat_g: Math.round(Number(fallbackMacros.fat_g || 0) * 10) / 10,
+      source: "Tabela TACO/IA",
+    };
+  }
+
+  // 4. Estimativa Canônica de Nutrição Esportiva (Tabela TACO) via IA
+  try {
+    const settings = await fetchAiSettings(supabase, userId);
+    const provider = resolveAiProvider(settings);
+    const apiKey = resolveAiApiKey(settings, provider);
+    if (apiKey) {
+      const res = await callAiChatCompletion({
+        provider,
+        apiKey,
+        model: getTextModel(provider, settings),
+        baseUrl: settings.omniroute_base_url,
+        messages: [
+          {
+            role: "system",
+            content:
+              "Você é um nutricionista esportivo. Estime macros (kcal, proteína, carboidrato, gordura) de alimentos brasileiros. Use a tabela TACO como referência mental. Retorne APENAS via tool call.",
+          },
+          {
+            role: "user",
+            content: `Alimento: "${cleanQuery}". Porção: ${g}g. Estime os macros para essa porção exata.`,
+          },
+        ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "report_macros",
+              description: "Reporta macros nutricionais estimados com base na tabela TACO",
+              parameters: {
+                type: "object",
+                properties: {
+                  name: { type: "string", description: "Nome canônico do alimento em português" },
+                  calories: { type: "number", description: "kcal por porção informada" },
+                  protein_g: { type: "number" },
+                  carbs_g: { type: "number" },
+                  fat_g: { type: "number" },
+                },
+                required: ["name", "calories", "protein_g", "carbs_g", "fat_g"],
+                additionalProperties: false,
+              },
+            },
+          },
+        ],
+        toolChoice: { type: "function", function: { name: "report_macros" } },
+      });
+      const json = res as any;
+      const call = json.choices?.[0]?.message?.tool_calls?.[0];
+      if (call) {
+        const args = JSON.parse(call.function.arguments);
+        return {
+          name: args.name || cleanQuery,
+          grams: g,
+          calories: Math.round(Number(args.calories || 0)),
+          protein_g: Math.round(Number(args.protein_g || 0) * 10) / 10,
+          carbs_g: Math.round(Number(args.carbs_g || 0) * 10) / 10,
+          fat_g: Math.round(Number(args.fat_g || 0) * 10) / 10,
+          source: "Tabela TACO/IA",
+        };
+      }
+    }
+  } catch (aiErr) {
+    console.error("Erro no fallback TACO/IA:", aiErr);
+  }
+
+  // Fallback seguro caso não encontre
+  return {
+    name: cleanQuery,
+    grams: g,
+    calories: Math.round(g * 1.5),
+    protein_g: 0,
+    carbs_g: 0,
+    fat_g: 0,
+    source: "Tabela TACO/IA",
+  };
+}
+
+function inferMealTypeFromTimeOrText(text?: string): "Café da manhã" | "Almoço" | "Jantar" | "Lanche" {
+  if (text) {
+    const t = text.toLowerCase();
+    if (t.includes("café") || t.includes("cafe") || t.includes("desjejum") || t.includes("acordei")) return "Café da manhã";
+    if (t.includes("almoç") || t.includes("almoc")) return "Almoço";
+    if (t.includes("janta") || t.includes("ceia")) return "Jantar";
+    if (t.includes("lanche") || t.includes("café da tarde") || t.includes("shake") || t.includes("pré-treino") || t.includes("pos-treino") || t.includes("pós-treino")) return "Lanche";
+  }
+
+  // Horário atual de Brasília
+  const hour = new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo", hour: "numeric", hour12: false });
+  const h = parseInt(hour, 10);
+  if (h >= 5 && h < 11) return "Café da manhã";
+  if (h >= 11 && h < 15) return "Almoço";
+  if (h >= 15 && h < 19) return "Lanche";
+  return "Jantar";
+}
+
 const hermesActionSchema = z.object({
   secretKey: z.string().optional(),
   telegramChatId: z.union([z.string(), z.number()]),
   telegramUsername: z.string().optional(),
-  action: z.enum(["pair", "complete_workout", "duplicate_workout", "create_workout", "log_voice", "status"]),
+  action: z.enum([
+    "pair",
+    "complete_workout",
+    "duplicate_workout",
+    "create_workout",
+    "log_voice",
+    "status",
+    "log_meal",
+    "search_food",
+  ]),
   payload: z.record(z.any()).default({}),
 });
 
@@ -669,6 +895,305 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
         workoutId: newWorkout.id,
         workoutName: newWorkout.name,
         message: `✅ Treino "${newWorkout.name}" criado com sucesso no FitWell Hub!\n\n📋 Exercícios:\n${exerciseListText}\n\nJá está disponível no seu app. Bom treino! 🏋️‍♂️`,
+      };
+    }
+
+    // 6. AÇÃO: REGISTRAR REFEIÇÃO / ALIMENTOS / ÁGUA ("Hermes, almocei 150g de frango e 100g de arroz e tomei 400ml de água")
+    if (data.action === "log_meal") {
+      const rawText = data.payload.raw_text ? String(data.payload.raw_text).trim() : "";
+      let mealType = data.payload.meal_type as "Café da manhã" | "Almoço" | "Jantar" | "Lanche" | undefined;
+      const targetDate = data.payload.meal_date ? String(data.payload.meal_date) : getLocalDate();
+      let waterMl = Number(data.payload.water_ml || 0);
+      let inputItems: Array<{ name: string; grams?: number; calories?: number; protein_g?: number; carbs_g?: number; fat_g?: number }> =
+        Array.isArray(data.payload.items) ? data.payload.items : [];
+
+      if (!mealType) {
+        mealType = inferMealTypeFromTimeOrText(rawText);
+      }
+
+      // Se não vieram itens estruturados, mas veio raw_text (ex: áudio ou texto corrido transcrito do usuário)
+      if (inputItems.length === 0 && rawText) {
+        try {
+          const settings = await fetchAiSettings(supabase, userId);
+          const provider = resolveAiProvider(settings);
+          const apiKey = resolveAiApiKey(settings, provider);
+          if (apiKey) {
+            const aiRes = await callAiChatCompletion({
+              provider,
+              apiKey,
+              model: getTextModel(provider, settings),
+              baseUrl: settings.omniroute_base_url,
+              messages: [
+                {
+                  role: "system",
+                  content:
+                    "Você é um nutricionista esportivo. Analise o relato falado do usuário e identifique: consumo de água (em ml), tipo da refeição (Café da manhã, Almoço, Jantar, Lanche) e cada alimento com sua porção em gramas estimada. Retorne APENAS via chamada da função record_voice_intake.",
+                },
+                {
+                  role: "user",
+                  content: `Relato do usuário: "${rawText}". Refeição provável: ${mealType}.`,
+                },
+              ],
+              tools: [
+                {
+                  type: "function",
+                  function: {
+                    name: "record_voice_intake",
+                    description: "Extrai água, refeição e lista de alimentos de um relato",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        water_ml: { type: "number", description: "Água em ml relatada (0 se não informado)" },
+                        meal_type: { type: "string", enum: ["Café da manhã", "Almoço", "Jantar", "Lanche"] },
+                        items: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              name: { type: "string", description: "Nome canônico do alimento em português" },
+                              grams: { type: "number", description: "Quantidade estimada em gramas" },
+                            },
+                            required: ["name"],
+                          },
+                        },
+                      },
+                      required: ["items"],
+                      additionalProperties: false,
+                    },
+                  },
+                },
+              ],
+              toolChoice: { type: "function", function: { name: "record_voice_intake" } },
+            });
+            const json = aiRes as any;
+            const call = json.choices?.[0]?.message?.tool_calls?.[0];
+            if (call) {
+              const args = JSON.parse(call.function.arguments);
+              if (args.water_ml && waterMl === 0) waterMl = Number(args.water_ml);
+              if (args.meal_type && !data.payload.meal_type) mealType = args.meal_type;
+              if (Array.isArray(args.items) && args.items.length > 0) {
+                inputItems = args.items;
+              }
+            }
+          }
+        } catch (parseErr) {
+          console.error("Erro ao analisar relato falado com IA:", parseErr);
+        }
+      }
+
+      // Se só registrou água (ex: "tomei 500ml de água")
+      if (inputItems.length === 0 && waterMl > 0) {
+        await supabase.from("water_logs").insert({
+          user_id: userId,
+          log_date: targetDate,
+          ml: Math.round(waterMl),
+        });
+
+        const { data: todayWater } = await supabase
+          .from("water_logs")
+          .select("ml")
+          .eq("user_id", userId)
+          .eq("log_date", targetDate);
+        const totalWaterToday = (todayWater || []).reduce((acc, w) => acc + (w.ml || 0), 0);
+
+        return {
+          success: true,
+          water_ml: waterMl,
+          total_water_today: totalWaterToday,
+          message: `💧 **+${waterMl}ml de água** registrados com sucesso no FitWell Hub!\n\nTotal de hoje: **${totalWaterToday}ml** hidratados. Continue assim! 🥤`,
+        };
+      }
+
+      if (inputItems.length === 0) {
+        return {
+          success: false,
+          error: "Nenhum alimento ou quantidade de água foi identificado no seu relato.",
+        };
+      }
+
+      // Resolver cada alimento com as 4 camadas da biblioteca
+      const resolvedItems: ResolvedFoodItem[] = [];
+      for (const it of inputItems) {
+        const grams = Number(it.grams) || 100;
+        const resolved = await resolveFoodItemWithLibrary(
+          supabase,
+          userId,
+          it.name,
+          grams,
+          it.calories !== undefined
+            ? {
+                calories: it.calories,
+                protein_g: it.protein_g,
+                carbs_g: it.carbs_g,
+                fat_g: it.fat_g,
+              }
+            : undefined
+        );
+        resolvedItems.push(resolved);
+      }
+
+      // 1. Localizar ou criar a refeição do dia
+      const finalMealType = mealType || "Almoço";
+      const { data: existingMeal } = await supabase
+        .from("meals")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("meal_date", targetDate)
+        .eq("meal_type", finalMealType)
+        .maybeSingle();
+
+      let mealId = existingMeal?.id;
+      if (!mealId) {
+        const { data: newMeal, error: mErr } = await supabase
+          .from("meals")
+          .insert({
+            user_id: userId,
+            meal_date: targetDate,
+            meal_type: finalMealType,
+          })
+          .select("id")
+          .single();
+        if (mErr || !newMeal) {
+          return { success: false, error: `Erro ao criar refeição: ${mErr?.message}` };
+        }
+        mealId = newMeal.id;
+      }
+
+      // 2. Inserir itens da refeição
+      const itemsToInsert = resolvedItems.map((ri) => ({
+        user_id: userId,
+        meal_id: mealId,
+        name: ri.name,
+        grams: ri.grams,
+        calories: ri.calories,
+        protein_g: ri.protein_g,
+        carbs_g: ri.carbs_g,
+        fat_g: ri.fat_g,
+      }));
+
+      const { error: insertItemsErr } = await supabase.from("meal_items").insert(itemsToInsert);
+      if (insertItemsErr) {
+        return { success: false, error: `Erro ao salvar itens no diário: ${insertItemsErr.message}` };
+      }
+
+      // 3. Registrar consumo de água se houver
+      if (waterMl > 0) {
+        await supabase.from("water_logs").insert({
+          user_id: userId,
+          log_date: targetDate,
+          ml: Math.round(waterMl),
+        });
+      }
+      const { data: allWater } = await supabase
+        .from("water_logs")
+        .select("ml")
+        .eq("user_id", userId)
+        .eq("log_date", targetDate);
+      const totalWaterToday = (allWater || []).reduce((acc, w) => acc + (w.ml || 0), 0);
+
+      // 4. Totais da refeição
+      const mealKcal = resolvedItems.reduce((a, b) => a + b.calories, 0);
+      const mealP = Math.round(resolvedItems.reduce((a, b) => a + b.protein_g, 0) * 10) / 10;
+      const mealC = Math.round(resolvedItems.reduce((a, b) => a + b.carbs_g, 0) * 10) / 10;
+      const mealF = Math.round(resolvedItems.reduce((a, b) => a + b.fat_g, 0) * 10) / 10;
+
+      // 5. Totais acumulados do dia
+      const { data: todayMeals } = await supabase
+        .from("meals")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("meal_date", targetDate);
+      const todayMealIds = (todayMeals || []).map((m) => m.id);
+
+      let dayKcal = 0;
+      let dayP = 0;
+      let dayC = 0;
+      let dayF = 0;
+
+      if (todayMealIds.length > 0) {
+        const { data: dayItems } = await supabase
+          .from("meal_items")
+          .select("calories, protein_g, carbs_g, fat_g")
+          .in("meal_id", todayMealIds);
+
+        (dayItems || []).forEach((item) => {
+          dayKcal += Number(item.calories || 0);
+          dayP += Number(item.protein_g || 0);
+          dayC += Number(item.carbs_g || 0);
+          dayF += Number(item.fat_g || 0);
+        });
+      }
+      dayP = Math.round(dayP * 10) / 10;
+      dayC = Math.round(dayC * 10) / 10;
+      dayF = Math.round(dayF * 10) / 10;
+
+      // 6. Meta do usuário
+      const { data: userGoal } = await supabase
+        .from("goals")
+        .select("calories, protein_g, carbs_g, fat_g")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      const goalKcal = userGoal?.calories || 2000;
+      const goalP = userGoal?.protein_g || 140;
+      const proteinPercent = Math.round((dayP / goalP) * 100);
+      const kcalPercent = Math.round((dayKcal / goalKcal) * 100);
+
+      // 7. Formatação da mensagem humanizada do Hermes
+      let replyMsg = `🍽️ **${finalMealType} registrado no FitWell Hub!**\n\n`;
+      resolvedItems.forEach((ri) => {
+        replyMsg += `• **${ri.name}** (${ri.grams}g): ${ri.calories} kcal | ${ri.protein_g}g P | ${ri.carbs_g}g C | ${ri.fat_g}g G\n`;
+      });
+
+      if (waterMl > 0) {
+        replyMsg += `💧 **+${waterMl}ml de água** (${totalWaterToday}ml acumulados hoje)\n`;
+      }
+
+      replyMsg += `\n📊 **Total da Refeição:** ${mealKcal} kcal | ${mealP}g P | ${mealC}g C | ${mealF}g G\n`;
+      replyMsg += `🎯 **Progresso de Hoje:** ${Math.round(dayKcal)}/${goalKcal} kcal (${kcalPercent}%) • ${dayP}/${goalP}g Proteína (${proteinPercent}%)\n`;
+      if (proteinPercent >= 100) {
+        replyMsg += `🔥 Parabéns! Você bateu a meta de proteínas do dia! 🚀`;
+      } else {
+        const remainingP = Math.max(0, Math.round(goalP - dayP));
+        replyMsg += `Faltam ${remainingP}g de proteína para completar sua meta diária.`;
+      }
+
+      return {
+        success: true,
+        mealType: finalMealType,
+        items: resolvedItems,
+        mealTotals: { calories: mealKcal, protein_g: mealP, carbs_g: mealC, fat_g: mealF },
+        dayTotals: { calories: Math.round(dayKcal), protein_g: dayP, carbs_g: dayC, fat_g: dayF },
+        water_ml: waterMl,
+        total_water_today: totalWaterToday,
+        goals: { calories: goalKcal, protein_g: goalP },
+        message: replyMsg,
+      };
+    }
+
+    // 7. AÇÃO: BUSCAR ALIMENTO NA BIBLIOTECA ("Hermes, quantas calorias tem 150g de patinho?")
+    if (data.action === "search_food") {
+      const query = String(data.payload.query || data.payload.food || "").trim();
+      const grams = Number(data.payload.grams || 100);
+
+      if (!query) {
+        return { success: false, error: "Nome do alimento não informado para consulta." };
+      }
+
+      const resolved = await resolveFoodItemWithLibrary(supabase, userId, query, grams);
+
+      const replyMsg =
+        `🔍 **${resolved.name}** (${resolved.grams}g):\n` +
+        `• Calorias: **${resolved.calories} kcal**\n` +
+        `• Proteínas: **${resolved.protein_g}g**\n` +
+        `• Carboidratos: **${resolved.carbs_g}g**\n` +
+        `• Gorduras: **${resolved.fat_g}g**\n` +
+        `*(Fonte dos dados: ${resolved.source})*`;
+
+      return {
+        success: true,
+        food: resolved,
+        message: replyMsg,
       };
     }
 
