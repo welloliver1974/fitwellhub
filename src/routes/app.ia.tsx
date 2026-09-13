@@ -46,6 +46,7 @@ import {
   getTelegramIntegrationStatus,
   generateTelegramLinkToken,
   unlinkTelegramAccount,
+  linkTelegramDirectly,
 } from "@/server-fns/telegram.functions";
 import {
   encodeAiExtraMeta,
@@ -1709,10 +1710,35 @@ function TelegramIntegrationSection() {
 
   const [generating, setGenerating] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
+  const [savingDirect, setSavingDirect] = useState(false);
+  const [manualChatId, setManualChatId] = useState("");
+  const [showManualInput, setShowManualInput] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [copiedToken, setCopiedToken] = useState(false);
   const [copiedCurl, setCopiedCurl] = useState(false);
   const [copiedHermesPrompt, setCopiedHermesPrompt] = useState(false);
+
+  const handleDirectLink = async () => {
+    if (!manualChatId.trim()) {
+      toast.error("Por favor, digite seu Telegram Chat ID.");
+      return;
+    }
+    if (!session?.access_token) return;
+    try {
+      setSavingDirect(true);
+      await linkTelegramDirectly({
+        data: { chatId: manualChatId.trim() },
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      toast.success("Telegram conectado com sucesso!");
+      setManualChatId("");
+      fetchStatus();
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao conectar Chat ID");
+    } finally {
+      setSavingDirect(false);
+    }
+  };
 
   const fetchStatus = async () => {
     if (!session?.access_token) return;
@@ -1878,6 +1904,46 @@ Quando o usuário pedir para prescrever ou criar um treino por voz (ex: "hoje me
               </Button>
             </div>
           )}
+
+          {/* Opção Manual Direta: Inserir Chat ID */}
+          <div className="pt-2 border-t border-border/40 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium text-foreground">
+                Ou vincule diretamente pelo seu Chat ID:
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowManualInput((prev) => !prev)}
+                className="text-[11px] text-primary hover:underline"
+              >
+                {showManualInput ? "Ocultar" : "Digitar Chat ID"}
+              </button>
+            </div>
+
+            {showManualInput && (
+              <div className="space-y-2 pt-1 bg-background/60 p-3 rounded-lg border border-border/50">
+                <p className="text-[11px] text-muted-foreground">
+                  Se você já sabe seu ID numérico do Telegram (ex: consulte no bot <strong>@userinfobot</strong>), digite abaixo:
+                </p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="Ex: 123456789"
+                    value={manualChatId}
+                    onChange={(e) => setManualChatId(e.target.value)}
+                    className="h-8 text-xs font-mono"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleDirectLink}
+                    disabled={savingDirect}
+                    className="h-8 text-xs shrink-0"
+                  >
+                    {savingDirect ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Vincular"}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

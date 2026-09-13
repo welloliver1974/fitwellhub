@@ -119,6 +119,43 @@ export const unlinkTelegramAccount = createServerFn({ method: "POST" })
     return { success: true };
   });
 
+const directLinkSchema = z.object({
+  chatId: z.string().trim().min(1, "Chat ID obrigatório"),
+  username: z.string().trim().optional(),
+});
+
+export const linkTelegramDirectly = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => directLinkSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const numericChatId = Number(data.chatId.replace(/[^0-9-]/g, ""));
+
+    if (isNaN(numericChatId) || numericChatId === 0) {
+      throw new Error("Chat ID inválido. Deve ser um número (ex: 123456789).");
+    }
+
+    const { error } = await supabase
+      .from("telegram_integrations" as any)
+      .upsert(
+        {
+          user_id: userId,
+          telegram_chat_id: numericChatId,
+          telegram_username: data.username || null,
+          link_token: null,
+          token_expires_at: null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" }
+      );
+
+    if (error) {
+      throw new Error(`Erro ao salvar vínculo: ${error.message}`);
+    }
+
+    return { success: true, chatId: String(numericChatId) };
+  });
+
 // ---------------------------------------------------------------------------
 // 2. Ações Executadas pelo Hermes Agent (Webhook / Ação Externa)
 // ---------------------------------------------------------------------------
