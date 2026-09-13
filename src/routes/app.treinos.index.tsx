@@ -5,6 +5,8 @@ import { formatLocalDate, getLocalDate } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -289,149 +291,188 @@ function WorkoutsPage() {
         </div>
       </div>
 
-      {workouts.length > 0 && splitOrder.length > 0 && (
-        <div className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-secondary/40 text-xs border border-border/50">
-          <div className="flex items-center gap-2">
-            <RotateCw className="h-3.5 w-3.5 text-primary shrink-0" />
-            <span className="text-muted-foreground">
-              Divisão ativa:{" "}
-              <strong className="text-foreground font-semibold tracking-wide">
-                {splitOrder.join(" ➔ ")}
-              </strong>
-            </span>
-          </div>
-          <Dialog open={splitDialogOpen} onOpenChange={setSplitDialogOpen}>
-            <DialogTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-xs text-primary hover:text-primary hover:bg-primary/10 rounded-full"
-              >
-                Ajustar divisão
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Ordem da Divisão de Treinos</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-3 py-2">
-                <Label>Sequência de Rotação (letras separadas por vírgula)</Label>
-                <Input
-                  value={splitInput}
-                  onChange={(e) => setSplitInput(e.target.value)}
-                  placeholder="B, C, D, A"
-                  autoFocus
-                />
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  O app sugere automaticamente o próximo treino na página inicial e no Coach IA baseado na última sessão finalizada no histórico.
-                  <br />
-                  <br />
-                  Exemplo atual: ao concluir o treino <strong>D</strong>, o próximo sugerido é o <strong>A</strong>.
-                </p>
-              </div>
-              <DialogFooter>
-                <Button onClick={handleSaveSplit} className="rounded-full">
-                  Salvar sequência
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
-      )}
+      <Tabs defaultValue="workouts" className="w-full space-y-4">
+        <TabsList className="grid w-full grid-cols-2 p-1 rounded-2xl bg-secondary/50 border border-border/40">
+          <TabsTrigger
+            value="workouts"
+            className="rounded-xl font-medium gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+          >
+            <Dumbbell className="h-4 w-4 text-primary" />
+            <span>Minhas Fichas</span>
+            <Badge variant="secondary" className="px-1.5 py-0 text-[11px] h-5 rounded-full ml-1">
+              {workouts.length}
+            </Badge>
+          </TabsTrigger>
+          <TabsTrigger
+            value="history"
+            className="rounded-xl font-medium gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+          >
+            <History className="h-4 w-4 text-primary" />
+            <span>Histórico Concluído</span>
+            <Badge variant="secondary" className="px-1.5 py-0 text-[11px] h-5 rounded-full ml-1">
+              {sessions.length}
+            </Badge>
+          </TabsTrigger>
+        </TabsList>
 
-      {workouts.length === 0 ? (
-        <Card className="p-10 text-center">
-          <Dumbbell className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-          <p className="text-muted-foreground">Nenhum treino ainda. Crie o primeiro!</p>
-        </Card>
-      ) : (
-        <div className="space-y-2">
-          {workouts.map((w) => (
-            <Link key={w.id} to="/app/treinos/$id" params={{ id: w.id }} className="block">
-              <Card className="p-4 flex items-center justify-between hover:bg-secondary/50 transition-colors">
-                <div className="flex-1 min-w-0">
-                  {editingId === w.id ? (
-                    <div className="flex items-center gap-2">
-                      <Input
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") { e.preventDefault(); saveEdit(w.id); }
-                          if (e.key === "Escape") cancelEdit();
-                        }}
-                        onBlur={() => saveEdit(w.id)}
-                        className="h-8 text-sm font-medium"
-                        autoFocus
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                      />
+        <TabsContent value="workouts" className="space-y-4 mt-0 focus-visible:outline-none">
+          {workouts.length > 0 && splitOrder.length > 0 && (
+            <div className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-secondary/40 text-xs border border-border/50">
+              <div className="flex items-center gap-2">
+                <RotateCw className="h-3.5 w-3.5 text-primary shrink-0" />
+                <span className="text-muted-foreground">
+                  Divisão ativa:{" "}
+                  <strong className="text-foreground font-semibold tracking-wide">
+                    {splitOrder.join(" ➔ ")}
+                  </strong>
+                </span>
+              </div>
+              <Dialog open={splitDialogOpen} onOpenChange={setSplitDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs text-primary hover:text-primary hover:bg-primary/10 rounded-full"
+                  >
+                    Ajustar divisão
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Ordem da Divisão de Treinos</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-3 py-2">
+                    <Label>Sequência de Rotação (letras separadas por vírgula)</Label>
+                    <Input
+                      value={splitInput}
+                      onChange={(e) => setSplitInput(e.target.value)}
+                      placeholder="B, C, D, A"
+                      autoFocus
+                    />
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      O app sugere automaticamente o próximo treino na página inicial e no Coach IA baseado na última sessão finalizada no histórico.
+                      <br />
+                      <br />
+                      Exemplo atual: ao concluir o treino <strong>D</strong>, o próximo sugerido é o <strong>A</strong>.
+                    </p>
+                  </div>
+                  <DialogFooter>
+                    <Button onClick={handleSaveSplit} className="rounded-full">
+                      Salvar sequência
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          )}
+
+          {workouts.length === 0 ? (
+            <Card className="p-10 text-center">
+              <Dumbbell className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+              <p className="text-muted-foreground">Nenhum treino ainda. Crie o primeiro!</p>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {workouts.map((w) => (
+                <Link key={w.id} to="/app/treinos/$id" params={{ id: w.id }} className="block">
+                  <Card className="p-4 flex items-center justify-between hover:bg-secondary/50 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      {editingId === w.id ? (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") { e.preventDefault(); saveEdit(w.id); }
+                              if (e.key === "Escape") cancelEdit();
+                            }}
+                            onBlur={() => saveEdit(w.id)}
+                            className="h-8 text-sm font-medium"
+                            autoFocus
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-medium truncate">{w.name}</p>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 shrink-0"
+                            onClick={(e) => startEditing(w, e)}
+                          >
+                            <PencilLine className="h-3 w-3 text-muted-foreground" />
+                          </Button>
+                        </div>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        {formatLocalDate(w.workout_date)}
+                      </p>
                     </div>
-                  ) : (
-                    <div className="flex items-center gap-1.5">
-                      <p className="font-medium truncate">{w.name}</p>
+                    <div className="flex items-center gap-1">
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 shrink-0"
-                        onClick={(e) => startEditing(w, e)}
+                        onClick={(e) => duplicate(w, e)}
+                        title="Duplicar para hoje"
                       >
-                        <PencilLine className="h-3 w-3 text-muted-foreground" />
+                        <Copy className="h-4 w-4 text-muted-foreground" />
                       </Button>
+                      <Button variant="ghost" size="icon" onClick={(e) => remove(w.id, e)}>
+                        <Trash2 className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </div>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    {formatLocalDate(w.workout_date)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => duplicate(w, e)}
-                    title="Duplicar para hoje"
-                  >
-                    <Copy className="h-4 w-4 text-muted-foreground" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={(e) => remove(w.id, e)}>
-                    <Trash2 className="h-4 w-4 text-muted-foreground" />
-                  </Button>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                </div>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      )}
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          )}
+        </TabsContent>
 
-      {sessions.length > 0 && (
-        <div className="space-y-2 border-t pt-4">
-          <div className="flex items-center gap-2">
-            <History className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-lg font-semibold">Treinos concluídos</h2>
+        <TabsContent value="history" className="space-y-3 mt-0 focus-visible:outline-none">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <History className="h-4 w-4 text-primary" />
+              <h2 className="text-base font-semibold">Treinos Concluídos</h2>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {sessions.length} {sessions.length === 1 ? "sessão registrada" : "sessões registradas"}
+            </span>
           </div>
           <p className="text-xs text-muted-foreground text-pretty">
             Sessões do histórico alimentam a média de treinos/semana e a meta. Para limpar um
-            registro de teste, use o botão de excluir ao lado — a base de treinos não é afetada.
+            registro de teste ou duplicado, use o botão de excluir ao lado — as fichas ativas não são afetadas.
           </p>
-          <div className="space-y-2">
-            {sessions.map((s) => (
-              <Card key={s.id} className="p-3 flex items-center justify-between">
-                <div className="min-w-0">
-                  <p className="font-medium truncate">{s.name}</p>
-                  <p className="text-xs text-muted-foreground">{formatSessionWhen(s.completed_at)}</p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeSession(s.id)}
-                  title="Excluir sessão do histórico"
-                >
-                  <Trash2 className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
+          {sessions.length === 0 ? (
+            <Card className="p-8 text-center border-dashed">
+              <History className="h-8 w-8 mx-auto text-muted-foreground mb-2 opacity-50" />
+              <p className="text-sm font-medium text-muted-foreground">Nenhuma sessão concluída ainda</p>
+              <p className="text-xs text-muted-foreground mt-1">Conclua um treino pelo app ou avise o Hermes no Telegram para salvar!</p>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {sessions.map((s) => (
+                <Card key={s.id} className="p-3 flex items-center justify-between hover:bg-secondary/30 transition-colors">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate text-sm">{s.name}</p>
+                    <p className="text-xs text-muted-foreground">{formatSessionWhen(s.completed_at)}</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeSession(s.id)}
+                    title="Excluir sessão do histórico"
+                    className="hover:text-destructive hover:bg-destructive/10"
+                  >
+                    <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive transition-colors" />
+                  </Button>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
