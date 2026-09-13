@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { getLocalDate } from "@/lib/utils";
+import { getLocalDate, todayBoundsSaoPaulo } from "@/lib/utils";
 import {
   callAiChatCompletion,
   fetchAiSettings,
@@ -390,10 +390,15 @@ const hermesActionSchema = z.object({
     "complete_workout",
     "duplicate_workout",
     "create_workout",
+    "undo_workout",
     "log_voice",
     "status",
     "log_meal",
     "search_food",
+    "update_meal_item",
+    "delete_meal_item",
+    "delete_meal",
+    "adjust_water",
   ]),
   payload: z.record(z.any()).default({}),
 });
@@ -1205,6 +1210,334 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
         success: true,
         food: resolved,
         message: replyMsg,
+      };
+    }
+
+    // 8. AÇÃO: ATUALIZAR QUANTIDADE DE UM ALIMENTO ("Hermes, na banana eram 150g e não 100g")
+    if (data.action === "update_meal_item") {
+      const foodQuery = String(data.payload.food_name || data.payload.query || data.payload.food || "").trim();
+      const newGrams = Number(data.payload.grams || data.payload.new_grams || 0);
+      const targetDate = data.payload.meal_date ? String(data.payload.meal_date) : getLocalDate();
+      const mealTypeFilter = data.payload.meal_type ? String(data.payload.meal_type).trim() : null;
+
+      if (!foodQuery || newGrams <= 0) {
+        return { success: false, error: "Informe o nome do alimento e a nova quantidade em gramas." };
+      }
+
+      // 1. Buscar refeições do dia
+      let mealQuery = supabase
+        .from("meals")
+        .select("id, meal_type")
+        .eq("user_id", userId)
+        .eq("meal_date", targetDate);
+
+      if (mealTypeFilter) {
+        if (mealTypeFilter === "Lanche da tarde" || mealTypeFilter === "Lanche") {
+          mealQuery = mealQuery.in("meal_type", ["Lanche da tarde", "Lanche"]);
+        } else {
+          mealQuery = mealQuery.eq("meal_type", mealTypeFilter);
+        }
+      }
+
+      const { data: userMeals } = await mealQuery;
+      const mealIds = (userMeals || []).map((m) => m.id);
+
+      if (mealIds.length === 0) {
+        return { success: false, error: `Nenhuma refeição encontrada para hoje (${targetDate}).` };
+      }
+
+      // 2. Buscar o item de refeição correspondente
+      const { data: matchingItems } = await supabase
+        .from("meal_items")
+        .select("id, meal_id, name, grams, calories, protein_g, carbs_g, fat_g")
+        .in("meal_id", mealIds)
+        .ilike("name", `%${foodQuery}%`)
+        .order("created_at", { ascending: false });
+
+      if (!matchingItems || matchingItems.length === 0) {
+        return { success: false, error: `Não encontrei nenhum alimento chamado "${foodQuery}" registrado hoje no seu app.` };
+      }
+
+      const itemToUpdate = matchingItems[0];
+      const oldGrams = Number(itemToUpdate.grams) || 100;
+      const ratio = newGrams / oldGrams;
+
+      const updatedKcal = Math.round(Number(itemToUpdate.calories || 0) * ratio);
+      const updatedP = Math.round(Number(itemToUpdate.protein_g || 0) * ratio * 10) / 10;
+      const updatedC = Math.round(Number(itemToUpdate.carbs_g || 0) * ratio * 10) / 10;
+      const updatedF = Math.round(Number(itemToUpdate.fat_g || 0) * ratio * 10) / 10;
+
+      const { error: updErr } = await supabase
+        .from("meal_items")
+        .update({
+          grams: newGrams,
+          calories: updatedKcal,
+          protein_g: updatedP,
+          carbs_g: updatedC,
+          fat_g: updatedF,
+        })
+        .eq("id", itemToUpdate.id);
+
+      if (updErr) {
+        return { success: false, error: `Erro ao atualizar alimento: ${updErr.message}` };
+      }
+
+      // 3. Recalcular totais do dia
+      const { data: allTodayMeals } = await supabase
+        .from("meals")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("meal_date", targetDate);
+      const allMIds = (allTodayMeals || []).map((m) => m.id);
+
+      let dayKcal = 0;
+      let dayP = 0;
+
+      if (allMIds.length > 0) {
+        const { data: dayItems } = await supabase
+          .from("meal_items")
+          .select("calories, protein_g")
+          .in("meal_id", allMIds);
+
+        (dayItems || []).forEach((item) => {
+          dayKcal += Number(item.calories || 0);
+          dayP += Number(item.protein_g || 0);
+        });
+      }
+
+      const { data: userGoal } = await supabase
+        .from("goals")
+        .select("calories, protein_g")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      const goalKcal = userGoal?.calories || 2000;
+      const goalP = userGoal?.protein_g || 140;
+
+      return {
+        success: true,
+        foodName: itemToUpdate.name,
+        newGrams,
+        updatedMacros: { calories: updatedKcal, protein_g: updatedP, carbs_g: updatedC, fat_g: updatedF },
+        dayTotals: { calories: Math.round(dayKcal), protein_g: Math.round(dayP * 10) / 10 },
+        message: `✏️ **${itemToUpdate.name}** atualizado para **${newGrams}g** com sucesso!\n\n` +
+          `• Novos valores: ${updatedKcal} kcal | ${updatedP}g P | ${updatedC}g C | ${updatedF}g G\n` +
+          `🎯 Total de hoje recalculado: ${Math.round(dayKcal)}/${goalKcal} kcal • ${Math.round(dayP * 10) / 10}/${goalP}g Proteína.`,
+      };
+    }
+
+    // 9. AÇÃO: APAGAR UM ALIMENTO ("Hermes, apaga a banana que registrei")
+    if (data.action === "delete_meal_item") {
+      const foodQuery = String(data.payload.food_name || data.payload.query || data.payload.food || "").trim();
+      const targetDate = data.payload.meal_date ? String(data.payload.meal_date) : getLocalDate();
+      const mealTypeFilter = data.payload.meal_type ? String(data.payload.meal_type).trim() : null;
+
+      if (!foodQuery) {
+        return { success: false, error: "Informe o nome do alimento que deseja apagar." };
+      }
+
+      let mealQuery = supabase
+        .from("meals")
+        .select("id, meal_type")
+        .eq("user_id", userId)
+        .eq("meal_date", targetDate);
+
+      if (mealTypeFilter) {
+        if (mealTypeFilter === "Lanche da tarde" || mealTypeFilter === "Lanche") {
+          mealQuery = mealQuery.in("meal_type", ["Lanche da tarde", "Lanche"]);
+        } else {
+          mealQuery = mealQuery.eq("meal_type", mealTypeFilter);
+        }
+      }
+
+      const { data: userMeals } = await mealQuery;
+      const mealIds = (userMeals || []).map((m) => m.id);
+
+      if (mealIds.length === 0) {
+        return { success: false, error: `Nenhuma refeição encontrada para hoje (${targetDate}).` };
+      }
+
+      const { data: matchingItems } = await supabase
+        .from("meal_items")
+        .select("id, meal_id, name, grams, calories, protein_g")
+        .in("meal_id", mealIds)
+        .ilike("name", `%${foodQuery}%`)
+        .order("created_at", { ascending: false });
+
+      if (!matchingItems || matchingItems.length === 0) {
+        return { success: false, error: `Não encontrei nenhum alimento chamado "${foodQuery}" nas suas refeições de hoje.` };
+      }
+
+      const itemToDelete = matchingItems[0];
+      const parentMeal = (userMeals || []).find((m) => m.id === itemToDelete.meal_id);
+      const mealName = parentMeal?.meal_type || "sua refeição";
+
+      const { error: delErr } = await supabase
+        .from("meal_items")
+        .delete()
+        .eq("id", itemToDelete.id);
+
+      if (delErr) {
+        return { success: false, error: `Erro ao apagar alimento: ${delErr.message}` };
+      }
+
+      // Se a refeição ficou sem nenhum item, apaga a refeição também
+      const { data: remainingInMeal } = await supabase
+        .from("meal_items")
+        .select("id")
+        .eq("meal_id", itemToDelete.meal_id);
+
+      if (!remainingInMeal || remainingInMeal.length === 0) {
+        await supabase.from("meals").delete().eq("id", itemToDelete.meal_id);
+      }
+
+      // Recalcular totais do dia
+      const { data: allTodayMeals } = await supabase
+        .from("meals")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("meal_date", targetDate);
+      const allMIds = (allTodayMeals || []).map((m) => m.id);
+
+      let dayKcal = 0;
+      let dayP = 0;
+
+      if (allMIds.length > 0) {
+        const { data: dayItems } = await supabase
+          .from("meal_items")
+          .select("calories, protein_g")
+          .in("meal_id", allMIds);
+
+        (dayItems || []).forEach((item) => {
+          dayKcal += Number(item.calories || 0);
+          dayP += Number(item.protein_g || 0);
+        });
+      }
+
+      return {
+        success: true,
+        deletedFood: itemToDelete.name,
+        mealType: mealName,
+        dayTotals: { calories: Math.round(dayKcal), protein_g: Math.round(dayP * 10) / 10 },
+        message: `🗑️ **${itemToDelete.name}** removido de **${mealName}** com sucesso!\n\n` +
+          `📉 Calorias e macros foram deduzidos da sua meta diária no FitWell Hub. Total de hoje: ${Math.round(dayKcal)} kcal.`,
+      };
+    }
+
+    // 10. AÇÃO: APAGAR UMA REFEIÇÃO INTEIRA ("Hermes, apaga o meu lanche da tarde")
+    if (data.action === "delete_meal") {
+      const rawMealType = String(data.payload.meal_type || data.payload.type || "").trim();
+      const targetDate = data.payload.meal_date ? String(data.payload.meal_date) : getLocalDate();
+
+      if (!rawMealType) {
+        return { success: false, error: "Informe qual refeição deseja excluir (ex: 'Lanche da tarde', 'Almoço')." };
+      }
+
+      let typesToMatch = [rawMealType];
+      if (rawMealType.toLowerCase().includes("lanche")) {
+        typesToMatch = ["Lanche da tarde", "Lanche", "Lanche da manhã"];
+      }
+
+      const { data: mealsToDelete } = await supabase
+        .from("meals")
+        .select("id, meal_type")
+        .eq("user_id", userId)
+        .eq("meal_date", targetDate)
+        .in("meal_type", typesToMatch);
+
+      if (!mealsToDelete || mealsToDelete.length === 0) {
+        return { success: false, error: `Nenhuma refeição "${rawMealType}" encontrada para hoje (${targetDate}).` };
+      }
+
+      const mealIds = mealsToDelete.map((m) => m.id);
+      await supabase.from("meal_items").delete().in("meal_id", mealIds);
+      await supabase.from("meals").delete().in("id", mealIds);
+
+      return {
+        success: true,
+        deletedMeal: mealsToDelete[0].meal_type,
+        message: `🗑️ Refeição **${mealsToDelete[0].meal_type}** e todos os seus alimentos foram excluídos com sucesso do seu diário de hoje!`,
+      };
+    }
+
+    // 11. AÇÃO: AJUSTAR OU CORRIGIR CONSUMO DE ÁGUA ("Hermes, ajusta minha água para 2000ml" ou "soma mais 300ml de água")
+    if (data.action === "adjust_water") {
+      const targetDate = data.payload.log_date || data.payload.date ? String(data.payload.log_date || data.payload.date) : getLocalDate();
+      const waterMl = Number(data.payload.water_ml || data.payload.ml || 0);
+      const mode = (data.payload.mode || "set") as "set" | "add" | "subtract";
+
+      if (waterMl === 0 && mode !== "set") {
+        return { success: false, error: "Informe a quantidade de água em ml." };
+      }
+
+      if (mode === "set") {
+        await supabase.from("water_logs").delete().eq("user_id", userId).eq("log_date", targetDate);
+        if (waterMl > 0) {
+          await supabase.from("water_logs").insert({
+            user_id: userId,
+            log_date: targetDate,
+            ml: Math.round(waterMl),
+          });
+        }
+      } else if (mode === "add") {
+        await supabase.from("water_logs").insert({
+          user_id: userId,
+          log_date: targetDate,
+          ml: Math.round(waterMl),
+        });
+      } else if (mode === "subtract") {
+        await supabase.from("water_logs").insert({
+          user_id: userId,
+          log_date: targetDate,
+          ml: -Math.round(Math.abs(waterMl)),
+        });
+      }
+
+      const { data: todayWater } = await supabase
+        .from("water_logs")
+        .select("ml")
+        .eq("user_id", userId)
+        .eq("log_date", targetDate);
+      const totalWater = Math.max(0, (todayWater || []).reduce((acc, w) => acc + (w.ml || 0), 0));
+
+      return {
+        success: true,
+        total_water_today: totalWater,
+        message: `💧 Meta de água atualizada com sucesso!\n\nTotal acumulado de hoje: **${totalWater}ml** hidratados. Continue firme! 🥤`,
+      };
+    }
+
+    // 12. AÇÃO: DESFAZER CONCLUSÃO DE TREINO ("Hermes, desfaz o treino de hoje")
+    if (data.action === "undo_workout") {
+      const routineName = String(data.payload.routine_name || data.payload.workout || "").trim();
+      const bounds = todayBoundsSaoPaulo();
+
+      let sessionQuery = supabase
+        .from("workout_sessions")
+        .select("id, name, completed_at")
+        .eq("user_id", userId)
+        .gte("completed_at", bounds.start)
+        .lte("completed_at", bounds.end)
+        .order("completed_at", { ascending: false });
+
+      if (routineName) {
+        sessionQuery = sessionQuery.ilike("name", `%${routineName}%`);
+      }
+
+      const { data: sessions } = await sessionQuery;
+
+      if (!sessions || sessions.length === 0) {
+        return { success: false, error: "Nenhuma sessão de treino concluída encontrada para hoje." };
+      }
+
+      const sessionToUndo = sessions[0];
+      await supabase.from("workout_session_sets").delete().eq("session_id", sessionToUndo.id);
+      await supabase.from("workout_sessions").delete().eq("id", sessionToUndo.id);
+
+      return {
+        success: true,
+        undoneWorkout: sessionToUndo.name,
+        message: `↩️ Conclusão do treino **"${sessionToUndo.name}"** desfeita com sucesso! Os registros de séries de hoje foram removidos.`,
       };
     }
 
