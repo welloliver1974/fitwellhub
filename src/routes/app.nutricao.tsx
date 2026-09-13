@@ -805,15 +805,31 @@ function NutricaoPage() {
     return library.filter((f) => f.name.toLowerCase().includes(q));
   }, [library, libQuery]);
 
-  const grouped = useMemo(
-    () =>
-      MEAL_TYPES.map((type) => {
-        const meal = meals.find((m) => m.meal_type === type);
-        const its = meal ? items.filter((i) => i.meal_id === meal.id) : [];
+  const grouped = useMemo(() => {
+    // 1. Grupos canônicos de MEAL_TYPES (com suporte a refeições legadas/genéricas como 'Lanche')
+    const canonical = MEAL_TYPES.map((type) => {
+      const matchedMeals = meals.filter(
+        (m) =>
+          m.meal_type === type ||
+          (type === "Lanche da tarde" && m.meal_type === "Lanche"),
+      );
+      const mIds = matchedMeals.map((m) => m.id);
+      const its = items.filter((i) => mIds.includes(i.meal_id));
+      return { type, items: its };
+    });
+
+    // 2. Grupos extras caso o usuário tenha outro tipo de refeição registrado
+    const extra = [...new Set(meals.map((m) => m.meal_type))]
+      .filter((t) => !MEAL_TYPES.includes(t) && t !== "Lanche")
+      .map((type) => {
+        const matchedMeals = meals.filter((m) => m.meal_type === type);
+        const mIds = matchedMeals.map((m) => m.id);
+        const its = items.filter((i) => mIds.includes(i.meal_id));
         return { type, items: its };
-      }),
-    [meals, items],
-  );
+      });
+
+    return [...canonical, ...extra];
+  }, [meals, items]);
 
   const consumed = useMemo(() => {
     return items.reduce(
@@ -1605,7 +1621,11 @@ function NutricaoPage() {
                   </Button>
                   {its.length > 0 &&
                     (() => {
-                      const meal = meals.find((m) => m.meal_type === type);
+                      const meal = meals.find(
+                        (m) =>
+                          m.meal_type === type ||
+                          (type === "Lanche da tarde" && m.meal_type === "Lanche"),
+                      );
                       return meal ? (
                         <Button
                           variant="ghost"

@@ -359,22 +359,26 @@ export async function resolveFoodItemWithLibrary(
   };
 }
 
-function inferMealTypeFromTimeOrText(text?: string): "Café da manhã" | "Almoço" | "Jantar" | "Lanche" {
+function inferMealTypeFromTimeOrText(text?: string): "Café da manhã" | "Lanche da manhã" | "Almoço" | "Lanche da tarde" | "Jantar" | "Ceia" {
   if (text) {
     const t = text.toLowerCase();
-    if (t.includes("café") || t.includes("cafe") || t.includes("desjejum") || t.includes("acordei")) return "Café da manhã";
+    if (t.includes("café da manhã") || t.includes("cafe da manha") || t.includes("desjejum") || t.includes("acordei")) return "Café da manhã";
+    if (t.includes("lanche da manhã") || t.includes("lanche da manha")) return "Lanche da manhã";
     if (t.includes("almoç") || t.includes("almoc")) return "Almoço";
-    if (t.includes("janta") || t.includes("ceia")) return "Jantar";
-    if (t.includes("lanche") || t.includes("café da tarde") || t.includes("shake") || t.includes("pré-treino") || t.includes("pos-treino") || t.includes("pós-treino")) return "Lanche";
+    if (t.includes("lanche da tarde") || t.includes("café da tarde") || t.includes("shake") || t.includes("pré-treino") || t.includes("pos-treino") || t.includes("pós-treino") || t.includes("lanche")) return "Lanche da tarde";
+    if (t.includes("janta") || t.includes("jantar")) return "Jantar";
+    if (t.includes("ceia")) return "Ceia";
   }
 
   // Horário atual de Brasília
   const hour = new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo", hour: "numeric", hour12: false });
   const h = parseInt(hour, 10);
-  if (h >= 5 && h < 11) return "Café da manhã";
-  if (h >= 11 && h < 15) return "Almoço";
-  if (h >= 15 && h < 19) return "Lanche";
-  return "Jantar";
+  if (h >= 5 && h < 10) return "Café da manhã";
+  if (h >= 10 && h < 12) return "Lanche da manhã";
+  if (h >= 12 && h < 15) return "Almoço";
+  if (h >= 15 && h < 19) return "Lanche da tarde";
+  if (h >= 19 && h < 22) return "Jantar";
+  return "Ceia";
 }
 
 const hermesActionSchema = z.object({
@@ -970,7 +974,9 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
             if (call) {
               const args = JSON.parse(call.function.arguments);
               if (args.water_ml && waterMl === 0) waterMl = Number(args.water_ml);
-              if (args.meal_type && !data.payload.meal_type) mealType = args.meal_type;
+              if (args.meal_type && !data.payload.meal_type) {
+                mealType = args.meal_type === "Lanche" ? "Lanche da tarde" : args.meal_type;
+              }
               if (Array.isArray(args.items) && args.items.length > 0) {
                 inputItems = args.items;
               }
@@ -979,6 +985,11 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
         } catch (parseErr) {
           console.error("Erro ao analisar relato falado com IA:", parseErr);
         }
+      }
+
+      // Normaliza 'Lanche' genérico para 'Lanche da tarde' oficial do app
+      if (mealType === "Lanche") {
+        mealType = "Lanche da tarde";
       }
 
       // Se só registrou água (ex: "tomei 500ml de água")
