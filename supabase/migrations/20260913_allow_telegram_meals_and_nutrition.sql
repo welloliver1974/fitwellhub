@@ -150,11 +150,50 @@ CREATE POLICY "telegram_delete_water_logs"
     )
   );
 
--- 4. TABELA FAVORITE_FOODS (Consulta de Favoritos pelo Hermes)
+-- 4. TABELA FAVORITE_FOODS (Consulta, Inserção, Atualização e Deleção pelo Hermes)
 DROP POLICY IF EXISTS "telegram_select_favorite_foods" ON public.favorite_foods;
 CREATE POLICY "telegram_select_favorite_foods"
   ON public.favorite_foods
   FOR SELECT
+  USING (
+    auth.uid() = user_id 
+    OR EXISTS (
+      SELECT 1 FROM public.telegram_integrations ti 
+      WHERE ti.user_id = favorite_foods.user_id 
+        AND ti.telegram_chat_id IS NOT NULL
+    )
+  );
+
+DROP POLICY IF EXISTS "telegram_insert_favorite_foods" ON public.favorite_foods;
+CREATE POLICY "telegram_insert_favorite_foods"
+  ON public.favorite_foods
+  FOR INSERT
+  WITH CHECK (
+    auth.uid() = user_id 
+    OR EXISTS (
+      SELECT 1 FROM public.telegram_integrations ti 
+      WHERE ti.user_id = favorite_foods.user_id 
+        AND ti.telegram_chat_id IS NOT NULL
+    )
+  );
+
+DROP POLICY IF EXISTS "telegram_update_favorite_foods" ON public.favorite_foods;
+CREATE POLICY "telegram_update_favorite_foods"
+  ON public.favorite_foods
+  FOR UPDATE
+  USING (
+    auth.uid() = user_id 
+    OR EXISTS (
+      SELECT 1 FROM public.telegram_integrations ti 
+      WHERE ti.user_id = favorite_foods.user_id 
+        AND ti.telegram_chat_id IS NOT NULL
+    )
+  );
+
+DROP POLICY IF EXISTS "telegram_delete_favorite_foods" ON public.favorite_foods;
+CREATE POLICY "telegram_delete_favorite_foods"
+  ON public.favorite_foods
+  FOR DELETE
   USING (
     auth.uid() = user_id 
     OR EXISTS (

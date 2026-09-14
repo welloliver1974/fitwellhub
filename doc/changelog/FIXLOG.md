@@ -1684,5 +1684,27 @@ O Daily Briefing recepcionava com a mensagem *"Boa tarde, guerreiro! ⚡"*. O us
 ### ✅ Validação
 - `npm test -- src/lib/briefing-utils.test.ts`: 5 testes executados com 100% de sucesso.
 
+---
+
+## Sessão: 14/09/2026 — Liberação de RLS para favorite_foods (INSERT, UPDATE e DELETE)
+
+### 🎯 Problema / Solicitação
+Na integração com o assistente Hermes (Telegram), as tabelas de refeições (`meals`, `meal_items`), hidratação (`water_logs`) e treinos (`workouts`, `exercises`, `sets`) já possuíam políticas de RLS completas (SELECT, INSERT, UPDATE, DELETE).
+Porém, a tabela de alimentos favoritos (`favorite_foods`) possuía apenas permissão de consulta (`SELECT`) para o bot do Telegram. Qualquer tentativa de atualizar (`UPDATE`), deletar (`DELETE`) ou inserir (`INSERT`) alimentos favoritos a partir do bot ou fluxos automatizados vinculados ao `telegram_chat_id` era bloqueada pelo Row Level Security (RLS) do Supabase.
+
+### 🔍 Causa Raiz
+Na migration `supabase/migrations/20260913_allow_telegram_meals_and_nutrition.sql`, a seção de `favorite_foods` continha exclusivamente a policy `telegram_select_favorite_foods`. Faltavam as políticas correspondentes para operações de escrita e exclusão.
+
+### 🛠️ Solução Implementada
+1. **Criação da Migration Dedicada:**
+   - Criado o arquivo [`supabase/migrations/20260914_allow_telegram_favorite_foods_update_delete.sql`](file:///e:/Apps/fitwell/fitwellhub/supabase/migrations/20260914_allow_telegram_favorite_foods_update_delete.sql).
+   - Implementadas 3 novas policies espelhando a estrutura de segurança de `meals` e `workouts`:
+     - `telegram_insert_favorite_foods` (`FOR INSERT WITH CHECK` com validação de `auth.uid() = user_id OR EXISTS (telegram_integrations)`)
+     - `telegram_update_favorite_foods` (`FOR UPDATE USING` com validação de `auth.uid() = user_id OR EXISTS (telegram_integrations)`)
+     - `telegram_delete_favorite_foods` (`FOR DELETE USING` com validação de `auth.uid() = user_id OR EXISTS (telegram_integrations)`)
+2. **Atualização da Migration Consolidada:**
+   - Atualizada a Seção 4 de [`supabase/migrations/20260913_allow_telegram_meals_and_nutrition.sql`](file:///e:/Apps/fitwell/fitwellhub/supabase/migrations/20260913_allow_telegram_meals_and_nutrition.sql) para conter todas as 4 policies (SELECT, INSERT, UPDATE, DELETE).
+
+
 
 
