@@ -2,6 +2,15 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [15/09/2026] - Antigravity (Sincronização Galaxy Watch 7 + Google Fit e Políticas RLS para Hermes Agent)
+- **Diagnóstico de Passos e Sincronização Google Fit**:
+  - Investigada discrepância entre os passos registrados no Galaxy Watch 7 (5.000+) e a leitura exibida no app Google Fit / FitWell Hub (1.167).
+  - Diagnosticado que os passos gravados no relógio estavam no Health Connect, mas bloqueados de aparecer na tela inicial do Google Fit pela política de backfill e concorrência do acelerômetro interno do celular.
+  - Implementada a integração via **Health Sync** (Samsung Health ➔ Google Fit) e desligado o sensor do telefone no Google Fit, alinhando as medições em tempo real com 100% de sucesso.
+- **Liberação de RLS para o Hermes Agent (Telegram)**:
+  - Criada a migration `supabase/migrations/20260915_allow_telegram_body_weights_and_profiles.sql` com políticas RLS restritas para os dados requisitados pelo Hermes: `body_weights`, `body_measurements`, `bioimpedance_logs`, `profiles` e `goals`.
+  - O acesso é condicionado a `ti.user_id = table.user_id AND ti.telegram_chat_id IS NOT NULL`, impedindo qualquer vazamento de dados de usuários não vinculados via API anônima do Supabase.
+
 ## [11/09/2026] - Antigravity (Correção de Erro 'Something went wrong' no Chat do Coach)
 - **Causa Raiz**:
   - `callAiChatCompletion` retorna o objeto JSON completo retornado pela API OpenAI (`response.json()`), contendo `{ id, choices: [{ message: { content } }] }` ou `{ error }`.

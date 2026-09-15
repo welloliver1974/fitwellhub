@@ -1,5 +1,22 @@
 # FIXLOG — FitWell Hub
 
+## Sessão: 15/09/2026 — Diagnóstico de Passos (Google Fit & Galaxy Watch 7) + Liberação Segura de RLS para Hermes Agent (Peso, Medidas, Bioimpedância e Metas)
+
+### 🎯 Funcionalidades e Ajustes
+1. **Diagnóstico & Solução de Sincronização de Passos (Google Fit + Samsung Galaxy Watch 7)**:
+   - Identificado o gargalo histórico entre Samsung Health e o aplicativo Google Fit no Android: passos gravados no relógio não entravam na tela inicial do Google Fit devido à priorização do sensor acelerômetro do smartphone (`derived:com.google.step_count.delta:com.google.android.gms:estimated_steps`) e bloqueio de backfill do Health Connect.
+   - Configurado o pipeline recomendado pela comunidade via app **Health Sync** (mão única: Samsung Health ➔ Google Fit) e desativado o recurso "Rastrear suas atividades" no Google Fit móvel.
+   - Confirmada sincronização em tempo real e equivalência de passos entre Google Fit e FitWell Hub.
+2. `supabase/migrations/20260915_allow_telegram_body_weights_and_profiles.sql`:
+   - **Liberação Segura de RLS para Hermes Agent (Telegram)**:
+     - Criação de políticas de segurança Row Level Security amarradas estritamente a `telegram_integrations` (`telegram_chat_id IS NOT NULL`) para prevenir vazamentos de dados públicos via API anônima.
+     - Tabelas contempladas:
+       - `body_weights`: SELECT, INSERT, UPDATE, DELETE (leitura e registro de pesagens via comando de voz/chat no Telegram).
+       - `body_measurements`: SELECT, INSERT, UPDATE, DELETE (leitura e acompanhamento de medidas corporais).
+       - `bioimpedance_logs`: SELECT, INSERT, UPDATE, DELETE (percentual de gordura, massa magra, etc.).
+       - `profiles`: SELECT, UPDATE (idade, sexo, altura, peso e objetivo para cálculo preciso de TMB/TDEE pelo Hermes).
+       - `goals`: SELECT, INSERT, UPDATE (consulta e ajuste dinâmico de metas nutricionais).
+
 ## Sessão: 13/09/2026 — Integração Telegram & Hermes Agent (Treino por Voz e Check-in Instantâneo)
 
 ### 🎯 Funcionalidades trabalhadas
