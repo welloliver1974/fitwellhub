@@ -13,7 +13,7 @@ Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hu
   - Quando o usuário conclui um treino no dia, a Home exibe um card de celebração (`CheckCircle2`) com o nome do treino e o horário em que foi concluído.
   - Exibe métricas agregadas: total de exercícios, total de séries e volume total movimentado no dia.
   - Grade visual com todos os exercícios feitos no dia, indicando séries e carga máxima, com link direto para o histórico de cada um.
-  - Se o usuário ainda não treinou, exibe o treino sugerido pela rotação com botão direto "Iniciar Treino →" e preview dos exercícios previstos.
+  - Lista de exercícios realizados e previstos convertida para um **Carrossel Horizontal Deslizável** (`snap-x snap-mandatory touch-pan-x` com sangria suave nas bordas), garantindo altura fixa na tela do celular, perfeita navegabilidade por toque e evitando que treinos com muitos exercícios empurrem o restante da página para baixo.
   - Layout harmonizado na parte inferior com cards alinhados de Peso Atual, Coach IA e Relatório Semanal em PDF.
 - **Validação**:
   - `npx vite build`: bundles de cliente e SSR compilados com 100% de sucesso.

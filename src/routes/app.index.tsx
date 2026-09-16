@@ -497,34 +497,45 @@ function TodayPage() {
             )}
           </div>
 
-          {/* Lista de exercícios realizados */}
+          {/* Lista de exercícios realizados em Carrossel Horizontal */}
           {completedWorkoutToday.exercises.length > 0 ? (
             <div className="mt-4 space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Exercícios feitos no dia:</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
+                <span>Exercícios realizados ({completedWorkoutToday.exercises.length}):</span>
+                <span className="text-[11px] text-muted-foreground/80 flex items-center gap-1">
+                  deslize para o lado <ChevronRight className="h-3 w-3" />
+                </span>
+              </div>
+              <div className="-mx-5 px-5 flex items-stretch gap-2.5 overflow-x-auto pb-1.5 pt-0.5 scrollbar-none snap-x snap-mandatory touch-pan-x">
                 {completedWorkoutToday.exercises.map((ex, i) => (
                   <Link
                     key={i}
                     to="/app/exercicios/$name"
                     params={{ name: encodeURIComponent(ex.name) }}
-                    className="p-2.5 rounded-xl bg-secondary/40 border border-border/40 hover:bg-secondary/70 transition-colors flex items-center justify-between gap-2 group"
-                    title="Ver gráfico e histórico deste exercício"
+                    className="w-[165px] sm:w-[185px] shrink-0 p-3 rounded-2xl bg-secondary/40 border border-border/40 hover:bg-secondary/70 hover:border-primary/30 transition-all flex flex-col justify-between gap-2.5 group snap-start select-none"
+                    title="Ver gráfico e evolução deste exercício"
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Dumbbell className="h-3.5 w-3.5 text-primary shrink-0 group-hover:scale-110 transition-transform" />
-                      <span className="text-xs sm:text-sm font-medium truncate text-foreground group-hover:text-primary transition-colors">
+                    <div>
+                      <div className="flex items-center justify-between gap-1 mb-1.5">
+                        <div className="h-6 w-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                          <Dumbbell className="h-3 w-3" />
+                        </div>
+                        {ex.maxWeight > 0 && (
+                          <span className="text-[10px] font-bold text-primary px-1.5 py-0.5 rounded-md bg-primary/10">
+                            {ex.maxWeight} kg
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs sm:text-sm font-semibold line-clamp-2 text-foreground group-hover:text-primary transition-colors leading-snug">
                         {ex.name}
-                      </span>
+                      </p>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0 text-right">
-                      <span className="text-[11px] text-muted-foreground">
+
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1.5 border-t border-border/30">
+                      <span>
                         {ex.setsCount} {ex.setsCount === 1 ? "série" : "séries"}
                       </span>
-                      {ex.maxWeight > 0 && (
-                        <span className="text-[11px] font-semibold text-primary px-1.5 py-0.5 rounded bg-primary/10">
-                          {ex.maxWeight}kg
-                        </span>
-                      )}
+                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
                     </div>
                   </Link>
                 ))}
@@ -566,11 +577,11 @@ function TodayPage() {
               <p className="text-xs text-muted-foreground mb-1.5 font-medium">
                 Exercícios programados ({plannedExercises.length}):
               </p>
-              <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="-mx-5 px-5 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none touch-pan-x">
                 {plannedExercises.map((name, i) => (
                   <span
                     key={i}
-                    className="text-[11px] sm:text-xs px-2.5 py-1 rounded-lg bg-secondary/60 text-secondary-foreground font-medium"
+                    className="text-[11px] sm:text-xs px-2.5 py-1 rounded-lg bg-secondary/60 text-secondary-foreground font-medium shrink-0 whitespace-nowrap"
                   >
                     {name}
                   </span>
