@@ -2,6 +2,22 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [15/09/2026] - Antigravity (Visualização de Exercícios Concluídos no Histórico e na Tela Principal)
+- **Histórico de Treinos Expansível (`src/routes/app.treinos.index.tsx`)**:
+  - Implementada a busca detalhada de séries e repetições em `workout_session_sets` vinculadas a cada sessão do histórico.
+  - Cada card de sessão concluída no histórico agora é interativo/expansível (toggle com Chevron), exibindo a lista completa de exercícios feitos.
+  - Para cada exercício: quantidade de séries, carga máxima atingida (ex: `máx 80 kg`) e detalhamento das séries (ex: `#1 80kg × 10 reps`).
+  - Cada exercício conta com link direto para sua página de evolução e histórico gráfico (`/app/exercicios/$name`).
+  - Exibição do volume total erguido na sessão em kg.
+- **Card de Destaque do Treino do Dia na Home (`src/routes/app.index.tsx`)**:
+  - Quando o usuário conclui um treino no dia, a Home exibe um card de celebração (`CheckCircle2`) com o nome do treino e o horário em que foi concluído.
+  - Exibe métricas agregadas: total de exercícios, total de séries e volume total movimentado no dia.
+  - Grade visual com todos os exercícios feitos no dia, indicando séries e carga máxima, com link direto para o histórico de cada um.
+  - Se o usuário ainda não treinou, exibe o treino sugerido pela rotação com botão direto "Iniciar Treino →" e preview dos exercícios previstos.
+  - Layout harmonizado na parte inferior com cards alinhados de Peso Atual, Coach IA e Relatório Semanal em PDF.
+- **Validação**:
+  - `npx vite build`: bundles de cliente e SSR compilados com 100% de sucesso.
+
 ## [15/09/2026] - Antigravity (Sincronização Galaxy Watch 7 + Google Fit e Políticas RLS para Hermes Agent)
 - **Diagnóstico de Passos e Sincronização Google Fit**:
   - Investigada discrepância entre os passos registrados no Galaxy Watch 7 (5.000+) e a leitura exibida no app Google Fit / FitWell Hub (1.167).

@@ -35,6 +35,8 @@ import {
   Dumbbell,
   Sparkles,
   FileDown,
+  CheckCircle2,
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Heatmap } from "@/components/Heatmap";
@@ -57,8 +59,33 @@ type Goals = {
 };
 type Totals = { calories: number; protein_g: number; carbs_g: number; fat_g: number };
 
+type CompletedExercise = {
+  name: string;
+  setsCount: number;
+  maxWeight: number;
+  sets: { set_number: number; reps: number; weight_kg: number; completed: boolean }[];
+};
+
+type TodayCompletedWorkout = {
+  id: string;
+  name: string;
+  workout_id: string | null;
+  completed_at: string;
+  exercises: CompletedExercise[];
+  totalVolume: number;
+  totalSets: number;
+};
+
 const BASE_WATER_GOAL_ML = 2500;
 const CUP_ML = 250;
+
+function formatSessionTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 function TodayPage() {
   const { user, session } = useAuth();
@@ -68,6 +95,8 @@ function TodayPage() {
   const [lastWeight, setLastWeight] = useState<number | null>(null);
   const [todayWorkout, setTodayWorkout] = useState<{ id: string; name: string } | null>(null);
   const [hasCompletedWorkoutToday, setHasCompletedWorkoutToday] = useState(false);
+  const [completedWorkoutToday, setCompletedWorkoutToday] = useState<TodayCompletedWorkout | null>(null);
+  const [plannedExercises, setPlannedExercises] = useState<string[]>([]);
   const [weightOpen, setWeightOpen] = useState(false);
   const [weightInput, setWeightInput] = useState("");
   const [loading, setLoading] = useState(true);
@@ -81,7 +110,7 @@ function TodayPage() {
     const { start: dayStart, end: dayEnd } = todayBoundsSaoPaulo();
     const { data: completedToday } = await supabase
       .from("workout_sessions")
-      .select("id, workout_id, name")
+      .select("id, workout_id, name, completed_at")
       .eq("user_id", userId)
       .gte("completed_at", dayStart)
       .lte("completed_at", dayEnd)
@@ -89,17 +118,77 @@ function TodayPage() {
       .limit(1);
 
     if (completedToday && completedToday[0]) {
+      const sess = completedToday[0];
       setHasCompletedWorkoutToday(true);
-      // workout_id é nullable — se existir, linka para o template original
-      if (completedToday[0].workout_id) {
+
+      // Buscar séries e exercícios da sessão concluída
+      const { data: setsData } = await supabase
+        .from("workout_session_sets")
+        .select("exercise_name, set_number, reps, weight_kg, completed")
+        .eq("session_id", sess.id)
+        .order("set_number", { ascending: true });
+
+      const exercises: CompletedExercise[] = [];
+      let totalVol = 0;
+      let totalSets = 0;
+
+      if (setsData && setsData.length > 0) {
+        const map = new Map<string, typeof setsData>();
+        for (const s of setsData) {
+          if (!map.has(s.exercise_name)) map.set(s.exercise_name, []);
+          map.get(s.exercise_name)!.push(s);
+        }
+
+        map.forEach((sList, exName) => {
+          let maxW = 0;
+          let compCount = 0;
+          for (const item of sList) {
+            const w = Number(item.weight_kg) || 0;
+            const r = Number(item.reps) || 0;
+            if (w > maxW) maxW = w;
+            if (item.completed) {
+              compCount++;
+              totalVol += w * r;
+            }
+          }
+          totalSets += compCount || sList.length;
+          exercises.push({
+            name: exName,
+            setsCount: compCount || sList.length,
+            maxWeight: maxW,
+            sets: sList.map((it) => ({
+              set_number: it.set_number,
+              reps: it.reps,
+              weight_kg: Number(it.weight_kg) || 0,
+              completed: it.completed,
+            })),
+          });
+        });
+      }
+
+      setCompletedWorkoutToday({
+        id: sess.id,
+        name: sess.name,
+        workout_id: sess.workout_id,
+        completed_at: sess.completed_at,
+        exercises,
+        totalVolume: totalVol,
+        totalSets,
+      });
+
+      if (sess.workout_id) {
         return {
-          id: completedToday[0].workout_id,
-          name: completedToday[0].name,
+          id: sess.workout_id,
+          name: sess.name,
         };
       }
-      // se não tiver template vinculado, vai pro fallback
+      return {
+        id: sess.id,
+        name: sess.name,
+      };
     } else {
       setHasCompletedWorkoutToday(false);
+      setCompletedWorkoutToday(null);
     }
 
     // 2. Rotação Inteligente de Divisão (Split Sequencer):
@@ -123,9 +212,18 @@ function TodayPage() {
     });
 
     if (next) {
+      // Buscar exercícios cadastrados na ficha
+      const { data: exData } = await supabase
+        .from("exercises")
+        .select("name")
+        .eq("workout_id", next.id)
+        .order("position", { ascending: true })
+        .limit(6);
+      setPlannedExercises((exData ?? []).map((e) => e.name));
       return { id: next.id, name: next.name };
     }
 
+    setPlannedExercises([]);
     return null;
   };
 
@@ -352,6 +450,154 @@ function TodayPage() {
         <StepsCard userId={user?.id} dailyStepGoal={10000} />
       </SafeBoundary>
 
+      {/* Card de Destaque: Treino de Hoje & Exercícios Realizados */}
+      {hasCompletedWorkoutToday && completedWorkoutToday ? (
+        <div className="rounded-2xl border border-emerald-500/30 bg-card p-5 relative overflow-hidden shadow-sm">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="h-10 w-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 tracking-wide uppercase">
+                    Treino Concluído Hoje
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    às {formatSessionTime(completedWorkoutToday.completed_at)}
+                  </span>
+                </div>
+                <h2 className="text-base sm:text-lg font-display font-bold text-foreground truncate">
+                  {completedWorkoutToday.name}
+                </h2>
+              </div>
+            </div>
+
+            <Link to="/app/treinos">
+              <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground hover:text-foreground shrink-0">
+                Histórico →
+              </Button>
+            </Link>
+          </div>
+
+          {/* Métricas do treino */}
+          <div className="flex items-center gap-1.5 sm:gap-2 mt-3 flex-wrap">
+            <span className="text-[11px] sm:text-xs px-2.5 py-1 rounded-full bg-secondary font-medium text-foreground">
+              {completedWorkoutToday.exercises.length} {completedWorkoutToday.exercises.length === 1 ? "exercício" : "exercícios"}
+            </span>
+            {completedWorkoutToday.totalSets > 0 && (
+              <span className="text-[11px] sm:text-xs px-2.5 py-1 rounded-full bg-secondary font-medium text-foreground">
+                {completedWorkoutToday.totalSets} séries
+              </span>
+            )}
+            {completedWorkoutToday.totalVolume > 0 && (
+              <span className="text-[11px] sm:text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium">
+                {Math.round(completedWorkoutToday.totalVolume).toLocaleString("pt-BR")} kg de volume
+              </span>
+            )}
+          </div>
+
+          {/* Lista de exercícios realizados */}
+          {completedWorkoutToday.exercises.length > 0 ? (
+            <div className="mt-4 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Exercícios feitos no dia:</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {completedWorkoutToday.exercises.map((ex, i) => (
+                  <Link
+                    key={i}
+                    to="/app/exercicios/$name"
+                    params={{ name: encodeURIComponent(ex.name) }}
+                    className="p-2.5 rounded-xl bg-secondary/40 border border-border/40 hover:bg-secondary/70 transition-colors flex items-center justify-between gap-2 group"
+                    title="Ver gráfico e histórico deste exercício"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Dumbbell className="h-3.5 w-3.5 text-primary shrink-0 group-hover:scale-110 transition-transform" />
+                      <span className="text-xs sm:text-sm font-medium truncate text-foreground group-hover:text-primary transition-colors">
+                        {ex.name}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 text-right">
+                      <span className="text-[11px] text-muted-foreground">
+                        {ex.setsCount} {ex.setsCount === 1 ? "série" : "séries"}
+                      </span>
+                      {ex.maxWeight > 0 && (
+                        <span className="text-[11px] font-semibold text-primary px-1.5 py-0.5 rounded bg-primary/10">
+                          {ex.maxWeight}kg
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-muted-foreground italic">
+              Treino finalizado com sucesso.
+            </p>
+          )}
+        </div>
+      ) : todayWorkout ? (
+        <div className="rounded-2xl border bg-card p-5 relative overflow-hidden shadow-sm hover:border-primary/30 transition-colors">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <Dumbbell className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[11px] font-semibold text-primary tracking-wide uppercase">
+                  Treino Sugerido para Hoje
+                </span>
+                <h2 className="text-base sm:text-lg font-display font-bold text-foreground truncate">
+                  {todayWorkout.name}
+                </h2>
+              </div>
+            </div>
+
+            <Link to="/app/treinos/$id" params={{ id: todayWorkout.id }}>
+              <Button size="sm" className="rounded-full h-8 px-3.5 text-xs font-medium gap-1 shadow-sm shrink-0">
+                Iniciar Treino
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          </div>
+
+          {plannedExercises.length > 0 && (
+            <div className="mt-3.5 pt-3 border-t border-border/40">
+              <p className="text-xs text-muted-foreground mb-1.5 font-medium">
+                Exercícios programados ({plannedExercises.length}):
+              </p>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {plannedExercises.map((name, i) => (
+                  <span
+                    key={i}
+                    className="text-[11px] sm:text-xs px-2.5 py-1 rounded-lg bg-secondary/60 text-secondary-foreground font-medium"
+                  >
+                    {name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-2xl border bg-card p-4 sm:p-5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-10 w-10 rounded-xl bg-muted text-muted-foreground flex items-center justify-center shrink-0">
+              <Dumbbell className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">Treino de hoje</p>
+              <p className="text-sm font-semibold truncate">Nenhum treino agendado</p>
+            </div>
+          </div>
+          <Link to="/app/treinos">
+            <Button variant="outline" size="sm" className="rounded-full text-xs h-8 shrink-0">
+              Escolher treino →
+            </Button>
+          </Link>
+        </div>
+      )}
+
       <div className="rounded-2xl border bg-card p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -435,18 +681,6 @@ function TodayPage() {
           </div>
         </Link>
 
-        {todayWorkout ? (
-          <Link to="/app/treinos/$id" params={{ id: todayWorkout.id }}>
-            <WorkoutCard name={todayWorkout.name} action="Abrir →" />
-          </Link>
-        ) : (
-          <Link to="/app/treinos">
-            <WorkoutCard name="Nenhum" action="Criar treino →" />
-          </Link>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
         <Link to="/app/coach">
           <div className="rounded-2xl border bg-card p-4 h-full hover:bg-secondary/50 transition-colors">
             <div className="flex items-center gap-2 text-muted-foreground text-xs">
@@ -456,30 +690,24 @@ function TodayPage() {
             <p className="text-xs text-muted-foreground mt-1">Insights personalizados →</p>
           </div>
         </Link>
-        <Link to="/app/relatorio">
-          <div className="rounded-2xl border bg-card p-4 h-full hover:bg-secondary/50 transition-colors">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs">
-              <FileDown className="h-4 w-4" /> Relatório
-            </div>
-            <p className="text-base font-display font-bold mt-2">Exportar PDF</p>
-            <p className="text-xs text-muted-foreground mt-1">7 dias completos →</p>
-          </div>
-        </Link>
       </div>
+
+      <Link to="/app/relatorio" className="block">
+        <div className="rounded-2xl border bg-card p-4 hover:bg-secondary/50 transition-colors flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <FileDown className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">Relatório Semanal</p>
+              <p className="text-xs text-muted-foreground">Exportar PDF com resumo dos últimos 7 dias</p>
+            </div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        </div>
+      </Link>
 
       <Heatmap />
-    </div>
-  );
-}
-
-function WorkoutCard({ name, action }: { name: string; action: string }) {
-  return (
-    <div className="rounded-2xl border bg-card p-4 h-full hover:bg-secondary/50 transition-colors">
-      <div className="flex items-center gap-2 text-muted-foreground text-xs">
-        <Dumbbell className="h-4 w-4" /> Treino de hoje
-      </div>
-      <p className="text-base font-display font-bold mt-2 truncate">{name}</p>
-      <p className="text-xs text-muted-foreground mt-1">{action}</p>
     </div>
   );
 }

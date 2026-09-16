@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
-import { formatLocalDate, getLocalDate } from "@/lib/utils";
+import { cn, formatLocalDate, getLocalDate } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, ChevronRight, Dumbbell, Trash2, Copy, Layers, PencilLine, History, RotateCw, Sparkles } from "lucide-react";
+import { Plus, ChevronRight, ChevronDown, ChevronUp, Dumbbell, Trash2, Copy, Layers, PencilLine, History, RotateCw, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { getSavedSplitRotation, saveSplitRotation } from "@/lib/workout-rotation";
 
@@ -27,6 +27,19 @@ export const Route = createFileRoute("/app/treinos/")({
 
 type Workout = { id: string; name: string; workout_date: string };
 type Session = { id: string; name: string; completed_at: string };
+
+type ExerciseSummary = {
+  name: string;
+  sets: { set_number: number; reps: number; weight_kg: number; completed: boolean }[];
+  maxWeight: number;
+  totalCompletedSets: number;
+};
+
+type SessionDetail = {
+  exercises: ExerciseSummary[];
+  totalVolume: number;
+  totalSets: number;
+};
 
 // Instant UTC (completed_at) em data+hora local SP — fuso fixo do app.
 function formatSessionWhen(iso: string): string {
@@ -47,9 +60,20 @@ function WorkoutsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [sessionDetails, setSessionDetails] = useState<Record<string, SessionDetail>>({});
+  const [expandedSessionIds, setExpandedSessionIds] = useState<Set<string>>(new Set());
   const [splitOrder, setSplitOrder] = useState<string[]>([]);
   const [splitDialogOpen, setSplitDialogOpen] = useState(false);
   const [splitInput, setSplitInput] = useState("");
+
+  const toggleSessionExpand = (id: string) => {
+    setExpandedSessionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const load = async () => {
     if (!user) return;
@@ -63,13 +87,86 @@ function WorkoutsPage() {
   };
   const loadSessions = async () => {
     if (!user) return;
-    const { data } = await supabase
+    const { data: sessData } = await supabase
       .from("workout_sessions")
       .select("id,name,completed_at")
       .eq("user_id", user.id)
       .order("completed_at", { ascending: false })
       .limit(30);
-    setSessions(data ?? []);
+
+    const sessList = sessData ?? [];
+    setSessions(sessList);
+
+    if (sessList.length > 0) {
+      const sessionIds = sessList.map((s) => s.id);
+      const { data: setsData } = await supabase
+        .from("workout_session_sets")
+        .select("session_id,exercise_name,set_number,reps,weight_kg,completed")
+        .in("session_id", sessionIds)
+        .order("set_number", { ascending: true });
+
+      if (setsData) {
+        const detailsMap: Record<string, SessionDetail> = {};
+
+        for (const s of sessList) {
+          detailsMap[s.id] = { exercises: [], totalVolume: 0, totalSets: 0 };
+        }
+
+        const sessionMap = new Map<string, Map<string, typeof setsData>>();
+        for (const item of setsData) {
+          if (!sessionMap.has(item.session_id)) {
+            sessionMap.set(item.session_id, new Map());
+          }
+          const exMap = sessionMap.get(item.session_id)!;
+          if (!exMap.has(item.exercise_name)) {
+            exMap.set(item.exercise_name, []);
+          }
+          exMap.get(item.exercise_name)!.push(item);
+        }
+
+        sessionMap.forEach((exMap, sessionId) => {
+          const exercises: ExerciseSummary[] = [];
+          let totalVol = 0;
+          let totalCompletedCount = 0;
+
+          exMap.forEach((sList, exName) => {
+            let maxW = 0;
+            let compCount = 0;
+            for (const item of sList) {
+              const w = Number(item.weight_kg) || 0;
+              const r = Number(item.reps) || 0;
+              if (w > maxW) maxW = w;
+              if (item.completed) {
+                compCount++;
+                totalVol += w * r;
+              }
+            }
+            totalCompletedCount += compCount || sList.length;
+            exercises.push({
+              name: exName,
+              sets: sList.map((it) => ({
+                set_number: it.set_number,
+                reps: it.reps,
+                weight_kg: Number(it.weight_kg) || 0,
+                completed: it.completed,
+              })),
+              maxWeight: maxW,
+              totalCompletedSets: compCount || sList.length,
+            });
+          });
+
+          detailsMap[sessionId] = {
+            exercises,
+            totalVolume: totalVol,
+            totalSets: totalCompletedCount,
+          };
+        });
+
+        setSessionDetails(detailsMap);
+      }
+    } else {
+      setSessionDetails({});
+    }
   };
   useEffect(() => {
     if (!user) return;
@@ -481,23 +578,156 @@ function WorkoutsPage() {
             </Card>
           ) : (
             <div className="space-y-2">
-              {sessions.map((s) => (
-                <Card key={s.id} className="p-2.5 sm:p-3 flex items-center justify-between hover:bg-secondary/30 transition-colors gap-2 overflow-hidden">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium truncate text-xs sm:text-sm">{s.name}</p>
-                    <p className="text-[11px] sm:text-xs text-muted-foreground">{formatSessionWhen(s.completed_at)}</p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeSession(s.id)}
-                    title="Excluir sessão do histórico"
-                    className="h-8 w-8 shrink-0 hover:text-destructive hover:bg-destructive/10"
+              {sessions.map((s) => {
+                const detail = sessionDetails[s.id];
+                const isExpanded = expandedSessionIds.has(s.id);
+                const exCount = detail?.exercises?.length ?? 0;
+
+                return (
+                  <Card
+                    key={s.id}
+                    className={cn(
+                      "p-3 sm:p-4 transition-all duration-200 overflow-hidden border border-border/60 cursor-pointer select-none",
+                      isExpanded ? "bg-secondary/40 shadow-sm border-primary/20" : "hover:bg-secondary/30"
+                    )}
+                    onClick={() => toggleSessionExpand(s.id)}
                   >
-                    <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground hover:text-destructive transition-colors" />
-                  </Button>
-                </Card>
-              ))}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-sm sm:text-base text-foreground truncate">{s.name}</p>
+                          {exCount > 0 && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-primary/30 text-primary shrink-0">
+                              {exCount} {exCount === 1 ? "exercício" : "exercícios"}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5 text-[11px] sm:text-xs text-muted-foreground flex-wrap">
+                          <span>{formatSessionWhen(s.completed_at)}</span>
+                          {detail && detail.totalVolume > 0 && (
+                            <>
+                              <span>•</span>
+                              <span className="text-foreground/90 font-medium">
+                                {Math.round(detail.totalVolume).toLocaleString("pt-BR")} kg vol.
+                              </span>
+                            </>
+                          )}
+                          {detail && detail.totalSets > 0 && (
+                            <>
+                              <span>•</span>
+                              <span>{detail.totalSets} séries</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeSession(s.id);
+                          }}
+                          title="Excluir sessão do histórico"
+                          className="h-8 w-8 hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground hover:text-destructive transition-colors" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSessionExpand(s.id);
+                          }}
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                          title={isExpanded ? "Recolher detalhes" : "Ver exercícios feitos"}
+                        >
+                          {isExpanded ? (
+                            <ChevronUp className="h-4 w-4 text-primary" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Detalhes dos exercícios concluídos quando expandido */}
+                    {isExpanded && (
+                      <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
+                        {exCount === 0 ? (
+                          <p className="text-xs text-muted-foreground italic py-1">
+                            Nenhuma série específica gravada para esta sessão.
+                          </p>
+                        ) : (
+                          <>
+                            <div className="flex items-center justify-between text-[11px] text-muted-foreground font-medium pb-1">
+                              <span>Exercícios realizados:</span>
+                              <span>{detail.exercises.length} itens</span>
+                            </div>
+                            <div className="space-y-1.5">
+                              {detail.exercises.map((ex, idx) => (
+                                <div
+                                  key={idx}
+                                  className="p-2.5 rounded-xl bg-background/80 border border-border/40 hover:border-primary/20 transition-colors"
+                                >
+                                  <div className="flex items-start sm:items-center justify-between gap-2 flex-col sm:flex-row">
+                                    <Link
+                                      to="/app/exercicios/$name"
+                                      params={{ name: encodeURIComponent(ex.name) }}
+                                      className="font-medium text-xs sm:text-sm text-foreground hover:text-primary transition-colors flex items-center gap-1.5 group min-w-0"
+                                      onClick={(e) => e.stopPropagation()}
+                                      title="Ver evolução e gráfico deste exercício"
+                                    >
+                                      <Dumbbell className="h-3.5 w-3.5 text-primary shrink-0 group-hover:scale-110 transition-transform" />
+                                      <span className="truncate group-hover:underline">{ex.name}</span>
+                                      <ChevronRight className="h-3 w-3 text-muted-foreground opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                                    </Link>
+
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-normal">
+                                        {ex.totalCompletedSets} {ex.totalCompletedSets === 1 ? "série" : "séries"}
+                                      </Badge>
+                                      {ex.maxWeight > 0 && (
+                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-primary/30 text-primary font-medium">
+                                          máx {ex.maxWeight} kg
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Breakdown das séries com repetições e cargas */}
+                                  <div className="flex items-center gap-1.5 flex-wrap mt-2 pt-1.5 border-t border-border/30">
+                                    {ex.sets.map((st, sIdx) => (
+                                      <div
+                                        key={sIdx}
+                                        className={cn(
+                                          "text-[10px] px-2 py-0.5 rounded-md border flex items-center gap-1",
+                                          st.completed
+                                            ? "bg-secondary/60 text-foreground border-border/40 font-medium"
+                                            : "bg-muted/30 text-muted-foreground border-transparent line-through opacity-60"
+                                        )}
+                                        title={`Série ${st.set_number}: ${st.reps} reps ${st.weight_kg ? `com ${st.weight_kg}kg` : ""}`}
+                                      >
+                                        <span className="text-muted-foreground text-[9px]">#{st.set_number}</span>
+                                        <span>
+                                          {st.weight_kg > 0 ? `${st.weight_kg}kg × ` : ""}
+                                          {st.reps} reps
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
             </div>
           )}
         </TabsContent>
