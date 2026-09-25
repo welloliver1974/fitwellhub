@@ -2,6 +2,26 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [25/09/2026] - Antigravity (Suporte Nativo a Cardio & Aeróbicos com Cálculo ACSM e Flexibilidade de Duração)
+- **Módulo Metabólico de Cardio (`src/lib/cardio-utils.ts` e `src/lib/cardio-utils.test.ts`)**:
+  - Implementação da equação clínica metabólica do ACSM (*American College of Sports Medicine*) para esteira e caminhada com inclinação (`calculateCardioCalories`).
+  - Funções de detecção inteligente de exercícios aeróbicos (`isCardioExercise`), serialização/leitura de metadados em JSON (`parseCardioMeta`, `serializeCardioMeta`) e formatação textual com queima calórica estimada.
+  - Cobertura de testes unitários automatizados (100% aprovados).
+- **Interface de Treino Adaptativa (`src/routes/app.treinos.$id.tsx` e `src/routes/app.treinos.$id.foco.tsx`)**:
+  - Seletor de tipo de exercício no cabeçalho: alternância entre **🏃 Cardio** e **🏋️ Musculação**.
+  - Ajuste dinâmico de colunas para cardio: **Tempo (min)** e **Velocidade (km/h)** em substituição a Séries/Reps/Carga.
+  - Campo de **Inclinação (%)** com cálculo de gasto calórico estimado em tempo real baseado no peso corporal do usuário (`body_weights`).
+  - Inclusão de atalhos rápidos de duração de 1 toque (`15 min`, `20 min`, `30 min`, `40 min`, `45 min`, `60 min`) e presets de timer no Modo Foco (`15m`, `20m`, `30m`, `40m`).
+  - Salvamento automático de resumo detalhado nas notas da sessão em `workout_sessions.notes`.
+- **Histórico e Evolução do Exercício (`src/routes/app.treinos.index.tsx` e `src/routes/app.exercicios.$name.tsx`)**:
+  - Exibição de badge destacado com resumo do cardio no histórico de treinos concluídos.
+  - Proteção do cálculo de tonelagem da musculação para não somar minutos de esteira como peso erguido.
+  - Página de evolução adaptada para cardio: exibição do **Maior tempo registrado** (em vez de recorde de carga em kg) e gráfico de **Minutos por sessão**.
+- **Contexto Aprimorado para Coach IA (`src/server-fns/chat.functions.ts` e `src/server-fns/workout-coach.functions.ts`)**:
+  - Injeção das notas de sessão e discriminação de séries de cardio nos prompts do Coach IA, garantindo que sessões aeróbicas sejam reconhecidas pelo tempo e velocidade e não como séries com repetições e halteres.
+- **Validação**:
+  - `npx vitest run`: **26 arquivos e 206 testes aprovados (100% de sucesso)**.
+
 ## [15/09/2026] - Antigravity (Visualização de Exercícios Concluídos no Histórico e na Tela Principal)
 - **Histórico de Treinos Expansível (`src/routes/app.treinos.index.tsx`)**:
   - Implementada a busca detalhada de séries e repetições em `workout_session_sets` vinculadas a cada sessão do histórico.

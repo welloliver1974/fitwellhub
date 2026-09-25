@@ -1,5 +1,21 @@
 # FIXLOG — FitWell Hub
 
+## Sessão: 25/09/2026 — Suporte Nativo a Cardio & Aeróbicos (Esteira com Inclinação, Fórmula ACSM e Flexibilidade de Duração)
+
+### 🎯 Funcionalidades e Ajustes
+1. **Módulo de Cálculo Metabólico e Metadados de Cardio (`src/lib/cardio-utils.ts` & `src/lib/cardio-utils.test.ts`)**:
+   - Integração da fórmula metabólica do ACSM (*American College of Sports Medicine*) para gasto energético de caminhada e corrida na esteira considerando velocidade, inclinação e peso corporal do atleta.
+   - Detecção automática de nomes aeróbicos (*esteira, caminhada, bike, escada, transport, elíptico*).
+2. **Execução de Treino & Modo Foco (`src/routes/app.treinos.$id.tsx` e `src/routes/app.treinos.$id.foco.tsx`)**:
+   - Campos dedicados de **Tempo (min)**, **Velocidade (km/h)** e **Inclinação (%)** com cálculo de kcal em tempo real.
+   - Atalhos de duração em 1 toque (`15 min`, `20 min`, `30 min`, `40 min`, `45 min`, `60 min`) e campo livre para digitação de qualquer minutagem.
+   - Timer de descanso adaptado para durações de cardio (`15m`, `20m`, `30m`, `40m`) no Modo Foco.
+   - Persistência das métricas no encerramento da sessão em `workout_sessions.notes`.
+3. **Histórico, Gráficos de Evolução e Coach IA (`app.treinos.index.tsx`, `app.exercicios.$name.tsx`, `chat.functions.ts`, `workout-coach.functions.ts`)**:
+   - Separação entre volume de força (kg) e cardio no histórico.
+   - Gráfico de minutos por sessão e maior tempo para exercícios aeróbicos.
+   - Formatação correta para o Coach IA reconhecer o treino de esteira como trabalho cardiovascular e complementar.
+
 ## Sessão: 15/09/2026 — Diagnóstico de Passos (Google Fit & Galaxy Watch 7) + Liberação Segura de RLS para Hermes Agent (Peso, Medidas, Bioimpedância e Metas)
 
 ### 🎯 Funcionalidades e Ajustes

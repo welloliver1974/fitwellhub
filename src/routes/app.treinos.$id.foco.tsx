@@ -16,11 +16,18 @@ import {
 } from "@/lib/rest-timer-service";
 import { Bell, BellRing } from "lucide-react";
 
+import {
+  isCardioExercise,
+  parseCardioMeta,
+  calculateCardioCalories,
+  formatCardioSummary,
+} from "@/lib/cardio-utils";
+
 export const Route = createFileRoute("/app/treinos/$id/foco")({
   component: FocusMode,
 });
 
-type Exercise = { id: string; name: string; position: number };
+type Exercise = { id: string; name: string; position: number; notes?: string | null };
 type WorkoutSet = {
   id: string;
   exercise_id: string;
@@ -43,6 +50,7 @@ function FocusMode() {
   const [restPreset, setRestPreset] = useState(60);
   const [restTargetTime, setRestTargetTime] = useState<number | null>(null);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>("default");
+  const [userWeightKg, setUserWeightKg] = useState<number>(75);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Estados da sessão de treino ativa (mesmo rascunho da tela normal)
@@ -191,10 +199,25 @@ function FocusMode() {
 
     const { data: ex } = await supabase
       .from("exercises")
-      .select("id,name,position")
+      .select("id,name,position,notes")
       .eq("workout_id", id)
       .order("position");
     setExercises((ex ?? []) as Exercise[]);
+
+    // Carregar peso corporal mais recente para cálculo calórico
+    if (user?.id) {
+      supabase
+        .from("body_weights")
+        .select("weight_kg")
+        .eq("user_id", user.id)
+        .order("log_date", { ascending: false })
+        .limit(1)
+        .then(({ data: wData }) => {
+          if (wData?.[0]?.weight_kg) {
+            setUserWeightKg(Number(wData[0].weight_kg));
+          }
+        });
+    }
     
     const exIds = (ex ?? []).map((e) => e.id);
     let loadedSets: WorkoutSet[] = [];
@@ -291,11 +314,13 @@ function FocusMode() {
 
   const addSet = async () => {
     if (!user || !ex) return;
+    const currentMeta = parseCardioMeta(ex.notes, exDisplayName);
+    const isCardio = currentMeta.isCardio;
     const exSets = sets.filter((s) => s.exercise_id === ex.id);
     const last = exSets[exSets.length - 1];
 
-    let lastReps = last?.reps ?? 10;
-    let lastWeight = last?.weight_kg ?? 0;
+    let lastReps = last?.reps ?? (isCardio ? 20 : 10);
+    let lastWeight = last?.weight_kg ?? (isCardio ? 4 : 0);
     if (last && setValues[last.id]) {
       lastReps = setValues[last.id].reps;
       lastWeight = setValues[last.id].weight_kg;
@@ -309,8 +334,10 @@ function FocusMode() {
       weight_kg: lastWeight,
     });
     if (error) return toast.error(error.message);
-    setRestSec(restPreset);
-    setRestRunning(true);
+    if (!isCardio) {
+      setRestSec(restPreset);
+      setRestRunning(true);
+    }
     load();
   };
 
@@ -324,6 +351,38 @@ function FocusMode() {
 
     setIsFinishing(true);
     try {
+      // 0. Montar resumo de cardio para as observações da sessão e Coach IA
+      const cardioSummaries: string[] = [];
+      exercises.forEach((item) => {
+        const itemDisplayName = nameOverrides[item.id] ?? item.name;
+        const meta = parseCardioMeta(item.notes, itemDisplayName);
+        if (meta.isCardio) {
+          const itemSets = sets.filter((s) => s.exercise_id === item.id && completedSets.has(s.id));
+          if (itemSets.length > 0) {
+            const totalMins = itemSets.reduce((acc, s) => {
+              const val = setValues[s.id] ?? { reps: s.reps };
+              return acc + (Number(val.reps) || 0);
+            }, 0);
+            const avgSpeed =
+              itemSets.reduce((acc, s) => {
+                const val = setValues[s.id] ?? { weight_kg: s.weight_kg };
+                return acc + (Number(val.weight_kg) || 0);
+              }, 0) / itemSets.length;
+            cardioSummaries.push(
+              formatCardioSummary({
+                name: itemDisplayName,
+                durationMin: totalMins,
+                speedKmh: avgSpeed,
+                inclinePct: meta.inclinePct,
+                weightKg: userWeightKg,
+              })
+            );
+          }
+        }
+      });
+
+      const sessionNotes = cardioSummaries.length > 0 ? cardioSummaries.join("\n") : null;
+
       // 1. Criar sessão de treino finalizada
       const { data: session, error: sessError } = await supabase
         .from("workout_sessions")
@@ -332,6 +391,7 @@ function FocusMode() {
           workout_id: id,
           name: workoutName || "Treino",
           completed_at: new Date().toISOString(),
+          notes: sessionNotes,
         })
         .select()
         .single();
@@ -342,11 +402,14 @@ function FocusMode() {
       const sessionSetsToInsert = sets.map((s) => {
         const val = setValues[s.id] ?? { reps: s.reps, weight_kg: Number(s.weight_kg) };
         const isDone = completedSets.has(s.id);
-        const exName = exercises.find((e) => e.id === s.exercise_id)?.name ?? "Exercício";
+        const originalEx = exercises.find((e) => e.id === s.exercise_id);
+        const resolvedName = originalEx
+          ? (nameOverrides[originalEx.id] ?? originalEx.name)
+          : "Exercício";
         return {
           session_id: session.id,
           user_id: user.id,
-          exercise_name: exName,
+          exercise_name: resolvedName,
           set_number: s.set_number,
           reps: val.reps,
           weight_kg: val.weight_kg,
@@ -435,113 +498,186 @@ function FocusMode() {
           Substituir exercício
         </Button>
 
-        {history[exDisplayName] && (
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary/80 text-secondary-foreground text-xs font-medium mt-2 shadow-xs">
-            <TrendingUp className="h-3.5 w-3.5 text-primary shrink-0" />
-            <span>Melhor carga: <strong>{history[exDisplayName].weight_kg} kg</strong> × {history[exDisplayName].reps} reps</span>
-          </div>
-        )}
+        {(() => {
+          const currentCardioMeta = ex ? parseCardioMeta(ex.notes, exDisplayName) : { isCardio: false };
+          const isCurrentCardio = currentCardioMeta.isCardio;
+          const currentTotalMins = exSets.reduce((sum, s) => {
+            const val = setValues[s.id] ?? { reps: s.reps };
+            return sum + (Number(val.reps) || 0);
+          }, 0);
+          const currentAvgSpeed =
+            exSets.length > 0
+              ? exSets.reduce((sum, s) => {
+                  const val = setValues[s.id] ?? { weight_kg: s.weight_kg };
+                  return sum + (Number(val.weight_kg) || 0);
+                }, 0) / exSets.length
+              : 0;
+          const currentEstKcal = calculateCardioCalories({
+            durationMin: currentTotalMins,
+            speedKmh: currentAvgSpeed,
+            inclinePct: currentCardioMeta.inclinePct,
+            weightKg: userWeightKg,
+          });
 
-        <div className="my-8 text-center">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Descanso</p>
-          <p className="text-7xl font-display font-bold tabular-nums text-primary">
-            {Math.floor(restSec / 60)
-              .toString()
-              .padStart(2, "0")}
-            :{(restSec % 60).toString().padStart(2, "0")}
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
-            {[60, 90, 120, 180].map((s) => (
-              <Button
-                key={s}
-                variant={restPreset === s ? "default" : "outline"}
-                size="sm"
-                onClick={() => {
-                  setRestPreset(s);
-                  startRestTimer(s);
-                }}
-              >
-                {s}s
-              </Button>
-            ))}
-            {restSec > 0 &&
-              (restRunning ? (
-                <Button size="icon" variant="ghost" onClick={pauseRestTimer} title="Pausar descanso">
-                  <Pause className="h-4 w-4" />
-                </Button>
-              ) : (
-                <Button size="icon" variant="ghost" onClick={resumeRestTimer} title="Retomar descanso">
-                  <Play className="h-4 w-4" />
-                </Button>
-              ))}
-          </div>
+          return (
+            <>
+              {isCurrentCardio ? (
+                <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/25 text-xs font-medium mt-2 shadow-xs">
+                  <span>🏃 Cardio Aeróbico</span>
+                  {currentCardioMeta.inclinePct != null && currentCardioMeta.inclinePct > 0 && (
+                    <span>• {currentCardioMeta.inclinePct}% inclinação</span>
+                  )}
+                  {currentEstKcal > 0 && <span>• 🔥 ~{currentEstKcal} kcal</span>}
+                </div>
+              ) : history[exDisplayName] ? (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary/80 text-secondary-foreground text-xs font-medium mt-2 shadow-xs">
+                  <TrendingUp className="h-3.5 w-3.5 text-primary shrink-0" />
+                  <span>
+                    Melhor carga: <strong>{history[exDisplayName].weight_kg} kg</strong> × {history[exDisplayName].reps} reps
+                  </span>
+                </div>
+              ) : null}
 
-          <div className="flex items-center justify-center mt-3">
-            {notifPermission === "granted" ? (
-              <div className="inline-flex items-center gap-1.5 text-[11px] text-emerald-500 font-medium bg-emerald-500/10 px-2.5 py-1 rounded-full">
-                <BellRing className="h-3 w-3" />
-                <span>Aviso com tela bloqueada ativo</span>
+              <div className="my-8 text-center">
+                <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
+                  {isCurrentCardio ? "Tempo de Cardio" : "Descanso"}
+                </p>
+                <p className="text-7xl font-display font-bold tabular-nums text-primary">
+                  {Math.floor(restSec / 60)
+                    .toString()
+                    .padStart(2, "0")}
+                  :{(restSec % 60).toString().padStart(2, "0")}
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
+                  {(isCurrentCardio ? [900, 1200, 1800, 2400] : [60, 90, 120, 180]).map((s) => (
+                    <Button
+                      key={s}
+                      variant={restPreset === s ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setRestPreset(s);
+                        startRestTimer(s);
+                      }}
+                    >
+                      {isCurrentCardio ? `${Math.floor(s / 60)}m` : `${s}s`}
+                    </Button>
+                  ))}
+                  {restSec > 0 &&
+                    (restRunning ? (
+                      <Button size="icon" variant="ghost" onClick={pauseRestTimer} title="Pausar">
+                        <Pause className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <Button size="icon" variant="ghost" onClick={resumeRestTimer} title="Retomar">
+                        <Play className="h-4 w-4" />
+                      </Button>
+                    ))}
+                </div>
+
+                <div className="flex items-center justify-center mt-3">
+                  {notifPermission === "granted" ? (
+                    <div className="inline-flex items-center gap-1.5 text-[11px] text-emerald-500 font-medium bg-emerald-500/10 px-2.5 py-1 rounded-full">
+                      <BellRing className="h-3 w-3" />
+                      <span>Aviso com tela bloqueada ativo</span>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={enableNotifications}
+                      className="h-7 text-xs text-muted-foreground hover:text-foreground gap-1.5 rounded-full border border-dashed border-border px-2.5"
+                    >
+                      <Bell className="h-3 w-3" />
+                      <span>Ativar avisos com tela apagada</span>
+                    </Button>
+                  )}
+                </div>
               </div>
-            ) : (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={enableNotifications}
-                className="h-7 text-xs text-muted-foreground hover:text-foreground gap-1.5 rounded-full border border-dashed border-border px-2.5"
-              >
-                <Bell className="h-3 w-3" />
-                <span>Ativar avisos com tela apagada</span>
-              </Button>
-            )}
-          </div>
-        </div>
 
-        <div className="w-full max-w-md space-y-2">
-          {exSets.map((s) => {
-            const done = completedSets.has(s.id);
-            const curVal = setValues[s.id] ?? { reps: s.reps, weight_kg: Number(s.weight_kg) };
-            return (
-            <div
-              key={s.id}
-              className={cn(
-                "grid grid-cols-[40px_28px_1fr_1fr_36px] items-center gap-2 rounded-xl bg-card border p-2 transition-opacity",
-                done && "opacity-50",
-              )}
-            >
-              <span className="text-center font-bold">{s.set_number}</span>
-              <div className="flex justify-center">
-                <input
-                  type="checkbox"
-                  checked={done}
-                  onChange={() => toggleCompleted(s.id)}
-                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-                />
+              <div className="w-full max-w-md space-y-2">
+                {exSets.length > 0 && (
+                  <div className="grid grid-cols-[40px_28px_1fr_1fr_36px] gap-2 px-2 text-xs font-semibold text-muted-foreground text-center">
+                    <span>#</span>
+                    <span></span>
+                    <span>{isCurrentCardio ? "Tempo (min)" : "Reps"}</span>
+                    <span>{isCurrentCardio ? "Velocidade (km/h)" : "Carga (kg)"}</span>
+                    <span></span>
+                  </div>
+                )}
+                {exSets.map((s) => {
+                  const done = completedSets.has(s.id);
+                  const curVal = setValues[s.id] ?? { reps: s.reps, weight_kg: Number(s.weight_kg) };
+                  return (
+                    <div
+                      key={s.id}
+                      className={cn(
+                        "grid grid-cols-[40px_28px_1fr_1fr_36px] items-center gap-2 rounded-xl bg-card border p-2 transition-opacity",
+                        done && "opacity-50"
+                      )}
+                    >
+                      <span className="text-center font-bold">{s.set_number}</span>
+                      <div className="flex justify-center">
+                        <input
+                          type="checkbox"
+                          checked={done}
+                          onChange={() => toggleCompleted(s.id)}
+                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                        />
+                      </div>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={curVal.reps || ""}
+                        placeholder={isCurrentCardio ? "min" : "reps"}
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => updateLocalSet(s.id, "reps", Number(e.target.value))}
+                        className="text-center text-lg font-medium"
+                        disabled={done}
+                      />
+                      <Input
+                        type="number"
+                        step={isCurrentCardio ? "0.1" : "0.5"}
+                        min="0"
+                        value={curVal.weight_kg || ""}
+                        placeholder={isCurrentCardio ? "km/h" : "kg"}
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => updateLocalSet(s.id, "weight_kg", Number(e.target.value))}
+                        className="text-center text-lg font-medium"
+                        disabled={done}
+                      />
+                      <Check className={cn("h-5 w-5 mx-auto", done ? "text-primary" : "text-muted-foreground/30")} />
+                      {isCurrentCardio && (
+                        <div className="col-span-5 flex items-center justify-center gap-1.5 pt-2 pb-1 flex-wrap border-t border-border/40 mt-1">
+                          <span className="text-[10px] text-muted-foreground font-medium mr-0.5">Duração:</span>
+                          {[15, 20, 30, 40, 45, 60].map((mins) => (
+                            <button
+                              key={mins}
+                              type="button"
+                              disabled={done}
+                              onClick={() => updateLocalSet(s.id, "reps", mins)}
+                              className={cn(
+                                "px-2.5 py-0.5 rounded-full text-xs font-medium border transition-all cursor-pointer",
+                                curVal.reps === mins
+                                  ? "bg-amber-500 text-white border-amber-500 font-semibold shadow-xs"
+                                  : "bg-card hover:bg-muted text-muted-foreground hover:text-foreground border-border"
+                              )}
+                            >
+                              {mins} min
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                <Button onClick={addSet} variant="secondary" className="w-full h-12 text-base">
+                  <Plus className="h-4 w-4 mr-1" />
+                  {isCurrentCardio ? "Adicionar etapa / bloco" : "Adicionar série"}
+                </Button>
               </div>
-              <Input
-                type="number"
-                value={curVal.reps || ""}
-                onFocus={(e) => e.target.select()}
-                onChange={(e) => updateLocalSet(s.id, "reps", Number(e.target.value))}
-                className="text-center text-lg"
-                disabled={done}
-              />
-              <Input
-                type="number"
-                step="0.5"
-                value={curVal.weight_kg || ""}
-                onFocus={(e) => e.target.select()}
-                onChange={(e) => updateLocalSet(s.id, "weight_kg", Number(e.target.value))}
-                className="text-center text-lg"
-                disabled={done}
-              />
-              <Check className={cn("h-5 w-5 mx-auto", done ? "text-primary" : "text-muted-foreground/30")} />
-            </div>
-            );
-          })}
-          <Button onClick={addSet} variant="secondary" className="w-full h-12 text-base">
-            <Plus className="h-4 w-4 mr-1" /> Adicionar série
-          </Button>
-        </div>
+            </>
+          );
+        })()}
       </div>
 
       <footer className="flex items-center justify-between px-5 py-4 border-t bg-card/50">

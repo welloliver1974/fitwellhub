@@ -20,6 +20,7 @@ import {
   type CoachPlan,
 } from "@/lib/coach-plan";
 import { formatMeasurements } from "@/lib/format-measurements";
+import { isCardioExercise } from "@/lib/cardio-utils";
 
 const inputSchema = z.object({
   message: z.string().trim().max(2000).optional().default(""),
@@ -71,6 +72,7 @@ export async function fetchUserContext(
         id, 
         name, 
         completed_at,
+        notes,
         workout_session_sets (
           exercise_name, 
           reps, 
@@ -142,8 +144,14 @@ export async function fetchUserContext(
       
       const exLines: string[] = [];
       for (const [exName, exSets] of exercisesMap.entries()) {
-        const setsSummary = exSets.map(s => `${s.reps}reps c/ ${s.weight_kg}kg`).join(", ");
-        exLines.push(`  * ${exName}: ${setsSummary}`);
+        const isCardio = isCardioExercise(exName);
+        const setsSummary = isCardio
+          ? exSets.map(s => `${s.reps} min @ ${s.weight_kg} km/h`).join(", ")
+          : exSets.map(s => `${s.reps}reps c/ ${s.weight_kg}kg`).join(", ");
+        exLines.push(`  * ${exName}${isCardio ? " (Cardio)" : ""}: ${setsSummary}`);
+      }
+      if ((w as any).notes) {
+        exLines.push(`  * Registro/Observações: ${(w as any).notes}`);
       }
       
       lines.push(`- ${w.name} em ${dateStr}:\n${exLines.join("\n")}`);

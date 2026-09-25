@@ -9,6 +9,7 @@ import {
   resolveAiApiKey,
   resolveAiProvider,
 } from "@/server-fns/ai-settings.functions";
+import { isCardioExercise } from "@/lib/cardio-utils";
 
 const coachInputSchema = z.object({
   message: z.string().min(1).max(2000),
@@ -118,6 +119,7 @@ export const consultWorkoutCoach = createServerFn({ method: "POST" })
           id,
           name,
           completed_at,
+          notes,
           workout_session_sets (
             exercise_name,
             reps,
@@ -216,6 +218,12 @@ export const consultWorkoutCoach = createServerFn({ method: "POST" })
         }
         const exSummary = Array.from(exercisesMap.entries())
           .map(([name, setList]) => {
+            const isCardio = isCardioExercise(name);
+            if (isCardio) {
+              const totalMin = setList.reduce((acc, c) => acc + c.reps, 0);
+              const topSpeed = Math.max(...setList.map(s => s.weight_kg), 0);
+              return `${name} (Cardio: ${totalMin} min${topSpeed > 0 ? ` @ ${topSpeed} km/h` : ""})`;
+            }
             const topSet = setList.reduce(
               (max, cur) => (cur.weight_kg > max.weight_kg ? cur : max),
               setList[0] || { reps: 0, weight_kg: 0 }
@@ -225,7 +233,8 @@ export const consultWorkoutCoach = createServerFn({ method: "POST" })
           .slice(0, 5)
           .join("; ");
 
-        return `• ${s.name} (${dateStr}): ${exSummary || "sem detalhes de séries"}`;
+        const notesInfo = (s as any).notes ? ` [${(s as any).notes}]` : "";
+        return `• ${s.name} (${dateStr}): ${exSummary || "sem detalhes de séries"}${notesInfo}`;
       });
       recentWorkoutsSummary = lines.join("\n");
     }

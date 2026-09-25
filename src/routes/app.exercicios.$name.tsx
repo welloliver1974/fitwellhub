@@ -14,6 +14,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
+import { isCardioExercise } from "@/lib/cardio-utils";
 
 export const Route = createFileRoute("/app/exercicios/$name")({ component: ExerciseHistory });
 
@@ -25,6 +26,7 @@ function ExerciseHistory() {
   const { user } = useAuth();
   const [rows, setRows] = useState<Row[]>([]);
   const [pr, setPr] = useState<{ weight: number; reps: number; date: string } | null>(null);
+  const isCardio = isCardioExercise(decoded);
 
   useEffect(() => {
     if (!user) return;
@@ -63,22 +65,30 @@ function ExerciseHistory() {
       const out: Row[] = sorted.map(([date, ss]) => ({
         date,
         maxWeight: Math.max(...ss.map((s) => s.weight)),
-        maxReps: Math.max(...ss.map((s) => s.reps)),
-        volume: ss.reduce((a, s) => a + s.weight * s.reps, 0),
+        maxReps: isCardio
+          ? ss.reduce((sum, s) => sum + s.reps, 0)
+          : Math.max(...ss.map((s) => s.reps)),
+        volume: isCardio ? 0 : ss.reduce((a, s) => a + s.weight * s.reps, 0),
       }));
       setRows(out);
 
       let best = { weight: 0, reps: 0, date: "" };
       for (const [date, ss] of sorted) {
         for (const s of ss) {
-          if (s.weight > best.weight) {
-            best = { weight: s.weight, reps: s.reps, date };
+          if (isCardio) {
+            if (s.reps > best.reps || (s.reps === best.reps && s.weight > best.weight)) {
+              best = { weight: s.weight, reps: s.reps, date };
+            }
+          } else {
+            if (s.weight > best.weight) {
+              best = { weight: s.weight, reps: s.reps, date };
+            }
           }
         }
       }
-      setPr(best.weight > 0 ? best : null);
+      setPr(best.reps > 0 || best.weight > 0 ? best : null);
     })();
-  }, [user, decoded]);
+  }, [user, decoded, isCardio]);
 
   const chart = rows.map((r) => ({ ...r, label: r.date.slice(5) }));
 
@@ -91,17 +101,31 @@ function ExerciseHistory() {
         <ArrowLeft className="h-4 w-4" /> Treinos
       </Link>
       <div>
-        <p className="text-xs uppercase tracking-wide text-muted-foreground">Histórico</p>
-        <h1 className="text-3xl font-display font-bold">{decoded}</h1>
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+          {isCardio ? "Histórico de Cardio" : "Histórico de Musculação"}
+        </p>
+        <h1 className="text-3xl font-display font-bold flex items-center gap-2">
+          <span>{isCardio ? "🏃" : "🏋️"}</span>
+          <span>{decoded}</span>
+        </h1>
       </div>
 
       {pr && (
-        <Card className="p-4 flex items-center gap-3">
+        <Card className="p-4 flex items-center gap-3 border-amber-500/20 bg-amber-500/[0.02]">
           <TrendingUp className="h-8 w-8 text-primary" />
           <div>
-            <p className="text-xs text-muted-foreground">Recorde pessoal</p>
+            <p className="text-xs text-muted-foreground">
+              {isCardio ? "Maior tempo registrado" : "Recorde pessoal"}
+            </p>
             <p className="text-xl font-display font-bold">
-              {pr.weight} kg × {pr.reps}
+              {isCardio ? (
+                <>
+                  {pr.reps} min
+                  {pr.weight > 0 ? ` a ${pr.weight} km/h` : ""}
+                </>
+              ) : (
+                `${pr.weight} kg × ${pr.reps}`
+              )}
             </p>
             <p className="text-xs text-muted-foreground">
               {formatLocalDate(pr.date)}
@@ -116,17 +140,26 @@ function ExerciseHistory() {
         </Card>
       ) : (
         <Card className="p-4">
-          <p className="text-xs text-muted-foreground mb-3">Carga máxima (kg) por sessão</p>
+          <p className="text-xs text-muted-foreground mb-3">
+            {isCardio ? "Tempo total (minutos) por sessão" : "Carga máxima (kg) por sessão"}
+          </p>
           <div className="h-56">
             <ResponsiveContainer>
               <LineChart data={chart}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="label" fontSize={11} />
                 <YAxis fontSize={11} />
-                <Tooltip />
+                <Tooltip
+                  formatter={(val: any, name: any) => {
+                    if (isCardio) {
+                      return [`${val} min`, "Tempo"];
+                    }
+                    return [`${val} kg`, "Carga máx"];
+                  }}
+                />
                 <Line
                   type="monotone"
-                  dataKey="maxWeight"
+                  dataKey={isCardio ? "maxReps" : "maxWeight"}
                   stroke="hsl(var(--primary))"
                   strokeWidth={2}
                   dot
@@ -145,7 +178,14 @@ function ExerciseHistory() {
                 {formatLocalDate(r.date)}
               </span>
               <span className="font-medium">
-                {r.maxWeight}kg × {r.maxReps} · vol {Math.round(r.volume)}
+                {isCardio ? (
+                  <>
+                    {r.maxReps} min
+                    {r.maxWeight > 0 ? ` @ ${r.maxWeight} km/h` : ""}
+                  </>
+                ) : (
+                  `${r.maxWeight}kg × ${r.maxReps} · vol ${Math.round(r.volume)}`
+                )}
               </span>
             </div>
           ))}

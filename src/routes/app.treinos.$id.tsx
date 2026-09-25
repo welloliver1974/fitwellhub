@@ -39,12 +39,20 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  isCardioExercise,
+  parseCardioMeta,
+  serializeCardioMeta,
+  calculateCardioCalories,
+  formatCardioSummary,
+} from "@/lib/cardio-utils";
+
 export const Route = createFileRoute("/app/treinos/$id")({
   component: WorkoutDetail,
 });
 
 type Workout = { id: string; name: string; workout_date: string };
-type Exercise = { id: string; name: string; position: number };
+type Exercise = { id: string; name: string; position: number; notes?: string | null };
 type WorkoutSet = {
   id: string;
   exercise_id: string;
@@ -66,6 +74,16 @@ type PrevSetRow = {
   weight_kg: number;
 };
 
+const DEFAULT_CARDIO_ITEMS = [
+  { id: "c-esteira", name: "Esteira" },
+  { id: "c-caminhada-inc", name: "Caminhada inclinada" },
+  { id: "c-corrida", name: "Corrida na esteira" },
+  { id: "c-bike", name: "Bicicleta ergométrica" },
+  { id: "c-eliptico", name: "Transport / Elíptico" },
+  { id: "c-escada", name: "Simulador de escada" },
+  { id: "c-remo", name: "Remo seco" },
+];
+
 function WorkoutDetail() {
   const { id } = Route.useParams();
   const { user } = useAuth();
@@ -78,6 +96,9 @@ function WorkoutDetail() {
   >({});
   const [open, setOpen] = useState(false);
   const [exName, setExName] = useState("");
+  const [isCardioType, setIsCardioType] = useState(false);
+  const [cardioIncline, setCardioIncline] = useState<number>(0);
+  const [userWeightKg, setUserWeightKg] = useState<number>(75);
   const [catalog, setCatalog] = useState<{ id: string; name: string }[]>([]);
   const [restSec, setRestSec] = useState(0);
   const [restRunning, setRestRunning] = useState(false);
@@ -219,10 +240,25 @@ function WorkoutDetail() {
 
     const { data: ex } = await supabase
       .from("exercises")
-      .select("id,name,position")
+      .select("id,name,position,notes")
       .eq("workout_id", id)
       .order("position");
     setExercises((ex ?? []) as Exercise[]);
+
+    // Carregar peso corporal mais recente para cálculo calórico do cardio
+    if (user?.id) {
+      supabase
+        .from("body_weights")
+        .select("weight_kg")
+        .eq("user_id", user.id)
+        .order("log_date", { ascending: false })
+        .limit(1)
+        .then(({ data: wData }) => {
+          if (wData?.[0]?.weight_kg) {
+            setUserWeightKg(Number(wData[0].weight_kg));
+          }
+        });
+    }
 
     const exIds = (ex ?? []).map((e) => e.id);
     let loadedSets: WorkoutSet[] = [];
@@ -307,27 +343,73 @@ function WorkoutDetail() {
     load(); /* eslint-disable-next-line */
   }, [id]);
 
+  const toggleExerciseType = async (ex: Exercise) => {
+    const meta = parseCardioMeta(ex.notes, ex.name);
+    const newIsCardio = !meta.isCardio;
+    const newNotes = serializeCardioMeta({ ...meta, isCardio: newIsCardio });
+    const { error } = await supabase
+      .from("exercises")
+      .update({ notes: newNotes })
+      .eq("id", ex.id);
+    if (error) return toast.error("Erro ao atualizar tipo: " + error.message);
+    toast.success(newIsCardio ? "Alterado para Cardio / Aeróbico 🏃" : "Alterado para Musculação 🏋️");
+    load();
+  };
+
+  const updateExerciseIncline = async (ex: Exercise, incline: number) => {
+    const meta = parseCardioMeta(ex.notes, ex.name);
+    const newNotes = serializeCardioMeta({ ...meta, isCardio: true, inclinePct: incline });
+    await supabase.from("exercises").update({ notes: newNotes }).eq("id", ex.id);
+    setExercises((prev) =>
+      prev.map((e) => (e.id === ex.id ? { ...e, notes: newNotes } : e))
+    );
+  };
+
   const addExercise = async () => {
     if (!user || !exName.trim()) return;
-    const { error } = await supabase.from("exercises").insert({
-      user_id: user.id,
-      workout_id: id,
-      name: exName.trim(),
-      position: exercises.length,
-    });
+    const initialNotes = isCardioType
+      ? serializeCardioMeta({ isCardio: true, inclinePct: Number(cardioIncline) || 0 })
+      : null;
+
+    const { data: newEx, error } = await supabase
+      .from("exercises")
+      .insert({
+        user_id: user.id,
+        workout_id: id,
+        name: exName.trim(),
+        position: exercises.length,
+        notes: initialNotes,
+      })
+      .select()
+      .single();
+
     if (error) return toast.error(error.message);
+
+    // Se for cardio, já insere automaticamente a 1ª etapa com valores padrão recomendados (ex: 20 min @ 4 km/h)
+    if (isCardioType && newEx) {
+      await supabase.from("sets").insert({
+        user_id: user.id,
+        exercise_id: newEx.id,
+        set_number: 1,
+        reps: 20,
+        weight_kg: 4.0,
+      });
+    }
+
     setExName("");
+    setIsCardioType(false);
+    setCardioIncline(0);
     setOpen(false);
     load();
   };
 
-  const addSet = async (exerciseId: string) => {
+  const addSet = async (exerciseId: string, isCardio = false) => {
     if (!user) return;
     const exSets = sets.filter((s) => s.exercise_id === exerciseId);
     const last = exSets[exSets.length - 1];
 
-    let lastReps = last?.reps ?? 10;
-    let lastWeight = last?.weight_kg ?? 0;
+    let lastReps = last?.reps ?? (isCardio ? 20 : 10);
+    let lastWeight = last?.weight_kg ?? (isCardio ? 4 : 0);
     if (last && setValues[last.id]) {
       lastReps = setValues[last.id].reps;
       lastWeight = setValues[last.id].weight_kg;
@@ -341,7 +423,9 @@ function WorkoutDetail() {
       weight_kg: lastWeight,
     });
     if (error) return toast.error(error.message);
-    startRest(restPreset);
+    if (!isCardio) {
+      startRest(restPreset);
+    }
     load();
   };
 
@@ -355,6 +439,37 @@ function WorkoutDetail() {
 
     setIsFinishing(true);
     try {
+      // 0. Montar resumo detalhado de cardio para as observações da sessão e Coach IA
+      const cardioSummaries: string[] = [];
+      exercises.forEach((ex) => {
+        const meta = parseCardioMeta(ex.notes, ex.name);
+        if (meta.isCardio) {
+          const exSets = sets.filter((s) => s.exercise_id === ex.id && completedSets.has(s.id));
+          if (exSets.length > 0) {
+            const totalMins = exSets.reduce((acc, s) => {
+              const val = setValues[s.id] ?? { reps: s.reps };
+              return acc + (Number(val.reps) || 0);
+            }, 0);
+            const avgSpeed =
+              exSets.reduce((acc, s) => {
+                const val = setValues[s.id] ?? { weight_kg: s.weight_kg };
+                return acc + (Number(val.weight_kg) || 0);
+              }, 0) / exSets.length;
+            cardioSummaries.push(
+              formatCardioSummary({
+                name: ex.name,
+                durationMin: totalMins,
+                speedKmh: avgSpeed,
+                inclinePct: meta.inclinePct,
+                weightKg: userWeightKg,
+              })
+            );
+          }
+        }
+      });
+
+      const sessionNotes = cardioSummaries.length > 0 ? cardioSummaries.join("\n") : null;
+
       // 1. Criar sessão de treino finalizada
       const { data: session, error: sessError } = await supabase
         .from("workout_sessions")
@@ -363,6 +478,7 @@ function WorkoutDetail() {
           workout_id: id,
           name: workout.name,
           completed_at: new Date().toISOString(),
+          notes: sessionNotes,
         })
         .select()
         .single();
@@ -528,7 +644,15 @@ function WorkoutDetail() {
                   .select("id,name")
                   .order("name")
                   .then(({ data }) => {
-                    if (data) setCatalog(data);
+                    const fetched = data ?? [];
+                    const names = new Set(fetched.map((i) => i.name.toLowerCase()));
+                    const combined = [...fetched];
+                    DEFAULT_CARDIO_ITEMS.forEach((cardio) => {
+                      if (!names.has(cardio.name.toLowerCase())) {
+                        combined.push(cardio);
+                      }
+                    });
+                    setCatalog(combined);
                   });
               }
             }}
@@ -545,9 +669,12 @@ function WorkoutDetail() {
               </DialogHeader>
               <Command>
                 <CommandInput
-                  placeholder="Buscar exercício..."
+                  placeholder="Buscar exercício (ex: Supino, Esteira...)"
                   value={exName}
-                  onValueChange={setExName}
+                  onValueChange={(val) => {
+                    setExName(val);
+                    setIsCardioType(isCardioExercise(val));
+                  }}
                 />
                 <CommandList>
                   <CommandEmpty>
@@ -567,13 +694,68 @@ function WorkoutDetail() {
                       value={item.name}
                       onSelect={(v) => {
                         setExName(v);
+                        setIsCardioType(isCardioExercise(v));
                       }}
                     >
-                      {item.name}
+                      <span className="flex items-center gap-1.5">
+                        <span>{isCardioExercise(item.name) ? "🏃" : "🏋️"}</span>
+                        <span>{item.name}</span>
+                      </span>
                     </CommandItem>
                   ))}
                 </CommandList>
               </Command>
+
+              {/* Seletor de Tipo e Parâmetros de Cardio */}
+              <div className="p-3 border-t bg-muted/20 flex flex-col gap-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-foreground">Tipo de atividade:</span>
+                  <div className="flex items-center gap-1 bg-muted p-0.5 rounded-lg border">
+                    <button
+                      type="button"
+                      className={cn(
+                        "px-2.5 py-1 text-xs rounded-md transition-all font-medium cursor-pointer",
+                        !isCardioType
+                          ? "bg-background text-foreground shadow-xs"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                      onClick={() => setIsCardioType(false)}
+                    >
+                      🏋️ Musculação
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        "px-2.5 py-1 text-xs rounded-md transition-all font-medium cursor-pointer",
+                        isCardioType
+                          ? "bg-amber-500 text-white shadow-xs"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                      onClick={() => setIsCardioType(true)}
+                    >
+                      🏃 Cardio
+                    </button>
+                  </div>
+                </div>
+                {isCardioType && (
+                  <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
+                    <span>Inclinação padrão da esteira (%):</span>
+                    <div className="flex items-center gap-1">
+                      <Input
+                        type="number"
+                        min="0"
+                        max="30"
+                        value={cardioIncline || ""}
+                        onChange={(e) => setCardioIncline(Number(e.target.value))}
+                        placeholder="0"
+                        className="h-7 w-16 text-center tabular-nums text-xs bg-background"
+                      />
+                      <span className="font-semibold">%</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <DialogFooter className="border-t p-3">
                 {exName.trim() &&
                   !catalog.some(
@@ -676,13 +858,57 @@ function WorkoutDetail() {
         <div className="space-y-4">
           {exercises.map((ex) => {
             const exSets = sets.filter((s) => s.exercise_id === ex.id);
+            const cardioMeta = parseCardioMeta(ex.notes, ex.name);
+            const isCardio = cardioMeta.isCardio;
+
+            const totalMins = exSets.reduce((sum, s) => {
+              const val = setValues[s.id] ?? { reps: s.reps };
+              return sum + (Number(val.reps) || 0);
+            }, 0);
+            const avgSpeed =
+              exSets.length > 0
+                ? exSets.reduce((sum, s) => {
+                    const val = setValues[s.id] ?? { weight_kg: s.weight_kg };
+                    return sum + (Number(val.weight_kg) || 0);
+                  }, 0) / exSets.length
+                : 0;
+            const estKcal = calculateCardioCalories({
+              durationMin: totalMins,
+              speedKmh: avgSpeed,
+              inclinePct: cardioMeta.inclinePct,
+              weightKg: userWeightKg,
+            });
+
             return (
-              <Card key={ex.id} className="p-4">
+              <Card
+                key={ex.id}
+                className={cn(
+                  "p-4 transition-all",
+                  isCardio && "border-amber-500/30 bg-amber-500/[0.02]"
+                )}
+              >
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-display font-semibold">{ex.name}</h3>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-display font-semibold text-base">{ex.name}</h3>
+                    <Button
+                      type="button"
+                      variant={isCardio ? "secondary" : "outline"}
+                      size="sm"
+                      className={cn(
+                        "h-6 px-2 text-[11px] rounded-full gap-1 font-medium transition-colors cursor-pointer",
+                        isCardio
+                          ? "bg-amber-500/10 text-amber-500 border border-amber-500/30 hover:bg-amber-500/20"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                      onClick={() => toggleExerciseType(ex)}
+                      title="Alternar entre Musculação e Cardio"
+                    >
+                      {isCardio ? "🏃 Cardio" : "🏋️ Musculação"}
+                    </Button>
+                  </div>
                   <div className="flex items-center gap-1">
                     <Link to="/app/exercicios/$name" params={{ name: encodeURIComponent(ex.name) }}>
-                      <Button variant="ghost" size="icon" title="Histórico">
+                      <Button variant="ghost" size="icon" title="Histórico e evolução">
                         <TrendingUp className="h-4 w-4 text-muted-foreground" />
                       </Button>
                     </Link>
@@ -692,35 +918,61 @@ function WorkoutDetail() {
                   </div>
                 </div>
 
-                {(() => {
-                  const sug = suggestion(ex.name);
-                  if (!sug) return null;
-                  return (
-                    <div className="mb-3 flex items-center gap-2 rounded-lg bg-primary/10 border border-primary/20 px-3 py-2 text-xs">
-                      <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
-                      <span className="text-muted-foreground">
-                        Última:{" "}
-                        <strong className="text-foreground">
-                          {sug.last.reps}×{sug.last.weight_kg}kg
-                        </strong>
-                        {sug.next > sug.last.weight_kg && (
-                          <>
-                            {" "}
-                            · tente <strong className="text-primary">{sug.next}kg</strong>
-                          </>
-                        )}
-                      </span>
+                {isCardio ? (
+                  <div className="mb-3 flex items-center justify-between gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground font-medium">Inclinação esteira:</span>
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          min="0"
+                          max="30"
+                          step="0.5"
+                          className="h-7 w-16 text-center tabular-nums text-xs bg-background font-medium"
+                          value={cardioMeta.inclinePct != null ? cardioMeta.inclinePct : ""}
+                          onChange={(e) => updateExerciseIncline(ex, Number(e.target.value))}
+                          placeholder="0"
+                        />
+                        <span className="text-muted-foreground font-semibold">%</span>
+                      </div>
                     </div>
-                  );
-                })()}
+                    {estKcal > 0 && (
+                      <div className="inline-flex items-center gap-1 font-semibold text-amber-500 bg-amber-500/15 px-2.5 py-1 rounded-full text-[11px]">
+                        <span>🔥 ~{estKcal} kcal</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  (() => {
+                    const sug = suggestion(ex.name);
+                    if (!sug) return null;
+                    return (
+                      <div className="mb-3 flex items-center gap-2 rounded-lg bg-primary/10 border border-primary/20 px-3 py-2 text-xs">
+                        <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
+                        <span className="text-muted-foreground">
+                          Última:{" "}
+                          <strong className="text-foreground">
+                            {sug.last.reps}×{sug.last.weight_kg}kg
+                          </strong>
+                          {sug.next > sug.last.weight_kg && (
+                            <>
+                              {" "}
+                              · tente <strong className="text-primary">{sug.next}kg</strong>
+                            </>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })()
+                )}
 
                 {exSets.length > 0 && (
                   <div className="space-y-2 mb-3">
-                    <div className="grid grid-cols-[24px_32px_1fr_1fr_32px] gap-2 text-xs text-muted-foreground px-1">
+                    <div className="grid grid-cols-[24px_32px_1fr_1fr_32px] gap-2 text-xs text-muted-foreground px-1 font-medium">
                       <span>#</span>
                       <span></span>
-                      <span>Reps</span>
-                      <span>Carga (kg)</span>
+                      <span>{isCardio ? "Tempo (min)" : "Reps"}</span>
+                      <span>{isCardio ? "Velocidade (km/h)" : "Carga (kg)"}</span>
                       <span></span>
                     </div>
                     {exSets.map((s) => {
@@ -747,15 +999,19 @@ function WorkoutDetail() {
                         </div>
                         <Input
                           type="number"
+                          min="1"
                           value={curVal.reps || ""}
+                          placeholder={isCardio ? "Minutos" : "Reps"}
                           onFocus={(e) => e.target.select()}
                           onChange={(e) => updateLocalSet(s.id, "reps", Number(e.target.value))}
                           disabled={done}
                         />
                         <Input
                           type="number"
-                          step="0.5"
+                          step={isCardio ? "0.1" : "0.5"}
+                          min="0"
                           value={curVal.weight_kg || ""}
+                          placeholder={isCardio ? "km/h" : "kg"}
                           onFocus={(e) => e.target.select()}
                           onChange={(e) => updateLocalSet(s.id, "weight_kg", Number(e.target.value))}
                           disabled={done}
@@ -768,6 +1024,27 @@ function WorkoutDetail() {
                         >
                           <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
                         </Button>
+                        {isCardio && (
+                          <div className="col-span-5 flex items-center gap-1.5 pl-7 pt-1 pb-1 flex-wrap">
+                            <span className="text-[10px] text-muted-foreground font-medium mr-0.5">Duração:</span>
+                            {[15, 20, 30, 40, 45, 60].map((mins) => (
+                              <button
+                                key={mins}
+                                type="button"
+                                disabled={done}
+                                onClick={() => updateLocalSet(s.id, "reps", mins)}
+                                className={cn(
+                                  "px-2 py-0.5 rounded text-[11px] font-medium border transition-all cursor-pointer",
+                                  curVal.reps === mins
+                                    ? "bg-amber-500 text-white border-amber-500 font-semibold shadow-xs"
+                                    : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border"
+                                )}
+                              >
+                                {mins} min
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       );
                     })}
@@ -775,12 +1052,13 @@ function WorkoutDetail() {
                 )}
 
                 <Button
-                  variant="secondary"
+                  variant="outline"
                   size="sm"
-                  className="w-full"
-                  onClick={() => addSet(ex.id)}
+                  className="w-full rounded-full border-dashed"
+                  onClick={() => addSet(ex.id, isCardio)}
                 >
-                  <Plus className="h-3.5 w-3.5 mr-1" /> Série
+                  <Plus className="h-4 w-4 mr-1" />
+                  {isCardio ? "Adicionar etapa / bloco" : "Adicionar série"}
                 </Button>
               </Card>
             );

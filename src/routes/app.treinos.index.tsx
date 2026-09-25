@@ -21,12 +21,14 @@ import { Plus, ChevronRight, ChevronDown, ChevronUp, Dumbbell, Trash2, Copy, Lay
 import { toast } from "sonner";
 import { getSavedSplitRotation, saveSplitRotation } from "@/lib/workout-rotation";
 
+import { isCardioExercise } from "@/lib/cardio-utils";
+
 export const Route = createFileRoute("/app/treinos/")({
   component: WorkoutsPage,
 });
 
 type Workout = { id: string; name: string; workout_date: string };
-type Session = { id: string; name: string; completed_at: string };
+type Session = { id: string; name: string; completed_at: string; notes?: string | null };
 
 type ExerciseSummary = {
   name: string;
@@ -89,7 +91,7 @@ function WorkoutsPage() {
     if (!user) return;
     const { data: sessData } = await supabase
       .from("workout_sessions")
-      .select("id,name,completed_at")
+      .select("id,name,completed_at,notes")
       .eq("user_id", user.id)
       .order("completed_at", { ascending: false })
       .limit(30);
@@ -130,6 +132,7 @@ function WorkoutsPage() {
           let totalCompletedCount = 0;
 
           exMap.forEach((sList, exName) => {
+            const isCardio = isCardioExercise(exName);
             let maxW = 0;
             let compCount = 0;
             for (const item of sList) {
@@ -138,7 +141,9 @@ function WorkoutsPage() {
               if (w > maxW) maxW = w;
               if (item.completed) {
                 compCount++;
-                totalVol += w * r;
+                if (!isCardio) {
+                  totalVol += w * r;
+                }
               }
             }
             totalCompletedCount += compCount || sList.length;
@@ -619,6 +624,13 @@ function WorkoutsPage() {
                             </>
                           )}
                         </div>
+                        {s.notes && (
+                          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[10px] text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md font-medium">
+                              {s.notes}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -667,59 +679,99 @@ function WorkoutsPage() {
                               <span>{detail.exercises.length} itens</span>
                             </div>
                             <div className="space-y-1.5">
-                              {detail.exercises.map((ex, idx) => (
-                                <div
-                                  key={idx}
-                                  className="p-2.5 rounded-xl bg-background/80 border border-border/40 hover:border-primary/20 transition-colors"
-                                >
-                                  <div className="flex items-start sm:items-center justify-between gap-2 flex-col sm:flex-row">
-                                    <Link
-                                      to="/app/exercicios/$name"
-                                      params={{ name: encodeURIComponent(ex.name) }}
-                                      className="font-medium text-xs sm:text-sm text-foreground hover:text-primary transition-colors flex items-center gap-1.5 group min-w-0"
-                                      onClick={(e) => e.stopPropagation()}
-                                      title="Ver evolução e gráfico deste exercício"
-                                    >
-                                      <Dumbbell className="h-3.5 w-3.5 text-primary shrink-0 group-hover:scale-110 transition-transform" />
-                                      <span className="truncate group-hover:underline">{ex.name}</span>
-                                      <ChevronRight className="h-3 w-3 text-muted-foreground opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
-                                    </Link>
+                              {detail.exercises.map((ex, idx) => {
+                                const isCardio = isCardioExercise(ex.name);
+                                const totalCardioMins = isCardio
+                                  ? ex.sets.reduce((sum, st) => sum + (st.reps || 0), 0)
+                                  : 0;
 
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-normal">
-                                        {ex.totalCompletedSets} {ex.totalCompletedSets === 1 ? "série" : "séries"}
-                                      </Badge>
-                                      {ex.maxWeight > 0 && (
-                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-primary/30 text-primary font-medium">
-                                          máx {ex.maxWeight} kg
-                                        </Badge>
-                                      )}
+                                return (
+                                  <div
+                                    key={idx}
+                                    className={cn(
+                                      "p-2.5 rounded-xl bg-background/80 border border-border/40 hover:border-primary/20 transition-colors",
+                                      isCardio && "border-amber-500/30 bg-amber-500/[0.02]"
+                                    )}
+                                  >
+                                    <div className="flex items-start sm:items-center justify-between gap-2 flex-col sm:flex-row">
+                                      <Link
+                                        to="/app/exercicios/$name"
+                                        params={{ name: encodeURIComponent(ex.name) }}
+                                        className="font-medium text-xs sm:text-sm text-foreground hover:text-primary transition-colors flex items-center gap-1.5 group min-w-0"
+                                        onClick={(e) => e.stopPropagation()}
+                                        title="Ver evolução e gráfico deste exercício"
+                                      >
+                                        <span className="text-sm shrink-0">{isCardio ? "🏃" : "🏋️"}</span>
+                                        <span className="truncate group-hover:underline">{ex.name}</span>
+                                        <ChevronRight className="h-3 w-3 text-muted-foreground opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                                      </Link>
+
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        {isCardio ? (
+                                          <>
+                                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-amber-500/30 text-amber-500 font-medium">
+                                              {totalCardioMins} min total
+                                            </Badge>
+                                            {ex.maxWeight > 0 && (
+                                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-amber-500/30 text-amber-500 font-medium">
+                                                máx {ex.maxWeight} km/h
+                                              </Badge>
+                                            )}
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-normal">
+                                              {ex.totalCompletedSets} {ex.totalCompletedSets === 1 ? "série" : "séries"}
+                                            </Badge>
+                                            {ex.maxWeight > 0 && (
+                                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-primary/30 text-primary font-medium">
+                                                máx {ex.maxWeight} kg
+                                              </Badge>
+                                            )}
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Breakdown das séries com repetições e cargas (ou tempo e velocidade para cardio) */}
+                                    <div className="flex items-center gap-1.5 flex-wrap mt-2 pt-1.5 border-t border-border/30">
+                                      {ex.sets.map((st, sIdx) => (
+                                        <div
+                                          key={sIdx}
+                                          className={cn(
+                                            "text-[10px] px-2 py-0.5 rounded-md border flex items-center gap-1",
+                                            st.completed
+                                              ? isCardio
+                                                ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 font-medium"
+                                                : "bg-secondary/60 text-foreground border-border/40 font-medium"
+                                              : "bg-muted/30 text-muted-foreground border-transparent line-through opacity-60"
+                                          )}
+                                          title={
+                                            isCardio
+                                              ? `Cardio etapa ${st.set_number}: ${st.reps} min ${st.weight_kg ? `a ${st.weight_kg}km/h` : ""}`
+                                              : `Série ${st.set_number}: ${st.reps} reps ${st.weight_kg ? `com ${st.weight_kg}kg` : ""}`
+                                          }
+                                        >
+                                          <span className="text-muted-foreground text-[9px]">#{st.set_number}</span>
+                                          <span>
+                                            {isCardio ? (
+                                              <>
+                                                {st.reps} min
+                                                {st.weight_kg > 0 ? ` @ ${st.weight_kg}km/h` : ""}
+                                              </>
+                                            ) : (
+                                              <>
+                                                {st.weight_kg > 0 ? `${st.weight_kg}kg × ` : ""}
+                                                {st.reps} reps
+                                              </>
+                                            )}
+                                          </span>
+                                        </div>
+                                      ))}
                                     </div>
                                   </div>
-
-                                  {/* Breakdown das séries com repetições e cargas */}
-                                  <div className="flex items-center gap-1.5 flex-wrap mt-2 pt-1.5 border-t border-border/30">
-                                    {ex.sets.map((st, sIdx) => (
-                                      <div
-                                        key={sIdx}
-                                        className={cn(
-                                          "text-[10px] px-2 py-0.5 rounded-md border flex items-center gap-1",
-                                          st.completed
-                                            ? "bg-secondary/60 text-foreground border-border/40 font-medium"
-                                            : "bg-muted/30 text-muted-foreground border-transparent line-through opacity-60"
-                                        )}
-                                        title={`Série ${st.set_number}: ${st.reps} reps ${st.weight_kg ? `com ${st.weight_kg}kg` : ""}`}
-                                      >
-                                        <span className="text-muted-foreground text-[9px]">#{st.set_number}</span>
-                                        <span>
-                                          {st.weight_kg > 0 ? `${st.weight_kg}kg × ` : ""}
-                                          {st.reps} reps
-                                        </span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </>
                         )}
