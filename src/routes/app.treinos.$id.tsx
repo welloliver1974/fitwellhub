@@ -36,6 +36,8 @@ import {
   Check,
   RefreshCw,
   PencilLine,
+  Pencil,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -113,6 +115,8 @@ function WorkoutDetail() {
   const [isFinishing, setIsFinishing] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
+  const [editingExId, setEditingExId] = useState<string | null>(null);
+  const [editingExName, setEditingExName] = useState("");
 
   // Auxiliar para salvar rascunho no localStorage
   const saveDraft = (
@@ -568,6 +572,24 @@ function WorkoutDetail() {
     setEditNameValue("");
   };
 
+  const saveExerciseName = async (exId: string) => {
+    if (!editingExName.trim()) {
+      setEditingExId(null);
+      return;
+    }
+    const { error } = await supabase
+      .from("exercises")
+      .update({ name: editingExName.trim() })
+      .eq("id", exId);
+    if (error) {
+      toast.error("Erro ao renomear: " + error.message);
+    } else {
+      toast.success("Exercício renomeado!");
+      load();
+    }
+    setEditingExId(null);
+  };
+
   if (!workout) return <p className="text-muted-foreground">Carregando…</p>;
 
   const suggestion = (name: string) => {
@@ -889,7 +911,54 @@ function WorkoutDetail() {
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-display font-semibold text-base">{ex.name}</h3>
+                    {editingExId === ex.id ? (
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          value={editingExName}
+                          onChange={(e) => setEditingExName(e.target.value)}
+                          className="h-7 w-44 text-sm font-semibold bg-background"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") saveExerciseName(ex.id);
+                            if (e.key === "Escape") setEditingExId(null);
+                          }}
+                        />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-primary hover:bg-primary/10"
+                          onClick={() => saveExerciseName(ex.id)}
+                          title="Confirmar"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-muted-foreground hover:bg-muted"
+                          onClick={() => setEditingExId(null)}
+                          title="Cancelar"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 group">
+                        <h3 className="font-display font-semibold text-base">{ex.name}</h3>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-muted-foreground/50 hover:text-foreground opacity-60 hover:opacity-100 transition-opacity"
+                          title="Renomear exercício"
+                          onClick={() => {
+                            setEditingExId(ex.id);
+                            setEditingExName(ex.name);
+                          }}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
                     <Button
                       type="button"
                       variant={isCardio ? "secondary" : "outline"}
