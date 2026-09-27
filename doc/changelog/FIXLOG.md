@@ -1754,6 +1754,41 @@ Na migration `supabase/migrations/20260913_allow_telegram_meals_and_nutrition.sq
 2. **Atualização da Migration Consolidada:**
    - Atualizada a Seção 4 de [`supabase/migrations/20260913_allow_telegram_meals_and_nutrition.sql`](file:///e:/Apps/fitwell/fitwellhub/supabase/migrations/20260913_allow_telegram_meals_and_nutrition.sql) para conter todas as 4 policies (SELECT, INSERT, UPDATE, DELETE).
 
+---
+
+## Sessão: 27/09/2026 — Integração Completa de Pesos e Medidas (Hermes Agent) + Blindagem de RLS + Cloudflare Service Role Secret
+
+### 🎯 Problema / Solicitação
+1. O assistente Hermes (bot do Telegram) já gerenciava treinos, refeições, hidratação e busca de alimentos, mas precisava de suporte nativo a registro e consulta de histórico de **peso corporal** e **medidas corporais** (antropometria).
+2. Durante a auditoria de segurança das tabelas de saúde, identificou-se que as tabelas `body_weights`, `body_measurements`, `bioimpedance_logs`, `profiles`, `goals` e `user_integrations` possuíam políticas públicas abertas no Supabase, permitindo que consultas anônimas com a publishable key lessem dados de todos os usuários.
+3. Após o fechamento das RLS, as novas leituras do Hermes retornavam lista vazia devido ao fallback silencioso para a publishable key na ausência da Service Role Key no Cloudflare Worker.
+
+### 🔍 Causa Raiz
+1. **Falta de Ações Específicas no Endpoint:** `executeHermesAction` cobria rotinas de treino e refeições, mas não possuía actions para `log_weight`, `log_measurement`, `get_weight` e `get_measurements`.
+2. **Brecha de RLS em Tabelas Sensíveis:** Políticas legadas `FOR ALL USING (true)` ou permissões públicas em `body_weights` e `body_measurements` expunham histórico para quem possuísse a chave pública.
+3. **Persistência de Variáveis no Cloudflare:** Criar `SUPABASE_SERVICE_ROLE_KEY` como variável de texto manual no painel do Cloudflare fazia com que o `npx wrangler deploy` com `wrangler.jsonc` removesse a variável não declarada. Além disso, `getSupabaseServiceClient()` consultava exclusivamente `process.env`, sem checar `globalThis` ou `import.meta.env`.
+
+### 🛠️ Solução Implementada
+1. **Implementação das 4 Ações no Servidor (`src/server-fns/telegram.functions.ts`):**
+   - `log_weight`: Grava/atualiza em `body_weights` com lógica de upsert pela data (`log_date`), sincroniza `profiles.weight_kg` e devolve a variação (delta) em relação à pesagem imediatamente anterior.
+   - `log_measurement`: Normaliza regiões bilaterais ("braço" -> "Braço Direito" e "Braço Esquerdo", coxa, panturrilha), calcula variação contra a última medida da mesma região e aceita múltiplos formatos de entrada (`items: [...]` e `measurements: [...]`).
+   - `get_weight`: Devolve o histórico cronológico decrescente com variação por pesagem e evolução líquida total desde o início.
+   - `get_measurements`: Devolve histórico agrupado por região corporal e por data com cálculos de delta.
+2. **Migration de Segurança e Fechamento de RLS:**
+   - Criada [`supabase/migrations/20260927_secure_health_tables_rls.sql`](file:///e:/Apps/fitwell/fitwellhub/supabase/migrations/20260927_secure_health_tables_rls.sql), eliminando permissões anônimas e restringindo `SELECT, INSERT, UPDATE, DELETE` a `auth.uid() = user_id`.
+3. **Resolução Robusta de Ambiente & Chave Mestra:**
+   - `getSupabaseServiceClient()` atualizado para buscar a chave em `process.env`, `globalThis` e `import.meta.env`.
+   - Chave `SUPABASE_SERVICE_ROLE_KEY` registrada permanentemente no cofre do Worker via `npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY`.
+4. **Alinhamento da UI e Prompt:**
+   - Tela `/app/ia` atualizada com o System Prompt instruindo o Hermes e documentando os novos recursos.
+
+### ✅ Validação
+- Migration SQL executada no Supabase.
+- Build de produção gerado com sucesso via `npm run build` (Client + SSR).
+- Deploy realizado com sucesso no Cloudflare Workers (`fitwellhub.welloliver.workers.dev`).
+- Repositório Git sincronizado com a branch `main`.
+
+
 
 
 

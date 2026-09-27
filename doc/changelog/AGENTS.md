@@ -790,3 +790,19 @@ Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hu
   - **Fix `app.nutricao.tsx`**: `setRefGrams(null)` no início do scan; `setRefGrams(servingGrams)` no ramo OFF; `setRefGrams(100)` no fallback IA.
   - **NOVO `src/components/nutrition-day-detail.tsx`**: card "Alimentação do dia" com date input (padrão **ontem**), lista refeições/itens do dia agrupadas por tipo com total — integrado no topo de `app.nutricao-historico.tsx`. Efeito depende de `user?.id` (estável), não do objeto `user` (evita re-busca em loop).
 - **Status**: Concluído — **78 testes verdes** (75 + 3), tsc limpo nos arquivos tocados, build OK.
+
+## [27/09/2026] - Antigravity (Integração Hermes Agent: Pesos, Medidas, RLS fechado e Service Role)
+- **Escopo**:
+  - **4 Novas Ações de IA (`executeHermesAction`)**:
+    - `log_weight`: Registra ou atualiza peso corporal (`body_weights`), atualiza `profiles.weight_kg` e calcula variação vs pesagem anterior.
+    - `log_measurement`: Registra medidas antropométricas (`body_measurements`), com suporte bilateral automático ("braço" -> "Braço Direito" e "Braço Esquerdo"), cálculo de deltas corporais e compatibilidade com ambos os formatos: `items: [...]` e `measurements: [...]`.
+    - `get_weight`: Retorna histórico cronológico de peso com evolução recente e variação total desde o início.
+    - `get_measurements`: Retorna histórico de medidas agrupadas por região corporal e data com cálculo de evolução.
+  - **Blindagem de Segurança & RLS**:
+    - Criada migration `supabase/migrations/20260927_secure_health_tables_rls.sql` revogando acessos anônimos e fechando RLS nas tabelas `body_weights`, `body_measurements`, `bioimpedance_logs`, `profiles`, `goals` e `user_integrations` para `auth.uid() = user_id`.
+  - **Correção de Leitura & Service Role no Cloudflare**:
+    - Atualizado `getSupabaseServiceClient()` em `src/server-fns/telegram.functions.ts` para ler a chave com fallback inteligente (`process.env`, `globalThis`, `import.meta.env`).
+    - Chave mestra persistida no cofre de segredos criptografados do Worker via `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`.
+    - Documentação e System Prompt atualizados na tela `/app/ia`.
+- **Status**: Concluído, build validado, deploy no Cloudflare Workers executado com sucesso e repositório Git sincronizado.
+
