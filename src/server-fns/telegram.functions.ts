@@ -19,17 +19,38 @@ import type { Database } from "@/integrations/supabase/types";
 
 // Client Supabase admin/service ou com chave de publicação para chamadas do webhook
 function getSupabaseServiceClient() {
+  const getEnv = (name: string) => {
+    return (
+      (typeof process !== "undefined" ? process.env?.[name] : undefined) ||
+      (import.meta.env as any)?.[name] ||
+      (globalThis as any)?.[name]
+    );
+  };
+
   const url =
-    process.env.SUPABASE_URL || "https://haavrgglnfbchiygspqw.supabase.co";
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    getEnv("SUPABASE_URL") ||
+    getEnv("VITE_SUPABASE_URL") ||
+    "https://haavrgglnfbchiygspqw.supabase.co";
+
+  const serviceKey = getEnv("SUPABASE_SERVICE_ROLE_KEY");
+  const publishableKey =
+    getEnv("SUPABASE_PUBLISHABLE_KEY") ||
+    getEnv("VITE_SUPABASE_PUBLISHABLE_KEY") ||
     "sb_publishable_Ad2aSiOJKf_53pnMCLhc6A_JkX1vvJ2";
+
+  if (!serviceKey) {
+    console.warn(
+      "[Hermes ServerFn] AVISO: SUPABASE_SERVICE_ROLE_KEY não foi encontrada no ambiente de execução. Operações em tabelas com RLS fechado podem retornar vazias."
+    );
+  }
+
+  const key = serviceKey || publishableKey;
 
   return createClient<Database>(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
+
 
 // ---------------------------------------------------------------------------
 // 1. Gerenciamento de Pareamento do Telegram (Pelo App do Usuário)
@@ -1892,7 +1913,7 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
       if (itemsToProcess.length === 0) {
         return {
           success: false,
-          error: "Nenhuma medida corporal identificada. Envie no formato: items: [{ label: 'Cintura', value_cm: 82 }].",
+          error: "Nenhuma medida corporal identificada. Envie no formato items: [{ label: 'Cintura', value_cm: 82 }] ou measurements: [{ label: 'Cintura', value_cm: 82 }].",
         };
       }
 
