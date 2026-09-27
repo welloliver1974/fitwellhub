@@ -1,5 +1,21 @@
 # FIXLOG — FitWell Hub
 
+## Sessão: 27/09/2026 — Integração de Medidas e Peso no Hermes Agent + Blindagem de RLS no Supabase
+
+### 🎯 Funcionalidades e Ajustes
+1. **Endpoint Unificado do Hermes (`src/server-fns/telegram.functions.ts`)**:
+   - Implementadas 4 ações solicitadas para o Hermes:
+     - `log_weight`: Registra peso em `body_weights`. Se já houver registro no mesmo dia (`log_date`), atualiza em vez de duplicar. Sincroniza `profiles.weight_kg` para recálculo de TMB/TDEE. Retorna variação vs pesagem anterior.
+     - `log_measurement`: Registra medidas em `body_measurements`. Suporta lista de itens (`items` ou `measurements`), medidas individuais ou extração de texto livre. Normaliza rótulos anatômicos e membros bilaterais (*Braço Direito* / *Braço Esquerdo*). Atualiza registro se já existir na mesma data e calcula delta vs medidas anteriores.
+     - `get_weight`: Consulta histórico de peso com ordenação mais recente primeiro, cálculo de variações e filtros opcionais `since` e `limit`.
+     - `get_measurements`: Consulta histórico de medidas agrupado por data e por label, com cálculo de variações e suporte a filtros `since` e `label`.
+   - Ação `status`: Enriquecida com último peso e últimas medidas cadastradas.
+2. **Interface e Instruções (`src/routes/app.ia.tsx`)**:
+   - Atualizado o prompt do sistema para o Hermes com exemplos de uso para medidas e peso.
+   - Adicionados cards visuais explicativos com as novas ações suportadas.
+3. **Segurança de RLS (`supabase/migrations/20260927_secure_health_tables_rls.sql`)**:
+   - Criada migration que fecha as brechas das policies `telegram_*` anteriores, garantindo que usuários autenticados só leiam/escrevam em seus próprios registros (`auth.uid() = user_id`), enquanto o servidor opera de forma segura via `service_role`.
+
 ## Sessão: 25/09/2026 — Suporte Nativo a Cardio & Aeróbicos (Esteira com Inclinação, Fórmula ACSM e Flexibilidade de Duração)
 
 ### 🎯 Funcionalidades e Ajustes

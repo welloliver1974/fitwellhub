@@ -1819,7 +1819,12 @@ Regras de Ação:
 2. Duplicar Treino: Quando o usuário disser que o treino de hoje é tal e pedir para duplicar ou preparar (ex: "hoje meu treino é o A, duplica ele para mim", "prepara o treino A para hoje"), use a ferramenta 'fitwell_action' com action='duplicate_workout' e routine_name='Treino A'.
 3. Criar Treino: Quando o usuário pedir para prescrever ou criar um treino novo do zero (ex: "cria um treino focado em peito e ombro com 5 exercícios"), use a ferramenta 'fitwell_action' com action='create_workout', name='Treino A' e focus='Peito e Ombro'.
 4. Registrar Refeição & Água por Voz: Quando o usuário relatar o que comeu ou bebeu (ex: "almocei 150g de frango e 100g de arroz integral e tomei 400ml de água", "comi 2 ovos com pão de manhã", "tomei 500ml de água"), use a ferramenta 'fitwell_action' com action='log_meal'. Envie raw_text com a fala do usuário ou envie os items estruturados (name, grams) e water_ml. O FitWell Hub consulta automaticamente a biblioteca real (favoritos, OpenFoodFacts e tabela TACO) para calcular os macros e salvar no diário.
-5. Consultar Alimento na Biblioteca: Quando o usuário perguntar os macros de algum alimento (ex: "quantas calorias tem 150g de patinho moído?"), use a ferramenta 'fitwell_action' com action='search_food', query='patinho moído' e grams=150.`;
+5. Consultar Alimento na Biblioteca: Quando o usuário perguntar os macros de algum alimento (ex: "quantas calorias tem 150g de patinho moído?"), use a ferramenta 'fitwell_action' com action='search_food', query='patinho moído' e grams=150.
+6. Registrar Medidas Corporais: Quando o usuário relatar medidas antropométricas (ex: "anota minhas medidas: cintura 82cm, braço 39cm e peito 104cm"), use a ferramenta 'fitwell_action' com action='log_measurement' e measurements=[{ label: "Cintura", value_cm: 82 }, { label: "Braço Direito", value_cm: 39 }, { label: "Peito", value_cm: 104 }].
+7. Consultar Medidas / Evolução: Quando o usuário perguntar sobre suas medidas ou histórico físico (ex: "quais foram minhas últimas medidas?", "como está a evolução do meu braço e cintura?"), use a ferramenta 'fitwell_action' com action='get_measurements' e opcionalmente label='Braço'.
+8. Registrar Peso na Balança: Quando o usuário relatar seu peso (ex: "bati 78.5kg na balança hoje", "meu peso deu 79kg"), use a ferramenta 'fitwell_action' com action='log_weight' e weight_kg=78.5.
+9. Consultar Histórico de Peso: Quando o usuário perguntar seu peso atual ou evolução na balança (ex: "quanto estou pesando?", "como está meu peso?"), use a ferramenta 'fitwell_action' com action='get_weight'.
+10. Consultar Resumo do Dia / Status: Para saber o status geral de treinos, refeições, água e medidas de hoje, use a ferramenta 'fitwell_action' com action='get_day' ou action='status'.`;
 
   if (loading) {
     return (
@@ -1991,6 +1996,34 @@ Regras de Ação:
             <div className="text-[11px] text-muted-foreground">
               Ação: <code>action: "search_food"</code><br />
               Exemplo: <em>"Quantas calorias tem 150g de salmão grelhado?"</em>. Consulta favoritos, OpenFoodFacts e Tabela TACO.
+            </div>
+          </div>
+          <div className="p-2.5 rounded-lg bg-background border border-border/60 space-y-1">
+            <div className="font-semibold text-foreground">5. Registrar Medidas Corporais</div>
+            <div className="text-[11px] text-muted-foreground">
+              Ação: <code>action: "log_measurement"</code><br />
+              Exemplo: <em>"Anota aí: cintura 82cm, braço 39cm e peito 104cm"</em>. Salva as medidas em cm e calcula a variação vs histórico.
+            </div>
+          </div>
+          <div className="p-2.5 rounded-lg bg-background border border-border/60 space-y-1">
+            <div className="font-semibold text-foreground">6. Consultar Medidas Corporais</div>
+            <div className="text-[11px] text-muted-foreground">
+              Ação: <code>action: "get_measurements"</code><br />
+              Exemplo: <em>"Hermes, quais foram minhas últimas medidas?"</em>. Retorna a lista atualizada por região do corpo e progresso.
+            </div>
+          </div>
+          <div className="p-2.5 rounded-lg bg-background border border-border/60 space-y-1">
+            <div className="font-semibold text-foreground">7. Registrar Peso na Balança</div>
+            <div className="text-[11px] text-muted-foreground">
+              Ação: <code>action: "log_weight"</code><br />
+              Exemplo: <em>"Pesei 78.5kg hoje"</em>. Registra o peso, compara com a pesagem anterior e sincroniza seu TMB/TDEE.
+            </div>
+          </div>
+          <div className="p-2.5 rounded-lg bg-background border border-border/60 space-y-1">
+            <div className="font-semibold text-foreground">8. Consultar Histórico de Peso</div>
+            <div className="text-[11px] text-muted-foreground">
+              Ação: <code>action: "get_weight"</code><br />
+              Exemplo: <em>"Quanto estou pesando?"</em>. Retorna o peso atual, delta recente e evolução desde a primeira pesagem.
             </div>
           </div>
         </div>

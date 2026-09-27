@@ -2,6 +2,22 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [27/09/2026] - Antigravity (Suporte a Medidas Corporais e Peso para o Hermes Agent + Blindagem de RLS)
+- **4 Novas Ações no Endpoint Unificado do Hermes (`src/server-fns/telegram.functions.ts`)**:
+  - `log_measurement`: registro de medidas antropométricas corporais em cm. Normaliza termos anatômicos (ex: *cintura*, *peito*, *braço*, *coxa*, *panturrilha*) e suporta membros bilaterais automáticos (*Braço Direito* e *Braço Esquerdo*). Suporta payload com `items: [{ label, value_cm }]`, `measurements` ou texto corrido transcrito. Se já existir registro para a mesma data e região, **atualiza** em vez de duplicar. Calcula variação vs medição anterior.
+  - `get_measurements`: consulta o histórico recente de medidas, com suporte a filtros opcionais `since: "YYYY-MM-DD"` e `label: string`, calculando a evolução delta de cada região.
+  - `log_weight`: registro de peso corporal em kg. Se já existir registro no mesmo `log_date`, **atualiza** em vez de duplicar. Atualiza automaticamente `profiles.weight_kg` para sincronização em tempo real de cálculos metabólicos (TMB/TDEE). Retorna evolução vs pesagem anterior.
+  - `get_weight`: consulta histórico de peso do usuário, com ordenação mais recente primeiro, filtros opcionais `since` e `limit`, calculando variações item a item e a perda/ganho total desde o início.
+  - Atualização da ação `status`: agora inclui também o último peso e as últimas medidas no retorno geral.
+- **Instruções e Interface do Hermes Agent (`src/routes/app.ia.tsx`)**:
+  - Prompt de sistema atualizado com as novas regras de medidas corporais e peso.
+  - Cards explicativos adicionados na interface com exemplos práticos de chamadas e formato de payloads.
+- **Blindagem de Segurança de RLS (`supabase/migrations/20260927_secure_health_tables_rls.sql`)**:
+  - Diagnosticada e corrigida a vulnerabilidade de RLS nas policies `telegram_*` de 15/09/2026 (`OR EXISTS (SELECT 1 FROM telegram_integrations...)`), que expunham dados de saúde pela chave pública do Supabase.
+  - Criada migration que restringe leitura e escrita exclusivamente para `auth.uid() = user_id` (e `auth.uid() = id` em profiles), enquanto o Hermes Agent opera de forma segura do lado do servidor via `SUPABASE_SERVICE_ROLE_KEY`.
+- **Validação**:
+  - `npm run build`: Bundles de cliente e SSR compilados com 100% de sucesso.
+
 ## [25/09/2026] - Antigravity (Suporte Nativo a Cardio & Aeróbicos com Cálculo ACSM e Flexibilidade de Duração)
 - **Módulo Metabólico de Cardio (`src/lib/cardio-utils.ts` e `src/lib/cardio-utils.test.ts`)**:
   - Implementação da equação clínica metabólica do ACSM (*American College of Sports Medicine*) para esteira e caminhada com inclinação (`calculateCardioCalories`).

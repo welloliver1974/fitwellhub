@@ -381,6 +381,75 @@ function inferMealTypeFromTimeOrText(text?: string): "Café da manhã" | "Lanche
   return "Ceia";
 }
 
+function normalizeMeasurementLabel(rawLabel: string): string[] {
+  const clean = rawLabel.trim().toLowerCase();
+
+  const directMap: Record<string, string> = {
+    cintura: "Cintura",
+    quadril: "Quadril",
+    peito: "Peito",
+    peitoral: "Peito",
+    ombro: "Ombros",
+    ombros: "Ombros",
+    costas: "Costas",
+    dorsal: "Costas",
+    dorsais: "Costas",
+    pochete: "Pochete",
+    abdômen: "Cintura",
+    abdomen: "Cintura",
+    barriga: "Cintura",
+    "braço direito": "Braço Direito",
+    "braco direito": "Braço Direito",
+    "braço esquerdo": "Braço Esquerdo",
+    "braco esquerdo": "Braço Esquerdo",
+    "antebraço direito": "Antebraço Direito",
+    "antebraco direito": "Antebraço Direito",
+    "antebraço esquerdo": "Antebraço Esquerdo",
+    "antebraco esquerdo": "Antebraço Esquerdo",
+    "coxa direita": "Coxa Direita",
+    "coxa esquerda": "Coxa Esquerda",
+    "panturrilha direita": "Panturrilha Direita",
+    "panturrilha esquerda": "Panturrilha Esquerda",
+    pescoço: "Pescoço",
+    pescoco: "Pescoço",
+  };
+
+  if (directMap[clean]) return [directMap[clean]];
+
+  if (clean === "braço" || clean === "braco" || clean === "biceps" || clean === "bíceps") {
+    return ["Braço Direito", "Braço Esquerdo"];
+  }
+  if (clean === "coxa" || clean === "perna") {
+    return ["Coxa Direita", "Coxa Esquerda"];
+  }
+  if (clean === "panturrilha") {
+    return ["Panturrilha Direita", "Panturrilha Esquerda"];
+  }
+  if (clean === "antebraço" || clean === "antebraco") {
+    return ["Antebraço Direito", "Antebraço Esquerdo"];
+  }
+
+  return [clean.charAt(0).toUpperCase() + clean.slice(1)];
+}
+
+function parseMeasurementsFromText(text: string): Array<{ label: string; value_cm: number }> {
+  const results: Array<{ label: string; value_cm: number }> = [];
+  const regex = /(cintura|quadril|peitoral|peito|ombros?|costas|dorsal|pochete|abd[ôo]men|barriga|braço\s*(?:direito|esquerdo|d|e)?|braco\s*(?:direito|esquerdo|d|e)?|antebraco\s*(?:direito|esquerdo|d|e)?|antebraço\s*(?:direito|esquerdo|d|e)?|coxa\s*(?:direita|esquerda|d|e)?|panturrilha\s*(?:direita|esquerda|d|e)?|pesco[çc]o)\s*(?:[:=]|de|medindo)?\s*([0-9]+(?:[.,][0-9]+)?)\s*(?:cm)?/gi;
+
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    const rawLabel = match[1];
+    const val = parseFloat(match[2].replace(",", "."));
+    if (val > 0) {
+      const normalizedLabels = normalizeMeasurementLabel(rawLabel);
+      for (const norm of normalizedLabels) {
+        results.push({ label: norm, value_cm: val });
+      }
+    }
+  }
+  return results;
+}
+
 const hermesActionSchema = z.object({
   secretKey: z.string().optional(),
   telegramChatId: z.union([z.string(), z.number()]),
@@ -401,6 +470,10 @@ const hermesActionSchema = z.object({
     "adjust_water",
     "get_day",
     "list_meals",
+    "log_measurement",
+    "get_measurements",
+    "log_weight",
+    "get_weight",
   ]),
   payload: z.record(z.any()).default({}),
 });
@@ -534,6 +607,40 @@ export const executeHermesAction = createServerFn({ method: "POST" })
         .eq("log_date", today);
       const totalWaterMl = (waterEntries || []).reduce((acc, w) => acc + (w.ml || 0), 0);
 
+      // Último peso registrado
+      const { data: latestWeightRows } = await supabase
+        .from("body_weights")
+        .select("weight_kg, log_date")
+        .eq("user_id", userId)
+        .order("log_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      const latestWeight = latestWeightRows?.[0]
+        ? {
+            weight_kg: Number(latestWeightRows[0].weight_kg),
+            log_date: latestWeightRows[0].log_date,
+          }
+        : null;
+
+      // Últimas medidas corporais registradas
+      const { data: recentMeasurements } = await supabase
+        .from("body_measurements")
+        .select("label, value_cm, log_date")
+        .eq("user_id", userId)
+        .order("log_date", { ascending: false })
+        .limit(30);
+
+      const latestMeasurementsMap: Record<string, { value_cm: number; log_date: string }> = {};
+      (recentMeasurements || []).forEach((m) => {
+        if (!latestMeasurementsMap[m.label]) {
+          latestMeasurementsMap[m.label] = {
+            value_cm: Number(m.value_cm),
+            log_date: m.log_date,
+          };
+        }
+      });
+
       return {
         success: true,
         userName: profile?.display_name || "Atleta",
@@ -546,6 +653,8 @@ export const executeHermesAction = createServerFn({ method: "POST" })
           water_ml: totalWaterMl,
           mealsCount: (todayMeals || []).length,
         },
+        latestWeight,
+        latestMeasurements: latestMeasurementsMap,
       };
     }
 
@@ -1733,6 +1842,392 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
         workouts: workouts || [],
         summaryText,
         message: summaryText,
+      };
+    }
+
+    // 14. AÇÃO: REGISTRAR MEDIDAS CORPORAIS ("Hermes, anota minhas medidas: cintura 82cm, braço 39cm")
+    if (data.action === "log_measurement") {
+      const targetDate = data.payload.log_date || data.payload.date ? String(data.payload.log_date || data.payload.date) : getLocalDate();
+      const rawText = data.payload.raw_text ? String(data.payload.raw_text).trim() : "";
+
+      const rawItems = Array.isArray(data.payload.items)
+        ? data.payload.items
+        : Array.isArray(data.payload.measurements)
+        ? data.payload.measurements
+        : [];
+
+      const itemsToProcess: Array<{ label: string; value_cm: number }> = [];
+
+      // A) Se enviou lista estruturada de medidas em "items" ou "measurements"
+      if (rawItems.length > 0) {
+        for (const item of rawItems) {
+          const val = Number(String(item.value_cm || item.value || "").replace(",", "."));
+          if (item.label && val > 0) {
+            const normalized = normalizeMeasurementLabel(String(item.label));
+            for (const n of normalized) {
+              itemsToProcess.push({ label: n, value_cm: Math.round(val * 10) / 10 });
+            }
+          }
+        }
+      }
+
+      // B) Se enviou apenas uma medida simples { label: "cintura", value_cm: 82 }
+      if (itemsToProcess.length === 0 && (data.payload.label || data.payload.name)) {
+        const val = Number(String(data.payload.value_cm || data.payload.value || data.payload.cm || "").replace(",", "."));
+        const rawLabel = String(data.payload.label || data.payload.name);
+        if (rawLabel && val > 0) {
+          const normalized = normalizeMeasurementLabel(rawLabel);
+          for (const n of normalized) {
+            itemsToProcess.push({ label: n, value_cm: Math.round(val * 10) / 10 });
+          }
+        }
+      }
+
+      // C) Fallback: Se não veio estruturado, parsear do raw_text
+      if (itemsToProcess.length === 0 && rawText) {
+        const parsed = parseMeasurementsFromText(rawText);
+        itemsToProcess.push(...parsed);
+      }
+
+      if (itemsToProcess.length === 0) {
+        return {
+          success: false,
+          error: "Nenhuma medida corporal identificada. Envie no formato: items: [{ label: 'Cintura', value_cm: 82 }].",
+        };
+      }
+
+      // Evita duplicatas na mesma requisição
+      const uniqueItemsMap = new Map<string, number>();
+      for (const it of itemsToProcess) {
+        uniqueItemsMap.set(it.label, it.value_cm);
+      }
+
+      const insertedSummary: Array<{ label: string; value_cm: number; diffStr: string; updated: boolean }> = [];
+
+      for (const [label, value_cm] of uniqueItemsMap.entries()) {
+        // Busca medida anterior desse label em datas anteriores para calcular evolução real
+        const { data: prevList } = await supabase
+          .from("body_measurements")
+          .select("value_cm, log_date")
+          .eq("user_id", userId)
+          .eq("label", label)
+          .neq("log_date", targetDate)
+          .order("log_date", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        const prev = prevList?.[0];
+        let diffStr = "";
+        if (prev) {
+          const diff = Math.round((value_cm - Number(prev.value_cm)) * 10) / 10;
+          if (Math.abs(diff) >= 0.1) {
+            const signal = diff > 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1);
+            diffStr = ` (${signal} cm vs ${prev.value_cm} cm em ${prev.log_date})`;
+          } else {
+            diffStr = ` (estável)`;
+          }
+        }
+
+        // Verifica se já existe registro desse mesmo label na mesma data para ATUALIZAR em vez de duplicar
+        const { data: existingEntry } = await supabase
+          .from("body_measurements")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("log_date", targetDate)
+          .eq("label", label)
+          .limit(1);
+
+        let isUpdate = false;
+        if (existingEntry && existingEntry.length > 0) {
+          isUpdate = true;
+          await supabase
+            .from("body_measurements")
+            .update({ value_cm })
+            .eq("id", existingEntry[0].id);
+        } else {
+          await supabase.from("body_measurements").insert({
+            user_id: userId,
+            log_date: targetDate,
+            label,
+            value_cm,
+          });
+        }
+
+        insertedSummary.push({ label, value_cm, diffStr, updated: isUpdate });
+      }
+
+      let msg = `📏 **Medidas Corporais Registradas com Sucesso!**\n📅 Data: **${targetDate}**\n\n`;
+      insertedSummary.forEach((it) => {
+        const tag = it.updated ? " *(atualizado)*" : "";
+        msg += `• **${it.label}**: ${it.value_cm.toFixed(1)} cm${it.diffStr}${tag}\n`;
+      });
+      msg += `\nSuas medidas foram salvas no FitWell Hub e já estão visíveis na tela de Medidas Corporais! 📊`;
+
+      return {
+        success: true,
+        date: targetDate,
+        count: insertedSummary.length,
+        measurements: insertedSummary,
+        message: msg,
+      };
+    }
+
+    // 15. AÇÃO: CONSULTAR MEDIDAS CORPORAIS ("Hermes, quais foram minhas últimas medidas?")
+    if (data.action === "get_measurements") {
+      const labelFilter = data.payload.label ? String(data.payload.label).trim() : null;
+      const sinceDate = data.payload.since ? String(data.payload.since).trim() : null;
+
+      let query = supabase
+        .from("body_measurements")
+        .select("id, log_date, label, value_cm, created_at")
+        .eq("user_id", userId)
+        .order("log_date", { ascending: false })
+        .order("created_at", { ascending: false });
+
+      if (sinceDate) {
+        query = query.gte("log_date", sinceDate);
+      }
+
+      const { data: rows } = await query.limit(200);
+
+      if (!rows || rows.length === 0) {
+        return {
+          success: true,
+          measurements: [],
+          byDate: {},
+          message: "📏 Nenhuma medida corporal encontrada no FitWell Hub para o período solicitado.",
+        };
+      }
+
+      // Agrupa por label para calcular evolução
+      const groups = new Map<string, Array<{ log_date: string; value_cm: number }>>();
+      // Agrupa por data para retorno estruturado por data e label
+      const byDate: Record<string, Record<string, number>> = {};
+
+      for (const r of rows) {
+        if (!groups.has(r.label)) {
+          groups.set(r.label, []);
+        }
+        groups.get(r.label)!.push({ log_date: r.log_date, value_cm: Number(r.value_cm) });
+
+        if (!byDate[r.log_date]) {
+          byDate[r.log_date] = {};
+        }
+        byDate[r.log_date][r.label] = Number(r.value_cm);
+      }
+
+      const results: Array<{
+        label: string;
+        current_cm: number;
+        current_date: string;
+        prev_cm: number | null;
+        prev_date: string | null;
+        diff_cm: number | null;
+      }> = [];
+
+      for (const [label, history] of groups.entries()) {
+        if (labelFilter && !label.toLowerCase().includes(labelFilter.toLowerCase())) {
+          continue;
+        }
+        const current = history[0];
+        const prev = history[1] || null;
+        const diff_cm = prev ? Math.round((current.value_cm - prev.value_cm) * 10) / 10 : null;
+
+        results.push({
+          label,
+          current_cm: current.value_cm,
+          current_date: current.log_date,
+          prev_cm: prev?.value_cm || null,
+          prev_date: prev?.log_date || null,
+          diff_cm,
+        });
+      }
+
+      if (results.length === 0) {
+        return {
+          success: true,
+          measurements: [],
+          byDate: {},
+          message: `📏 Nenhuma medida encontrada para o filtro "${labelFilter}".`,
+        };
+      }
+
+      let msg = `📏 **Suas Medidas Corporais:${sinceDate ? ` (desde ${sinceDate})` : ""}**\n\n`;
+      results.forEach((it) => {
+        let diffText = "";
+        if (it.diff_cm !== null) {
+          const sig = it.diff_cm > 0 ? `+${it.diff_cm.toFixed(1)}` : it.diff_cm.toFixed(1);
+          diffText = ` (${sig} cm)`;
+        }
+        msg += `• **${it.label}**: ${it.current_cm.toFixed(1)} cm (em ${it.current_date})${diffText}\n`;
+      });
+      msg += `\nUse o app FitWell Hub para ver os gráficos de evolução! 📈`;
+
+      return {
+        success: true,
+        measurements: results,
+        byDate,
+        message: msg,
+      };
+    }
+
+    // 16. AÇÃO: REGISTRAR PESO ("Hermes, bati 78.5kg na balança")
+    if (data.action === "log_weight") {
+      const targetDate = data.payload.log_date || data.payload.date ? String(data.payload.log_date || data.payload.date) : getLocalDate();
+      let weightVal = Number(String(data.payload.weight_kg || data.payload.weight || data.payload.valor || data.payload.kg || "").replace(",", "."));
+
+      if ((!weightVal || isNaN(weightVal)) && data.payload.raw_text) {
+        const match = /(?:peso|pesei|pesando|balan[çc]a|bati|deu)?\s*([0-9]+(?:[.,][0-9]+)?)\s*(?:kg|quilos)?/i.exec(String(data.payload.raw_text));
+        if (match && match[1]) {
+          weightVal = parseFloat(match[1].replace(",", "."));
+        }
+      }
+
+      if (!weightVal || isNaN(weightVal) || weightVal <= 20 || weightVal >= 350) {
+        return {
+          success: false,
+          error: "Peso inválido. Informe o peso em kg (ex: weight_kg: 78.5).",
+        };
+      }
+
+      weightVal = Math.round(weightVal * 10) / 10;
+
+      // Busca pesagem anterior em data diferente para calcular variação real
+      const { data: prevWeights } = await supabase
+        .from("body_weights")
+        .select("weight_kg, log_date")
+        .eq("user_id", userId)
+        .neq("log_date", targetDate)
+        .order("log_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      const prev = prevWeights?.[0];
+      let diffStr = "";
+      if (prev) {
+        const diff = Math.round((weightVal - Number(prev.weight_kg)) * 10) / 10;
+        if (Math.abs(diff) >= 0.1) {
+          const sig = diff > 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1);
+          diffStr = `\n• Variação: **${sig} kg** em relação à pesagem anterior (${Number(prev.weight_kg).toFixed(1)} kg em ${prev.log_date})`;
+        } else {
+          diffStr = `\n• Variação: **estável** em relação à pesagem anterior (${prev.weight_kg} kg)`;
+        }
+      }
+
+      // Se já existir registro do mesmo log_date, ATUALIZA em vez de duplicar
+      const { data: existingWeight } = await supabase
+        .from("body_weights")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("log_date", targetDate)
+        .limit(1);
+
+      let isUpdate = false;
+      if (existingWeight && existingWeight.length > 0) {
+        isUpdate = true;
+        await supabase
+          .from("body_weights")
+          .update({ weight_kg: weightVal })
+          .eq("id", existingWeight[0].id);
+      } else {
+        await supabase.from("body_weights").insert({
+          user_id: userId,
+          log_date: targetDate,
+          weight_kg: weightVal,
+        });
+      }
+
+      // Atualiza o perfil para recalcular TMB/TDEE
+      await supabase
+        .from("profiles")
+        .update({
+          weight_kg: weightVal,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", userId);
+
+      const tag = isUpdate ? " *(atualizado para hoje)*" : "";
+      const msg = `⚖️ **Peso Registrado com Sucesso!**${tag}\n\n• Peso atual: **${weightVal.toFixed(1)} kg** (em ${targetDate})${diffStr}\n\nSeu perfil e metas metabólicas no FitWell Hub foram sincronizados! 🚀`;
+
+      return {
+        success: true,
+        weight_kg: weightVal,
+        date: targetDate,
+        updated: isUpdate,
+        previous_weight_kg: prev ? Number(prev.weight_kg) : null,
+        message: msg,
+      };
+    }
+
+    // 17. AÇÃO: CONSULTAR HISTÓRICO DE PESO ("Hermes, quanto estou pesando?")
+    if (data.action === "get_weight") {
+      const limit = Math.min(100, Math.max(1, Number(data.payload.limit) || 15));
+      const sinceDate = data.payload.since ? String(data.payload.since).trim() : null;
+
+      let query = supabase
+        .from("body_weights")
+        .select("id, log_date, weight_kg, created_at")
+        .eq("user_id", userId)
+        .order("log_date", { ascending: false })
+        .order("created_at", { ascending: false });
+
+      if (sinceDate) {
+        query = query.gte("log_date", sinceDate);
+      }
+
+      const { data: weights } = await query.limit(limit);
+
+      if (!weights || weights.length === 0) {
+        return {
+          success: true,
+          weights: [],
+          message: "⚖️ Nenhuma pesagem encontrada no FitWell Hub para o período solicitado.",
+        };
+      }
+
+      const latest = weights[0];
+      const prev = weights[1] || null;
+
+      // Busca primeira pesagem registrada para total acumulado
+      const { data: firstWeightRows } = await supabase
+        .from("body_weights")
+        .select("weight_kg, log_date")
+        .eq("user_id", userId)
+        .order("log_date", { ascending: true })
+        .order("created_at", { ascending: true })
+        .limit(1);
+
+      const first = firstWeightRows?.[0] || null;
+
+      // Monta lista com variações individuais
+      const historyWithDiff = weights.map((w, idx) => {
+        const nextInList = weights[idx + 1];
+        const diff = nextInList ? Math.round((Number(w.weight_kg) - Number(nextInList.weight_kg)) * 10) / 10 : null;
+        return {
+          log_date: w.log_date,
+          weight_kg: Number(w.weight_kg),
+          diff_vs_previous: diff,
+        };
+      });
+
+      let msg = `⚖️ **Seu Histórico de Peso:${sinceDate ? ` (desde ${sinceDate})` : ""}**\n\n• Peso atual: **${Number(latest.weight_kg).toFixed(1)} kg** (em ${latest.log_date})\n`;
+      if (prev) {
+        const diff = Math.round((Number(latest.weight_kg) - Number(prev.weight_kg)) * 10) / 10;
+        const sig = diff > 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1);
+        msg += `• Pesagem anterior: **${Number(prev.weight_kg).toFixed(1)} kg** (${prev.log_date}) -> **${sig} kg**\n`;
+      }
+      if (first && first.log_date !== latest.log_date) {
+        const totalDiff = Math.round((Number(latest.weight_kg) - Number(first.weight_kg)) * 10) / 10;
+        const totalSig = totalDiff > 0 ? `+${totalDiff.toFixed(1)}` : totalDiff.toFixed(1);
+        msg += `• Evolução total desde o início (${first.log_date}): **${totalSig} kg**\n`;
+      }
+
+      return {
+        success: true,
+        current_weight_kg: Number(latest.weight_kg),
+        current_date: latest.log_date,
+        history: historyWithDiff,
+        message: msg,
       };
     }
 
