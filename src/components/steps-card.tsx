@@ -19,6 +19,7 @@ import {
   fetchGoogleFitDailyData,
   getGoogleFitAuthUrl,
 } from "@/server-fns/google-fit.functions";
+import { Switch } from "@/components/ui/switch";
 import {
   Footprints,
   Flame,
@@ -28,6 +29,7 @@ import {
   ExternalLink,
   Info,
   CheckCircle2,
+  Settings2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -53,42 +55,87 @@ export function StepsCard({
   const [manualOpen, setManualOpen] = useState(false);
   const [manualInput, setManualInput] = useState("");
   const [guideOpen, setGuideOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [autoSync, setAutoSync] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("fitwell_steps_auto_sync") !== "false";
+  });
 
   // Credenciais do Google configuradas
   const hasClientConfigured = true;
 
-  const loadLocalData = async (isSync = false) => {
-    if (isSync) setSyncing(true);
+  const handleToggleAutoSync = (enabled: boolean) => {
+    setAutoSync(enabled);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("fitwell_steps_auto_sync", enabled ? "true" : "false");
+    }
+    if (enabled) {
+      toast.success("Sincronização com Google Fit ativada!");
+      loadLocalData(true, true);
+    } else {
+      toast.info("Modo Manual ativado. A sincronização com Google Fit foi pausada.");
+    }
+  };
+
+  const handleDisconnectGoogleFit = async () => {
+    if (!currentUserId) return;
+    try {
+      await supabase
+        .from("user_integrations")
+        .delete()
+        .eq("user_id", currentUserId)
+        .eq("provider", "google_fit");
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("fitwell_google_fit_tokens");
+      }
+      setConnected(false);
+      setSettingsOpen(false);
+      toast.success("Integração com Google Fit desconectada.");
+    } catch (e: any) {
+      toast.error("Erro ao desconectar Google Fit: " + (e?.message || ""));
+    }
+  };
+
+  const loadLocalData = async (isManualSync = false, forceFitSync = false) => {
+    if (isManualSync) setSyncing(true);
 
     try {
       const today = getLocalDate();
+      let currentDbSteps = 0;
+      let currentDbCal = 0;
+      let currentDbDist = 0;
 
       // 1. Ler passos diretamente de daily_steps_logs do Supabase
       if (currentUserId) {
         try {
           const { data: stepLog, error: stepErr } = await supabase
             .from("daily_steps_logs")
-            .select("steps, active_calories")
+            .select("steps, active_calories, distance_meters, source")
             .eq("user_id", currentUserId)
             .eq("log_date", today)
             .maybeSingle();
 
           if (!stepErr && stepLog && stepLog.steps != null) {
-            const st = stepLog.steps;
-            const cal = stepLog.active_calories ?? estimateActiveCaloriesFromSteps(st);
-            setSteps(st);
-            setActiveCalories(cal);
-            setDistanceMeters(Math.round(st * 0.75));
-            if (onActiveCaloriesChange) onActiveCaloriesChange(cal);
+            currentDbSteps = Number(stepLog.steps);
+            currentDbCal = stepLog.active_calories ?? estimateActiveCaloriesFromSteps(currentDbSteps);
+            currentDbDist = stepLog.distance_meters ?? Math.round(currentDbSteps * 0.75);
+
+            setSteps(currentDbSteps);
+            setActiveCalories(currentDbCal);
+            setDistanceMeters(currentDbDist);
+            if (onActiveCaloriesChange) onActiveCaloriesChange(currentDbCal);
           } else {
             // Fallback de cache local
             try {
               const cached = localStorage.getItem(`fitwell-steps-${currentUserId}-${today}`);
               if (cached) {
                 const parsed = JSON.parse(cached);
-                setSteps(parsed.steps || 0);
-                setActiveCalories(parsed.activeCalories || 0);
-                setDistanceMeters(Math.round((parsed.steps || 0) * 0.75));
+                currentDbSteps = Number(parsed.steps) || 0;
+                currentDbCal = Number(parsed.activeCalories) || 0;
+                currentDbDist = Math.round(currentDbSteps * 0.75);
+                setSteps(currentDbSteps);
+                setActiveCalories(currentDbCal);
+                setDistanceMeters(currentDbDist);
               }
             } catch {}
           }
@@ -131,8 +178,11 @@ export function StepsCard({
           } catch {}
         }
 
-        // 3. Se estiver conectado ou for sincronização manual, busca direto do Google Fit
-        if (session?.access_token && (isConnected || isSync)) {
+        // 3. Decidir se consulta o Google Fit
+        // Só consulta o Google Fit se estiver conectado E (forceFitSync || autoSync)
+        const shouldQueryFit = isConnected && (forceFitSync || autoSync);
+
+        if (session?.access_token && shouldQueryFit) {
           try {
             const activeClientId =
               (typeof window !== "undefined" && localStorage.getItem("fitwell_google_client_id")) ||
@@ -161,28 +211,41 @@ export function StepsCard({
             }
 
             if (metrics && typeof metrics.steps === "number" && !metrics.error) {
-              if (metrics.steps > 0 || steps === 0) {
+              if (metrics.steps > 0) {
+                // Passos válidos encontrados no Google Fit
                 setSteps(metrics.steps);
                 setActiveCalories(metrics.activeCalories);
                 setDistanceMeters(metrics.distanceMeters);
                 if (onActiveCaloriesChange) onActiveCaloriesChange(metrics.activeCalories);
-              }
-              if (isSync) {
-                if (metrics.steps > 0) {
+
+                if (isManualSync) {
                   toast.success(`${metrics.steps.toLocaleString("pt-BR")} passos sincronizados do Google Fit!`);
+                }
+              } else {
+                // Google Fit retornou 0
+                if (currentDbSteps > 0) {
+                  // NUNCA ZERA! Preserva o valor manual ou do Hermes!
+                  if (isManualSync) {
+                    toast.info(`Google Fit retornou 0 passos na nuvem. Seus ${currentDbSteps.toLocaleString("pt-BR")} passos foram mantidos.`);
+                  }
                 } else {
-                  toast.info("Google Fit consultado: 0 passos registrados na nuvem hoje até agora.");
+                  setSteps(0);
+                  setActiveCalories(0);
+                  setDistanceMeters(0);
+                  if (isManualSync) {
+                    toast.info("Google Fit consultado: 0 passos registrados na nuvem hoje até agora.");
+                  }
                 }
               }
-            } else if (metrics?.error && isSync) {
+            } else if (metrics?.error && isManualSync) {
               toast.error(metrics.error);
             }
           } catch (syncErr: any) {
             console.warn("Sincronização remota com Google Fit falhou:", syncErr);
-            if (isSync) toast.info("Dados locais mantidos");
+            if (isManualSync) toast.info("Dados locais mantidos");
           }
-        } else if (isSync) {
-          toast.info("Passos de hoje atualizados!");
+        } else if (isManualSync) {
+          toast.info(autoSync ? "Passos de hoje atualizados!" : "Modo Manual: passos atualizados do banco!");
         }
       }
     } catch (err: any) {
@@ -193,8 +256,9 @@ export function StepsCard({
   };
 
   useEffect(() => {
-    loadLocalData(true);
-  }, [currentUserId, session?.access_token]);
+    // Carrega dados (não força Google Fit caso autoSync esteja desligado)
+    loadLocalData(false, false);
+  }, [currentUserId, session?.access_token, autoSync]);
 
   const handleManualSave = async () => {
     const val = parseInt(manualInput.replace(/\D/g, ""), 10);
@@ -217,6 +281,7 @@ export function StepsCard({
             log_date: today,
             steps: val,
             active_calories: active,
+            distance_meters: dist,
             source: "manual",
             updated_at: new Date().toISOString(),
           },
@@ -275,16 +340,20 @@ export function StepsCard({
             <Footprints className="h-5 w-5" />
           </div>
           <div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <h3 className="text-sm font-semibold text-foreground">Passos & Gasto Ativo</h3>
-              {connected ? (
+              {connected && autoSync ? (
                 <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full">
                   <Watch className="h-3 w-3" />
-                  Samsung Watch
+                  Samsung Watch (Auto)
+                </span>
+              ) : connected && !autoSync ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">
+                  Modo Manual (Sync Pausada)
                 </span>
               ) : (
                 <span className="inline-flex items-center text-[10px] font-medium text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
-                  {steps > 0 ? "Registrado" : "Sem registro"}
+                  {steps > 0 ? "Manual / Telegram" : "Sem registro"}
                 </span>
               )}
             </div>
@@ -297,9 +366,9 @@ export function StepsCard({
             variant="ghost"
             size="icon"
             className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            onClick={() => loadLocalData(true)}
+            onClick={() => loadLocalData(true, autoSync)}
             disabled={syncing}
-            title="Atualizar passos"
+            title={autoSync ? "Atualizar e sincronizar passos" : "Atualizar passos do banco"}
           >
             <RotateCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
           </Button>
@@ -336,6 +405,86 @@ export function StepsCard({
               <DialogFooter>
                 <Button onClick={handleManualSave} className="w-full">
                   Salvar passos
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                title="Configurações de sincronização e passos"
+              >
+                <Settings2 className="h-4 w-4" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Settings2 className="h-5 w-5 text-primary" />
+                  Sincronização & Modo de Passos
+                </DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-4 py-2 text-xs">
+                {/* Switch de Sincronização Automática */}
+                <div className="flex items-center justify-between p-3 rounded-xl bg-secondary/50 border border-border/50">
+                  <div className="space-y-0.5 pr-2">
+                    <p className="font-semibold text-foreground text-xs">Sincronização com Google Fit</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {autoSync
+                        ? "Ativada: busca passos do Google Fit / Samsung Watch."
+                        : "Pausada: Modo Manual ativo (zero risco de sobrescrever)."}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={autoSync}
+                    onCheckedChange={handleToggleAutoSync}
+                  />
+                </div>
+
+                {!autoSync && (
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs">
+                    <p className="font-semibold mb-0.5">Modo Manual Ativado</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      O FitWell Hub preservará estritamente os passos que você lançar no app ou mandar para o <strong>Hermes no Telegram</strong>. Nenhuma rotina externa alterará seus valores.
+                    </p>
+                  </div>
+                )}
+
+                <div className="space-y-2 pt-2 border-t border-border/60">
+                  <p className="font-semibold text-foreground">Como você pode registrar:</p>
+                  <ul className="space-y-1.5 text-[11px] text-muted-foreground list-disc pl-4">
+                    <li><strong>Telegram (Hermes):</strong> Fale <em>"Hermes, dei 8500 passos hoje"</em> no chat do Telegram.</li>
+                    <li><strong>Manual:</strong> Toque no ícone do lápis ✏️ no card para digitar em 5 segundos.</li>
+                    <li><strong>Automático:</strong> Ative o switch acima para sincronizar via Google Fit.</li>
+                  </ul>
+                </div>
+
+                {connected && (
+                  <div className="pt-2 border-t border-border/60 flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold text-foreground text-xs">Vínculo Google Fit</p>
+                      <p className="text-[10px] text-muted-foreground">Conta Google conectada ao FitWell Hub</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs text-destructive hover:bg-destructive/10 border-destructive/30"
+                      onClick={handleDisconnectGoogleFit}
+                    >
+                      Desconectar Google Fit
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setSettingsOpen(false)} className="w-full">
+                  Fechar
                 </Button>
               </DialogFooter>
             </DialogContent>

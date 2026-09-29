@@ -2,6 +2,23 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [29/09/2026] - Antigravity (Suporte a Passos e Perfil/Metabolismo para o Hermes Agent + Modo Manual e Proteção de Passos no Card)
+- **Novas Ações no Endpoint Unificado do Hermes (`src/server-fns/telegram.functions.ts`)**:
+  - `log_steps`: registro de passos diários via Telegram. Calcula calorias ativas com base no peso atual do usuário (`estimateActiveCaloriesFromSteps`), distância em km e salva com `source: "telegram_hermes"`.
+  - `get_steps`: consulta o total de passos, calorias ativas e distância da data especificada.
+  - `get_profile`: consulta oficial de perfil e cálculos metabólicos (sexo, idade, altura, peso recente, TMB Mifflin-St Jeor, média de treinos das últimas 4 semanas, fator de atividade e TDEE oficial). Elimina bloqueios de RLS (`200 []`) de consultas diretas a `profiles`.
+  - Enriquecimento das ações `status` e `get_day` com os passos do dia.
+- **Card de Passos (`src/components/steps-card.tsx`)**:
+  - Correção de bug no `loadLocalData`: eliminação do zeramento de passos manuais caso a nuvem do Google Fit retorne `0`.
+  - Adicionado botão de configurações (`Settings2`) e interruptor (`Switch`) para ativar/pausar a sincronização automática com o Google Fit.
+  - Modo Manual sinalizado com badge no cabeçalho: `Modo Manual (Sync Pausada)`.
+- **Instruções e Interface do Hermes Agent (`src/routes/app.ia.tsx`)**:
+  - Prompt de sistema atualizado com as novas ferramentas (`log_steps`, `get_steps` e `get_profile`).
+  - Cards explicativos adicionados na interface com exemplos práticos.
+- **Validação**:
+  - `npm run test`: **26 arquivos e 206 testes aprovados (100% de sucesso)**.
+  - `npm run build`: Bundles de cliente e SSR compilados com 100% de sucesso.
+
 ## [27/09/2026] - Antigravity (Suporte a Medidas Corporais e Peso para o Hermes Agent + Blindagem de RLS)
 - **4 Novas Ações no Endpoint Unificado do Hermes (`src/server-fns/telegram.functions.ts`)**:
   - `log_measurement`: registro de medidas antropométricas corporais em cm. Normaliza termos anatômicos (ex: *cintura*, *peito*, *braço*, *coxa*, *panturrilha*) e suporta membros bilaterais automáticos (*Braço Direito* e *Braço Esquerdo*). Suporta payload com `items: [{ label, value_cm }]`, `measurements` ou texto corrido transcrito. Se já existir registro para a mesma data e região, **atualiza** em vez de duplicar. Calcula variação vs medição anterior.

@@ -73,10 +73,20 @@ export function playBeep(_duration = 2000) {
       osc.frequency.value = freq;
       osc.type = "square";
       gain.gain.setValueAtTime(1.0, start);
-      gain.gain.exponentialRampToValueAtTime(0.001, start + beepLen);
       osc.start(start);
       osc.stop(start + beepLen);
     });
   } catch {
   }
+}
+
+export function calculateAge(birthDateStr: string): number {
+  const birthDate = new Date(birthDateStr);
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
 }

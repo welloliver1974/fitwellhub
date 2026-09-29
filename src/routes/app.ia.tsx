@@ -1824,7 +1824,10 @@ Regras de Ação:
 7. Consultar Medidas / Evolução: Quando o usuário perguntar sobre suas medidas ou histórico físico (ex: "quais foram minhas últimas medidas?", "como está a evolução do meu braço e cintura?"), use a ferramenta 'fitwell_action' com action='get_measurements' e opcionalmente label='Braço'.
 8. Registrar Peso na Balança: Quando o usuário relatar seu peso (ex: "bati 78.5kg na balança hoje", "meu peso deu 79kg"), use a ferramenta 'fitwell_action' com action='log_weight' e weight_kg=78.5.
 9. Consultar Histórico de Peso: Quando o usuário perguntar seu peso atual ou evolução na balança (ex: "quanto estou pesando?", "como está meu peso?"), use a ferramenta 'fitwell_action' com action='get_weight'.
-10. Consultar Resumo do Dia / Status: Para saber o status geral de treinos, refeições, água e medidas de hoje, use a ferramenta 'fitwell_action' com action='get_day' ou action='status'.`;
+10. Registrar Passos Diários: Quando o usuário relatar passos dados no dia (ex: "Hermes, dei 8500 passos hoje", "anota 10200 passos", "fiz 7000 passos"), use a ferramenta 'fitwell_action' com action='log_steps' e steps=8500. Isso atualiza o card de passos e o gasto calórico ativo no app.
+11. Consultar Passos: Quando o usuário perguntar quantos passos deu hoje (ex: "Hermes, quantos passos dei hoje?"), use a ferramenta 'fitwell_action' com action='get_steps'.
+12. Consultar Perfil e Metabolismo (TMB / TDEE): Quando o usuário perguntar sobre seu gasto calórico, TMB, TDEE, altura, peso ou idade, use a ferramenta 'fitwell_action' com action='get_profile'. IMPORTANTE: NUNCA tente consultar a tabela 'profiles' via REST anônimo (ela é protegida por RLS); use sempre action='get_profile', que retorna os dados oficiais calculados pelo Mifflin-St Jeor e o fator de atividade dos últimos 28 dias.
+13. Consultar Resumo do Dia / Status: Para saber o status geral de treinos, refeições, água, passos e metas de hoje, use a ferramenta 'fitwell_action' com action='get_day' ou action='status'.`;
 
   if (loading) {
     return (
@@ -2024,6 +2027,20 @@ Regras de Ação:
             <div className="text-[11px] text-muted-foreground">
               Ação: <code>action: "get_weight"</code><br />
               Exemplo: <em>"Quanto estou pesando?"</em>. Retorna o peso atual, delta recente e evolução desde a primeira pesagem.
+            </div>
+          </div>
+          <div className="p-2.5 rounded-lg bg-background border border-border/60 space-y-1">
+            <div className="font-semibold text-foreground">9. Registrar Passos Diários</div>
+            <div className="text-[11px] text-muted-foreground">
+              Ação: <code>action: "log_steps"</code><br />
+              Exemplo: <em>"Hermes, dei 8500 passos hoje"</em>. Salva no card de passos com cálculo de calorias ativas e km.
+            </div>
+          </div>
+          <div className="p-2.5 rounded-lg bg-background border border-border/60 space-y-1">
+            <div className="font-semibold text-foreground">10. Consultar Perfil & Metabolismo (TMB/TDEE)</div>
+            <div className="text-[11px] text-muted-foreground">
+              Ação: <code>action: "get_profile"</code><br />
+              Exemplo: <em>"Hermes, qual meu gasto calórico diário e TMB?"</em>. Retorna dados de perfil, Mifflin-St Jeor, treinos das últimas 4 semanas e TDEE oficial.
             </div>
           </div>
         </div>

@@ -1,6 +1,27 @@
 # FIXLOG — FitWell Hub
 
-## Sessão: 27/09/2026 — Integração de Medidas e Peso no Hermes Agent + Blindagem de RLS no Supabase
+## Sessão: 29/09/2026 — Integração de Passos e Perfil/Metabolismo no Hermes Agent + Modo Manual e Proteção de Passos no Card
+
+### 🎯 Funcionalidades e Ajustes
+1. **Endpoint Unificado do Hermes (`src/server-fns/telegram.functions.ts`)**:
+   - **Registro e Consulta de Passos (`log_steps` e `get_steps`)**:
+     - `log_steps`: Permite ao usuário registrar passos via comando de voz ou texto no Telegram (*"Hermes, dei 8500 passos hoje"*). Salva na tabela `daily_steps_logs` com cálculo de calorias ativas proporcional ao peso corporal (`estimateActiveCaloriesFromSteps`), distância em km e `source: "telegram_hermes"`.
+     - `get_steps`: Consulta os passos, calorias ativas e distância da data informada ou do dia atual.
+     - Ações `status` e `get_day`: Enriquecidas para também retornar os passos diários e gasto ativo.
+   - **Acesso Seguro ao Perfil e Metabolismo (`get_profile`)**:
+     - Criada ação oficial para fornecer com total segurança os dados de perfil (sexo, altura, idade, data de nascimento e peso recente) e cálculos metabólicos oficiais: TMB exata (Mifflin-St Jeor), sessões de treino dos últimos 28 dias, fator de atividade (1.200 a 1.725) e TDEE oficial calculado pelo FitWell Hub.
+     - Resolve definitivamente a limitação do Hermes tentar ler `profiles` diretamente via REST anônimo (bloqueado por RLS com `200 []`).
+2. **Card de Passos (`src/components/steps-card.tsx`)**:
+   - **Proteção contra zeramento de passos**: Corrigido bug onde o retorno `0` do Google Fit sobrescrevia passos lançados manualmente. O app agora preserva estritamente os passos existentes no banco.
+   - **Controle de Modo Manual vs Sincronização Automática**: Adicionado botão de configurações (`⚙️`) com interruptor (*Switch*) para ativar/pausar a sincronização com Google Fit.
+   - Quando pausado, o card assume o status visual `Modo Manual (Sync Pausada)`, sem realizar requisições externas desnecessárias no carregamento da tela.
+   - Opção rápida para desconectar a conta do Google Fit diretamente pelo diálogo de configurações.
+3. **Instruções e Interface do Hermes Agent (`src/routes/app.ia.tsx`)**:
+   - Atualizado o prompt do sistema para o Hermes com exemplos de uso para registro de passos (`log_steps`) e consulta de perfil/metabolismo (`get_profile`).
+   - Adicionados cards visuais explicativos das novas ferramentas.
+4. **Utilitários (`src/lib/utils.ts`)**:
+   - Exportada a função `calculateAge` para reutilização consistente em todo o ecossistema do app.
+
 
 ### 🎯 Funcionalidades e Ajustes
 1. **Endpoint Unificado do Hermes (`src/server-fns/telegram.functions.ts`)**:

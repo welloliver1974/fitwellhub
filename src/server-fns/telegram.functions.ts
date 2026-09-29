@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { getLocalDate, todayBoundsSaoPaulo } from "@/lib/utils";
+import { getLocalDate, getLocalDateMinusDays, todayBoundsSaoPaulo, calculateAge } from "@/lib/utils";
+import { estimateActiveCaloriesFromSteps } from "@/lib/google-fit-utils";
 import {
   callAiChatCompletion,
   fetchAiSettings,
@@ -495,6 +496,9 @@ const hermesActionSchema = z.object({
     "get_measurements",
     "log_weight",
     "get_weight",
+    "log_steps",
+    "get_steps",
+    "get_profile",
   ]),
   payload: z.record(z.any()).default({}),
 });
@@ -1837,6 +1841,26 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
       summaryText += `• Carboidratos: ${totalCarbs}g / ${goals.carbs_g}g (Restam: ${remaining.carbs_g}g)\n`;
       summaryText += `• Gorduras: ${totalFat}g / ${goals.fat_g}g (Restam: ${remaining.fat_g}g)\n\n`;
 
+      // 5.5 Passos do dia
+      const { data: stepLog } = await supabase
+        .from("daily_steps_logs")
+        .select("steps, active_calories, distance_meters")
+        .eq("user_id", userId)
+        .eq("log_date", targetDate)
+        .maybeSingle();
+
+      const daySteps = stepLog?.steps ? Number(stepLog.steps) : 0;
+      const dayActiveCal = stepLog?.active_calories
+        ? Number(stepLog.active_calories)
+        : (daySteps > 0 ? estimateActiveCaloriesFromSteps(daySteps) : 0);
+      const dayDistKm = stepLog?.distance_meters
+        ? (stepLog.distance_meters / 1000).toFixed(1).replace(".", ",")
+        : (daySteps > 0 ? ((daySteps * 0.75) / 1000).toFixed(1).replace(".", ",") : "0,0");
+
+      if (daySteps > 0) {
+        summaryText += `👟 **Passos:** ${daySteps.toLocaleString("pt-BR")} passos (~${dayActiveCal} kcal ativas | ~${dayDistKm} km)\n\n`;
+      }
+
       if (workouts && workouts.length > 0) {
         summaryText += `🏋️‍♂️ **Treinos Concluídos Hoje:**\n`;
         workouts.forEach((w) => {
@@ -1851,6 +1875,9 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
         date: targetDate,
         meals: structuredMeals,
         water_ml: totalWaterMl,
+        steps: daySteps,
+        active_calories: dayActiveCal,
+        distance_meters: stepLog?.distance_meters ?? Math.round(daySteps * 0.75),
         totals: {
           calories: totalCalories,
           protein_g: totalProtein,
@@ -2248,6 +2275,230 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
         current_weight_kg: Number(latest.weight_kg),
         current_date: latest.log_date,
         history: historyWithDiff,
+        message: msg,
+      };
+    }
+
+    // 18. AÇÃO: REGISTRAR PASSOS ("Hermes, dei 8500 passos hoje")
+    if (data.action === "log_steps") {
+      const rawSteps = data.payload.steps ?? data.payload.count;
+      const stepsNum = Math.round(Number(rawSteps));
+      if (isNaN(stepsNum) || stepsNum < 0) {
+        return {
+          success: false,
+          error: "Quantidade de passos inválida. Informe um valor numérico positivo (ex: 8500).",
+        };
+      }
+
+      const targetDate = data.payload.date ? String(data.payload.date) : getLocalDate();
+
+      // Peso recente para calcular gasto calórico ativo
+      const { data: wRows } = await supabase
+        .from("body_weights")
+        .select("weight_kg")
+        .eq("user_id", userId)
+        .order("log_date", { ascending: false })
+        .limit(1);
+      const weightKg = wRows?.[0]?.weight_kg ? Number(wRows[0].weight_kg) : 75;
+
+      const activeCalories =
+        data.payload.active_calories != null
+          ? Math.round(Number(data.payload.active_calories))
+          : estimateActiveCaloriesFromSteps(stepsNum, weightKg);
+
+      const distanceMeters =
+        data.payload.distance_meters != null
+          ? Math.round(Number(data.payload.distance_meters))
+          : Math.round(stepsNum * 0.75);
+
+      const { error: upsertErr } = await supabase.from("daily_steps_logs").upsert(
+        {
+          user_id: userId,
+          log_date: targetDate,
+          steps: stepsNum,
+          active_calories: activeCalories,
+          distance_meters: distanceMeters,
+          source: "telegram_hermes",
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,log_date" }
+      );
+
+      if (upsertErr) {
+        console.error("[Hermes] Erro ao salvar daily_steps_logs:", upsertErr);
+        return { success: false, error: "Falha ao gravar os passos no banco de dados." };
+      }
+
+      const distKm = (distanceMeters / 1000).toFixed(1).replace(".", ",");
+      const msg =
+        `👟 **Passos Registrados com Sucesso!**\n\n` +
+        `• Passos: **${stepsNum.toLocaleString("pt-BR")}** (${targetDate === getLocalDate() ? "Hoje" : targetDate})\n` +
+        `• Calorias ativas estimadas: **~${activeCalories} kcal**\n` +
+        `• Distância aproximada: **~${distKm} km**\n\n` +
+        `O card de passos do FitWell Hub foi atualizado! 🎯`;
+
+      return {
+        success: true,
+        steps: stepsNum,
+        active_calories: activeCalories,
+        distance_meters: distanceMeters,
+        date: targetDate,
+        message: msg,
+      };
+    }
+
+    // 19. AÇÃO: CONSULTAR PASSOS ("Hermes, quantos passos dei hoje?")
+    if (data.action === "get_steps") {
+      const targetDate = data.payload.date ? String(data.payload.date) : getLocalDate();
+
+      const { data: stepLog } = await supabase
+        .from("daily_steps_logs")
+        .select("steps, active_calories, distance_meters, source, updated_at")
+        .eq("user_id", userId)
+        .eq("log_date", targetDate)
+        .maybeSingle();
+
+      if (!stepLog || stepLog.steps == null) {
+        return {
+          success: true,
+          date: targetDate,
+          steps: 0,
+          active_calories: 0,
+          distance_meters: 0,
+          message: `👟 Nenhum passo registrado no FitWell Hub para ${targetDate === getLocalDate() ? "hoje" : targetDate}.`,
+        };
+      }
+
+      const stepsNum = Number(stepLog.steps);
+      const activeCal = Number(stepLog.active_calories || 0);
+      const distKm = ((stepLog.distance_meters || Math.round(stepsNum * 0.75)) / 1000)
+        .toFixed(1)
+        .replace(".", ",");
+
+      const msg =
+        `👟 **Passos de ${targetDate === getLocalDate() ? "Hoje" : targetDate}:**\n\n` +
+        `• Total: **${stepsNum.toLocaleString("pt-BR")} passos**\n` +
+        `• Gasto ativo: **~${activeCal} kcal**\n` +
+        `• Distância: **~${distKm} km**\n` +
+        `• Origem: ${stepLog.source === "telegram_hermes" ? "Hermes (Telegram)" : stepLog.source === "google_fit" ? "Samsung Watch / Google Fit" : "Manual"}`;
+
+      return {
+        success: true,
+        date: targetDate,
+        steps: stepsNum,
+        active_calories: activeCal,
+        distance_meters: stepLog.distance_meters,
+        source: stepLog.source,
+        message: msg,
+      };
+    }
+
+    // 20. AÇÃO: CONSULTAR PERFIL, METABOLISMO (TMB / TDEE) E METAS ("get_profile")
+    if (data.action === "get_profile") {
+      // 1. Perfil
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("display_name, sex, height_cm, birth_date")
+        .eq("id", userId)
+        .single();
+
+      // 2. Último peso
+      const { data: weightRows } = await supabase
+        .from("body_weights")
+        .select("weight_kg, log_date")
+        .eq("user_id", userId)
+        .order("log_date", { ascending: false })
+        .limit(1);
+
+      const latestWeight = weightRows?.[0] ? Number(weightRows[0].weight_kg) : null;
+      const height = profile?.height_cm ? Number(profile.height_cm) : null;
+      const sex = profile?.sex as "male" | "female" | null;
+      const birthDate = profile?.birth_date || null;
+      const age = birthDate ? calculateAge(birthDate) : null;
+
+      // 3. Cálculo TMB (Mifflin-St Jeor)
+      let bmr: number | null = null;
+      if (latestWeight && height && age && sex) {
+        if (sex === "male") {
+          bmr = Math.round(10 * latestWeight + 6.25 * height - 5 * age + 5);
+        } else {
+          bmr = Math.round(10 * latestWeight + 6.25 * height - 5 * age - 161);
+        }
+      }
+
+      // 4. Sessões de treino nos últimos 28 dias
+      const twentyEightDaysAgo = getLocalDateMinusDays(28);
+      const { data: recentWorkouts } = await supabase
+        .from("workout_sessions")
+        .select("id")
+        .eq("user_id", userId)
+        .gte("completed_at", twentyEightDaysAgo + "T00:00:00");
+
+      const totalWorkouts = recentWorkouts?.length || 0;
+      const sessionsPerWeek = Math.round((totalWorkouts / 4) * 10) / 10;
+
+      let activityFactor = 1.2;
+      let activityLabel = "Sedentário (< 1 treino/sem)";
+      if (sessionsPerWeek >= 1 && sessionsPerWeek < 3) {
+        activityFactor = 1.375;
+        activityLabel = "Levemente Ativo (1 a 2,9 treinos/sem)";
+      } else if (sessionsPerWeek >= 3 && sessionsPerWeek < 5) {
+        activityFactor = 1.55;
+        activityLabel = "Moderadamente Ativo (3 a 4,9 treinos/sem)";
+      } else if (sessionsPerWeek >= 5) {
+        activityFactor = 1.725;
+        activityLabel = "Muito Ativo (≥ 5 treinos/sem)";
+      }
+
+      const tdee = bmr ? Math.round(bmr * activityFactor) : null;
+
+      // 5. Metas
+      const { data: userGoals } = await supabase
+        .from("goals")
+        .select("calories, protein_g, carbs_g, fat_g, water_ml, goal_auto")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      let msg = `👤 **Perfil & Metabolismo no FitWell Hub:**\n\n`;
+      msg += `• Nome: ${profile?.display_name || "Usuário"}\n`;
+      msg += `• Sexo: ${sex === "male" ? "Masculino" : sex === "female" ? "Feminino" : "Não informado"}\n`;
+      msg += `• Idade: ${age ? `${age} anos` : "Não informada"} ${birthDate ? `(${birthDate})` : ""}\n`;
+      msg += `• Altura: ${height ? `${height} cm` : "Não informada"}\n`;
+      msg += `• Peso atual: ${latestWeight ? `${latestWeight} kg` : "Não informado"}\n\n`;
+
+      if (bmr && tdee) {
+        msg += `🔥 **Taxa Metabólica Basal (TMB - Mifflin-St Jeor):** ~${bmr} kcal/dia\n`;
+        msg += `⚡ **Fator de Atividade:** ${activityFactor.toFixed(3)} (${activityLabel})\n`;
+        msg += `🏋️‍♂️ **Frequência de treinos:** ${totalWorkouts} treinos nos últimos 28 dias (~${sessionsPerWeek} treinos/semana)\n`;
+        msg += `🎯 **Gasto Energético Diário (TDEE):** ~${tdee} kcal/dia\n\n`;
+      }
+
+      if (userGoals) {
+        msg += `🥗 **Metas Diárias Atuais:**\n`;
+        msg += `• Calorias: ${userGoals.calories} kcal ${userGoals.goal_auto ? "(Auto-ajustável pelo TDEE)" : "(Personalizada)"}\n`;
+        msg += `• Proteínas: ${userGoals.protein_g}g | Carbos: ${userGoals.carbs_g}g | Gorduras: ${userGoals.fat_g}g\n`;
+        msg += `• Água: ${userGoals.water_ml} ml\n`;
+      }
+
+      return {
+        success: true,
+        profile: {
+          display_name: profile?.display_name,
+          sex,
+          height_cm: height,
+          birth_date: birthDate,
+          age,
+          weight_kg: latestWeight,
+        },
+        metabolism: {
+          bmr,
+          activity_factor: activityFactor,
+          activity_label: activityLabel,
+          sessions_per_week: sessionsPerWeek,
+          total_workouts_last_28_days: totalWorkouts,
+          tdee,
+        },
+        goals: userGoals || null,
         message: msg,
       };
     }
