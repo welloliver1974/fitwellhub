@@ -1,5 +1,22 @@
 # FIXLOG — FitWell Hub
 
+## Sessão: 29/09/2026 — Correção de Schema da Tabela daily_steps_logs (Remoção de distance_meters) & Validação de Leitura e Escrita do Hermes
+
+### 🎯 Diagnóstico & Correção
+1. **Incompatibilidade da Coluna `distance_meters` em `daily_steps_logs`**:
+   - **Causa Raiz**: A tabela `daily_steps_logs` possui as colunas `id, user_id, log_date, steps, active_calories, source, created_at, updated_at`, sem a coluna física `distance_meters`.
+   - **Impacto no Card e no Hermes**:
+     - No card de passos (`src/components/steps-card.tsx`), ao salvar manualmente (`handleManualSave`), a inclusão de `distance_meters` no upsert causava erro PostgREST PGRST204, fazendo com que o valor ficasse armazenado apenas no `localStorage` do navegador e não subisse para o Supabase.
+     - No endpoint do Hermes (`src/server-fns/telegram.functions.ts`), a ação `get_steps` e `get_day` tentavam selecionar `distance_meters`, disparando erro 42703 (*column daily_steps_logs.distance_meters does not exist*) e retornando `steps: 0`. A ação `log_steps` também falharia ao tentar gravar a coluna inexistente.
+   - **Correção Geral**:
+     - `src/components/steps-card.tsx`: Removida `distance_meters` do `.select()` e do `.upsert()`. A distância é calculada de forma reativa e consistente (`Math.round(steps * 0.75)`).
+     - `src/server-fns/telegram.functions.ts`: Removida `distance_meters` do upsert de `log_steps` e das consultas de `get_steps` e `get_day`. A distância em metros e km continua sendo retornada no JSON e na mensagem formatada via cálculo em tempo real.
+   - **Validação ao Vivo**:
+     - Testada escrita ao vivo via `log_steps` e leitura via `get_steps` no Cloudflare Worker (`371f4c7b-f806-45da-8ccf-d26434605246`):
+       - Escrita de 9.200 passos: retorno com 420 kcal ativas, 6.900m de distância e persistência imediata com `source: "telegram_hermes"`.
+       - Leitura via `get_steps`: retorno exato de 9.200 passos e 420 kcal.
+     - O endpoint `executeHermesAction` manteve o mesmo hash: `436b5896b6d83dce9c95927677a7d80ecbbefec10ebacde79f3272da1e4b47bc`.
+
 ## Sessão: 29/09/2026 — Correção de Schema da Tabela Profiles (full_name vs display_name) & Ativação 100% Validada do get_profile no Hermes Agent
 
 ### 🎯 Diagnóstico & Correção

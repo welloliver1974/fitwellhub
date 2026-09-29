@@ -110,7 +110,7 @@ export function StepsCard({
         try {
           const { data: stepLog, error: stepErr } = await supabase
             .from("daily_steps_logs")
-            .select("steps, active_calories, distance_meters, source")
+            .select("steps, active_calories, source")
             .eq("user_id", currentUserId)
             .eq("log_date", today)
             .maybeSingle();
@@ -118,7 +118,7 @@ export function StepsCard({
           if (!stepErr && stepLog && stepLog.steps != null) {
             currentDbSteps = Number(stepLog.steps);
             currentDbCal = stepLog.active_calories ?? estimateActiveCaloriesFromSteps(currentDbSteps);
-            currentDbDist = stepLog.distance_meters ?? Math.round(currentDbSteps * 0.75);
+            currentDbDist = Math.round(currentDbSteps * 0.75);
 
             setSteps(currentDbSteps);
             setActiveCalories(currentDbCal);
@@ -281,7 +281,6 @@ export function StepsCard({
             log_date: today,
             steps: val,
             active_calories: active,
-            distance_meters: dist,
             source: "manual",
             updated_at: new Date().toISOString(),
           },

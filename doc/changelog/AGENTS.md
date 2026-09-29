@@ -2,6 +2,16 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [29/09/2026] - Antigravity (Correção de Schema da Tabela daily_steps_logs & Validação de Leitura/Escrita de Passos no Hermes)
+- **Correção da Coluna Inexistente `distance_meters` em `daily_steps_logs`**:
+  - A tabela física possui as colunas `id, user_id, log_date, steps, active_calories, source, created_at, updated_at`.
+  - A inclusão de `distance_meters` em `.select()` e `.upsert()` causava erro de coluna no PostgREST, impedindo a gravação no Supabase pelo card de passos (ficava só no `localStorage`) e fazendo `get_steps` devolver 0 passos.
+  - Removido `distance_meters` dos comandos SQL/Supabase tanto no card (`steps-card.tsx`) quanto no backend (`telegram.functions.ts`).
+  - O cálculo da distância em metros e km continua sendo entregue no JSON de retorno e na mensagem formatada.
+- **Validação ao Vivo**:
+  - Testadas `log_steps` (gravação de 9.200 passos com `source: "telegram_hermes"`) e `get_steps` (leitura imediata de 9.200 passos e 420 kcal ativas) via Cloudflare Worker.
+  - Deploy realizado no Cloudflare Workers (`371f4c7b-f806-45da-8ccf-d26434605246`), mantendo o mesmo hash do endpoint.
+
 ## [29/09/2026] - Antigravity (Correção de Schema da Tabela Profiles & Validação ao Vivo do get_profile no Hermes Agent)
 - **Correção de Coluna na Tabela `profiles`**:
   - A query de perfil em `executeHermesAction` tentava selecionar `display_name`, causando erro 42703 do PostgREST (*column profiles.display_name does not exist*) e anulando a resposta inteira de perfil/TMB/TDEE.

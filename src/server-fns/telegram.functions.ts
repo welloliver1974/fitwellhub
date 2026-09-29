@@ -1844,7 +1844,7 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
       // 5.5 Passos do dia
       const { data: stepLog } = await supabase
         .from("daily_steps_logs")
-        .select("steps, active_calories, distance_meters")
+        .select("steps, active_calories")
         .eq("user_id", userId)
         .eq("log_date", targetDate)
         .maybeSingle();
@@ -1853,9 +1853,10 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
       const dayActiveCal = stepLog?.active_calories
         ? Number(stepLog.active_calories)
         : (daySteps > 0 ? estimateActiveCaloriesFromSteps(daySteps) : 0);
-      const dayDistKm = stepLog?.distance_meters
-        ? (stepLog.distance_meters / 1000).toFixed(1).replace(".", ",")
-        : (daySteps > 0 ? ((daySteps * 0.75) / 1000).toFixed(1).replace(".", ",") : "0,0");
+      const dayDistMeters = Math.round(daySteps * 0.75);
+      const dayDistKm = daySteps > 0
+        ? ((dayDistMeters) / 1000).toFixed(1).replace(".", ",")
+        : "0,0";
 
       if (daySteps > 0) {
         summaryText += `👟 **Passos:** ${daySteps.toLocaleString("pt-BR")} passos (~${dayActiveCal} kcal ativas | ~${dayDistKm} km)\n\n`;
@@ -1877,7 +1878,7 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
         water_ml: totalWaterMl,
         steps: daySteps,
         active_calories: dayActiveCal,
-        distance_meters: stepLog?.distance_meters ?? Math.round(daySteps * 0.75),
+        distance_meters: dayDistMeters,
         totals: {
           calories: totalCalories,
           protein_g: totalProtein,
@@ -2316,7 +2317,6 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
           log_date: targetDate,
           steps: stepsNum,
           active_calories: activeCalories,
-          distance_meters: distanceMeters,
           source: "telegram_hermes",
           updated_at: new Date().toISOString(),
         },
@@ -2352,7 +2352,7 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
 
       const { data: stepLog } = await supabase
         .from("daily_steps_logs")
-        .select("steps, active_calories, distance_meters, source, updated_at")
+        .select("steps, active_calories, source, updated_at")
         .eq("user_id", userId)
         .eq("log_date", targetDate)
         .maybeSingle();
@@ -2370,9 +2370,8 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
 
       const stepsNum = Number(stepLog.steps);
       const activeCal = Number(stepLog.active_calories || 0);
-      const distKm = ((stepLog.distance_meters || Math.round(stepsNum * 0.75)) / 1000)
-        .toFixed(1)
-        .replace(".", ",");
+      const distanceMeters = Math.round(stepsNum * 0.75);
+      const distKm = (distanceMeters / 1000).toFixed(1).replace(".", ",");
 
       const msg =
         `👟 **Passos de ${targetDate === getLocalDate() ? "Hoje" : targetDate}:**\n\n` +
@@ -2386,7 +2385,7 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
         date: targetDate,
         steps: stepsNum,
         active_calories: activeCal,
-        distance_meters: stepLog.distance_meters,
+        distance_meters: distanceMeters,
         source: stepLog.source,
         message: msg,
       };
