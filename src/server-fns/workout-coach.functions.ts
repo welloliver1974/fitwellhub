@@ -84,7 +84,7 @@ export const consultWorkoutCoach = createServerFn({ method: "POST" })
     ] = await Promise.all([
       supabase
         .from("profiles")
-        .select("display_name, sex, height_cm, birth_date")
+        .select("full_name, sex, height_cm, birth_date")
         .eq("id", userId)
         .maybeSingle(),
       supabase
@@ -162,6 +162,7 @@ export const consultWorkoutCoach = createServerFn({ method: "POST" })
     const claims = (context as any).claims;
     const rawName =
       data.userName?.trim() ||
+      profile?.full_name?.trim() ||
       profile?.display_name?.trim() ||
       claims?.user_metadata?.full_name ||
       claims?.user_metadata?.display_name ||

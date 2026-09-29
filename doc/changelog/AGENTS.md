@@ -2,6 +2,16 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [29/09/2026] - Antigravity (Correção de Schema da Tabela Profiles & Validação ao Vivo do get_profile no Hermes Agent)
+- **Correção de Coluna na Tabela `profiles`**:
+  - A query de perfil em `executeHermesAction` tentava selecionar `display_name`, causando erro 42703 do PostgREST (*column profiles.display_name does not exist*) e anulando a resposta inteira de perfil/TMB/TDEE.
+  - Corrigido para `full_name`, normalizado retorno para conter tanto `full_name` quanto `display_name` (alias de compatibilidade).
+  - Corrigidas também as queries em `workout-generator.functions.ts`, `workout-coach.functions.ts`, `briefing.functions.ts`, `app.relatorio.tsx`, `daily-briefing-card.tsx` e `workout-coach-chat.tsx`.
+- **Validação ao Vivo em Produção**:
+  - Testado o endpoint `_serverFn/436b5896b6d83dce9c95927677a7d80ecbbefec10ebacde79f3272da1e4b47bc` com o chat_id do usuário Wellington (`497789001`).
+  - Retorno 100% fiel: Wellington (183cm, 85.5kg, 51 anos), TMB 1.749 kcal, 21 treinos/28d, Fator 1.725 (Muito Ativo), TDEE 3.017 kcal.
+  - Deploy no Cloudflare Workers concluído com sucesso (Version ID `49b9d3c6-65e5-4922-b7aa-f5ef42bcf780`).
+
 ## [29/09/2026] - Antigravity (Suporte a Passos e Perfil/Metabolismo para o Hermes Agent + Modo Manual e Proteção de Passos no Card)
 - **Novas Ações no Endpoint Unificado do Hermes (`src/server-fns/telegram.functions.ts`)**:
   - `log_steps`: registro de passos diários via Telegram. Calcula calorias ativas com base no peso atual do usuário (`estimateActiveCaloriesFromSteps`), distância em km e salva com `source: "telegram_hermes"`.

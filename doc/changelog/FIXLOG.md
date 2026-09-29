@@ -1,5 +1,18 @@
 # FIXLOG — FitWell Hub
 
+## Sessão: 29/09/2026 — Correção de Schema da Tabela Profiles (full_name vs display_name) & Ativação 100% Validada do get_profile no Hermes Agent
+
+### 🎯 Diagnóstico & Correção
+1. **Incompatibilidade de Coluna na Tabela `profiles`**:
+   - **Causa Raiz**: A query em `executeHermesAction` (`action === "get_profile"`) e `status` tentava selecionar `display_name` (`.select("display_name, sex, height_cm, birth_date")`). Como a coluna real no banco de dados é `full_name`, o PostgREST retornava erro 42703 (*column profiles.display_name does not exist*), fazendo `profile` retornar `null` e zerando em cascata `sex`, `height_cm`, `birth_date`, `age`, `bmr` e `tdee`.
+   - **Correção Geral**: Atualizadas todas as consultas à tabela `profiles` em `telegram.functions.ts`, `workout-generator.functions.ts`, `workout-coach.functions.ts`, `briefing.functions.ts`, `app.relatorio.tsx`, `daily-briefing-card.tsx` e `workout-coach-chat.tsx` para utilizarem `full_name`.
+   - **Resposta Enriquecida para o Hermes**: O objeto `profile` retornado por `get_profile` agora inclui tanto `full_name` quanto `display_name` (como alias compatível), além de `birth_date`, `age`, `height_cm`, `weight_kg` e `sex`.
+   - **Validação ao Vivo**: Testada a chamada com os dados reais do usuário Wellington (`497789001` / `b6939da8-93d6-4776-ad72-54827f3a18d7`), retornando com 100% de sucesso e precisão:
+     - Altura: 183 cm | Data de Nascimento: 1974-12-27 | Idade: 51 anos | Sexo: male | Peso: 85.5 kg
+     - TMB: 1.749 kcal (Mifflin-St Jeor) | 21 treinos nos últimos 28 dias (~5.3/sem) | Fator de Atividade: 1.725 (Muito Ativo)
+     - TDEE Oficial: 3.017 kcal/dia (casando perfeitamente com o cálculo interno do app e a dedução do Hermes).
+   - **Deploy e Hash Mantido**: Deployed no Cloudflare Workers (`https://fitwellhub.welloliver.workers.dev`), mantendo o hash do endpoint `436b5896b6d83dce9c95927677a7d80ecbbefec10ebacde79f3272da1e4b47bc`.
+
 ## Sessão: 29/09/2026 — Integração de Passos e Perfil/Metabolismo no Hermes Agent + Modo Manual e Proteção de Passos no Card
 
 ### 🎯 Funcionalidades e Ajustes

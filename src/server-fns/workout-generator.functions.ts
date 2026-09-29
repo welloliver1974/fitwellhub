@@ -92,7 +92,7 @@ export const generateAiWorkoutRoutine = createServerFn({ method: "POST" })
         .limit(60),
       supabase
         .from("profiles")
-        .select("display_name, sex, height_cm, birth_date")
+        .select("full_name, sex, height_cm, birth_date")
         .eq("id", userId)
         .maybeSingle(),
       supabase
@@ -179,6 +179,7 @@ export const generateAiWorkoutRoutine = createServerFn({ method: "POST" })
     // 2. Extrair dados fisiológicos, antropométricos e metabólicos (TMB + TDEE)
     const claims = (context as any).claims;
     const rawName =
+      profile?.full_name?.trim() ||
       profile?.display_name?.trim() ||
       claims?.user_metadata?.full_name ||
       claims?.user_metadata?.display_name ||

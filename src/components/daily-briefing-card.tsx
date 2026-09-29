@@ -58,12 +58,12 @@ export function DailyBriefingCard({
 
     supabase
       .from("profiles")
-      .select("display_name")
+      .select("full_name")
       .eq("id", user.id)
       .maybeSingle()
       .then(({ data }) => {
-        if (data?.display_name?.trim()) {
-          setProfileName(data.display_name.trim());
+        if (data?.full_name?.trim()) {
+          setProfileName(data.full_name.trim());
         }
       });
   }, [user, propUserName]);

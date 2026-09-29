@@ -71,7 +71,7 @@ function RelatorioPage() {
         { data: weights },
         { data: water },
       ] = await Promise.all([
-        supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
+        supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
         supabase
           .from("goals")
           .select("calories,protein_g,carbs_g,fat_g")
@@ -170,7 +170,7 @@ function RelatorioPage() {
       y += 8;
       doc.setFontSize(10);
       doc.setTextColor(120);
-      doc.text(`${profile?.display_name ?? user.email ?? ""} · ${start} a ${today}`, 14, y);
+      doc.text(`${profile?.full_name ?? user.email ?? ""} · ${start} a ${today}`, 14, y);
       doc.setTextColor(0);
       y += 10;
 

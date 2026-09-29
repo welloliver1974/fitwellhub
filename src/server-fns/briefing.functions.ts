@@ -45,11 +45,11 @@ export const getDailyBriefing = createServerFn({ method: "POST" })
       try {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("display_name")
+          .select("full_name")
           .eq("id", userId)
           .maybeSingle();
-        if (profile?.display_name?.trim()) {
-          rawName = profile.display_name.trim();
+        if (profile?.full_name?.trim()) {
+          rawName = profile.full_name.trim();
         }
       } catch {}
     }

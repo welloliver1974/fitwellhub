@@ -591,7 +591,7 @@ export const executeHermesAction = createServerFn({ method: "POST" })
     if (data.action === "status") {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("display_name")
+        .select("full_name")
         .eq("id", userId)
         .maybeSingle();
 
@@ -668,7 +668,7 @@ export const executeHermesAction = createServerFn({ method: "POST" })
 
       return {
         success: true,
-        userName: profile?.display_name || "Atleta",
+        userName: profile?.full_name || "Atleta",
         workouts: (workouts || []).map((w) => w.name),
         todayNutrition: {
           calories: dayKcal,
@@ -2185,11 +2185,10 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
         });
       }
 
-      // Atualiza o perfil para recalcular TMB/TDEE
+      // Atualiza timestamp do perfil
       await supabase
         .from("profiles")
         .update({
-          weight_kg: weightVal,
           updated_at: new Date().toISOString(),
         })
         .eq("id", userId);
@@ -2398,7 +2397,7 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
       // 1. Perfil
       const { data: profile } = await supabase
         .from("profiles")
-        .select("display_name, sex, height_cm, birth_date")
+        .select("full_name, sex, height_cm, birth_date")
         .eq("id", userId)
         .single();
 
@@ -2460,7 +2459,7 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
         .maybeSingle();
 
       let msg = `👤 **Perfil & Metabolismo no FitWell Hub:**\n\n`;
-      msg += `• Nome: ${profile?.display_name || "Usuário"}\n`;
+      msg += `• Nome: ${profile?.full_name || "Usuário"}\n`;
       msg += `• Sexo: ${sex === "male" ? "Masculino" : sex === "female" ? "Feminino" : "Não informado"}\n`;
       msg += `• Idade: ${age ? `${age} anos` : "Não informada"} ${birthDate ? `(${birthDate})` : ""}\n`;
       msg += `• Altura: ${height ? `${height} cm` : "Não informada"}\n`;
@@ -2483,7 +2482,8 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
       return {
         success: true,
         profile: {
-          display_name: profile?.display_name,
+          full_name: profile?.full_name || null,
+          display_name: profile?.full_name || null,
           sex,
           height_cm: height,
           birth_date: birthDate,
