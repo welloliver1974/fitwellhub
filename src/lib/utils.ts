@@ -57,6 +57,58 @@ export function todayBoundsSaoPaulo(): { start: string; end: string } {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
+/**
+ * Infere uma data civil YYYY-MM-DD a partir de texto em português (ex: "ontem", "anteontem", "hoje", "06/10", "dia 15").
+ * Retorna null se nenhuma data relativa for encontrada.
+ */
+export function inferDateFromRelativeText(text?: string, referenceDate?: Date): string | null {
+  if (!text) return null;
+  const t = text.toLowerCase();
+
+  // Anteontem / antes de ontem
+  if (/\banteontem\b|\bantes de ontem\b/i.test(t)) {
+    return getLocalDateMinusDays(2, referenceDate);
+  }
+
+  // Ontem
+  if (/\bontem\b/i.test(t)) {
+    return getLocalDateMinusDays(1, referenceDate);
+  }
+
+  // Hoje
+  if (/\bhoje\b/i.test(t)) {
+    return getLocalDate(referenceDate);
+  }
+
+  // Padrão ISO YYYY-MM-DD
+  const isoMatch = t.match(/\b(20\d{2})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\b/);
+  if (isoMatch) {
+    return isoMatch[0];
+  }
+
+  // Padrão brasileiro DD/MM ou DD/MM/YYYY
+  const brMatch = t.match(/\b(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])(?:\/(20\d{2}))?\b/);
+  if (brMatch) {
+    const day = brMatch[1];
+    const month = brMatch[2];
+    const year = brMatch[3] || getLocalDate(referenceDate).slice(0, 4);
+    return `${year}-${month}-${day}`;
+  }
+
+  // "dia 05" / "dia 5" (assume mês e ano atuais em SP)
+  const dayMatch = t.match(/\bdia\s+(0?[1-9]|[12]\d|3[01])\b/);
+  if (dayMatch) {
+    const day = dayMatch[1].padStart(2, "0");
+    const currentYmd = getLocalDate(referenceDate);
+    const year = currentYmd.slice(0, 4);
+    const month = currentYmd.slice(5, 7);
+    return `${year}-${month}-${day}`;
+  }
+
+  return null;
+}
+
+
 export function playBeep(_duration = 2000) {
   try {
     const ctx = new AudioContext();

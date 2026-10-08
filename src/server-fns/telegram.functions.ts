@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { getLocalDate, getLocalDateMinusDays, todayBoundsSaoPaulo, calculateAge } from "@/lib/utils";
+import { getLocalDate, getLocalDateMinusDays, todayBoundsSaoPaulo, calculateAge, inferDateFromRelativeText } from "@/lib/utils";
 import { estimateActiveCaloriesFromSteps } from "@/lib/google-fit-utils";
 import {
   callAiChatCompletion,
@@ -485,6 +485,7 @@ const hermesActionSchema = z.object({
     "log_voice",
     "status",
     "log_meal",
+    "duplicate_meal",
     "search_food",
     "update_meal_item",
     "delete_meal_item",
@@ -1085,8 +1086,14 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
     // 6. AÇÃO: REGISTRAR REFEIÇÃO / ALIMENTOS / ÁGUA ("Hermes, almocei 150g de frango e 100g de arroz e tomei 400ml de água")
     if (data.action === "log_meal") {
       const rawText = data.payload.raw_text ? String(data.payload.raw_text).trim() : "";
-      let mealType = data.payload.meal_type as "Café da manhã" | "Almoço" | "Jantar" | "Lanche" | undefined;
-      const targetDate = data.payload.meal_date ? String(data.payload.meal_date) : getLocalDate();
+      let mealType = (data.payload.meal_type as string) || undefined;
+      let targetDate = data.payload.meal_date || data.payload.date ? String(data.payload.meal_date || data.payload.date) : "";
+      if (!targetDate && rawText) {
+        targetDate = inferDateFromRelativeText(rawText) || "";
+      }
+      if (!targetDate) {
+        targetDate = getLocalDate();
+      }
       let waterMl = Number(data.payload.water_ml || 0);
       let inputItems: Array<{ name: string; grams?: number; calories?: number; protein_g?: number; carbs_g?: number; fat_g?: number }> =
         Array.isArray(data.payload.items) ? data.payload.items : [];
@@ -1111,7 +1118,7 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
                 {
                   role: "system",
                   content:
-                    "Você é um nutricionista esportivo. Analise o relato falado do usuário e identifique: consumo de água (em ml), tipo da refeição (Café da manhã, Almoço, Jantar, Lanche) e cada alimento com sua porção em gramas estimada. Retorne APENAS via chamada da função record_voice_intake.",
+                    `Você é um nutricionista esportivo. Analise o relato falado do usuário e identifique: consumo de água (em ml), tipo da refeição (Café da manhã, Almoço, Jantar, Lanche), data da refeição (se foi hoje, ontem, anteontem etc. retorne no formato YYYY-MM-DD considerando que a data de hoje é ${getLocalDate()}) e cada alimento com sua porção em gramas estimada. Retorne APENAS via chamada da função record_voice_intake.`,
                 },
                 {
                   role: "user",
@@ -1123,10 +1130,14 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
                   type: "function",
                   function: {
                     name: "record_voice_intake",
-                    description: "Extrai água, refeição e lista de alimentos de um relato",
+                    description: "Extrai água, data da refeição, refeição e lista de alimentos de um relato",
                     parameters: {
                       type: "object",
                       properties: {
+                        meal_date: {
+                          type: "string",
+                          description: `Data da refeição em formato YYYY-MM-DD se o usuário se referir a ontem, anteontem ou data específica (hoje é ${getLocalDate()})`,
+                        },
                         water_ml: { type: "number", description: "Água em ml relatada (0 se não informado)" },
                         meal_type: { type: "string", enum: ["Café da manhã", "Almoço", "Jantar", "Lanche"] },
                         items: {
@@ -1156,6 +1167,9 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
               if (args.water_ml && waterMl === 0) waterMl = Number(args.water_ml);
               if (args.meal_type && !data.payload.meal_type) {
                 mealType = args.meal_type === "Lanche" ? "Lanche da tarde" : args.meal_type;
+              }
+              if (args.meal_date && !data.payload.meal_date && !data.payload.date) {
+                targetDate = String(args.meal_date);
               }
               if (Array.isArray(args.items) && args.items.length > 0) {
                 inputItems = args.items;
@@ -1187,11 +1201,16 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
           .eq("log_date", targetDate);
         const totalWaterToday = (todayWater || []).reduce((acc, w) => acc + (w.ml || 0), 0);
 
+        const isToday = targetDate === getLocalDate();
+        const isYesterday = targetDate === getLocalDateMinusDays(1);
+        const dateDesc = isToday ? "hoje" : isYesterday ? "ontem" : targetDate.split("-").reverse().join("/");
+
         return {
           success: true,
           water_ml: waterMl,
+          target_date: targetDate,
           total_water_today: totalWaterToday,
-          message: `💧 **+${waterMl}ml de água** registrados com sucesso no FitWell Hub!\n\nTotal de hoje: **${totalWaterToday}ml** hidratados. Continue assim! 🥤`,
+          message: `💧 **+${waterMl}ml de água** registrados com sucesso no FitWell Hub (${isToday ? "hoje" : `data: ${dateDesc}`})!\n\nTotal acumulado de ${dateDesc}: **${totalWaterToday}ml** hidratados. Continue assim! 🥤`,
         };
       }
 
@@ -1331,17 +1350,26 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
       const kcalPercent = Math.round((dayKcal / goalKcal) * 100);
 
       // 7. Formatação da mensagem humanizada do Hermes
-      let replyMsg = `🍽️ **${finalMealType} registrado no FitWell Hub!**\n\n`;
+      const isToday = targetDate === getLocalDate();
+      const isYesterday = targetDate === getLocalDateMinusDays(1);
+      const dateSuffix = isToday
+        ? ""
+        : isYesterday
+        ? " (de ontem)"
+        : ` (${targetDate.split("-").reverse().join("/")})`;
+      const dateLabel = isToday ? "Hoje" : isYesterday ? "Ontem" : targetDate.split("-").reverse().join("/");
+
+      let replyMsg = `🍽️ **${finalMealType}${dateSuffix} registrado no FitWell Hub!**\n\n`;
       resolvedItems.forEach((ri) => {
         replyMsg += `• **${ri.name}** (${ri.grams}g): ${ri.calories} kcal | ${ri.protein_g}g P | ${ri.carbs_g}g C | ${ri.fat_g}g G\n`;
       });
 
       if (waterMl > 0) {
-        replyMsg += `💧 **+${waterMl}ml de água** (${totalWaterToday}ml acumulados hoje)\n`;
+        replyMsg += `💧 **+${waterMl}ml de água** (${totalWaterToday}ml acumulados em ${dateLabel.toLowerCase()})\n`;
       }
 
       replyMsg += `\n📊 **Total da Refeição:** ${mealKcal} kcal | ${mealP}g P | ${mealC}g C | ${mealF}g G\n`;
-      replyMsg += `🎯 **Progresso de Hoje:** ${Math.round(dayKcal)}/${goalKcal} kcal (${kcalPercent}%) • ${dayP}/${goalP}g Proteína (${proteinPercent}%)\n`;
+      replyMsg += `🎯 **Progresso de ${dateLabel}:** ${Math.round(dayKcal)}/${goalKcal} kcal (${kcalPercent}%) • ${dayP}/${goalP}g Proteína (${proteinPercent}%)\n`;
       if (proteinPercent >= 100) {
         replyMsg += `🔥 Parabéns! Você bateu a meta de proteínas do dia! 🚀`;
       } else {
@@ -1352,11 +1380,228 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
       return {
         success: true,
         mealType: finalMealType,
+        mealDate: targetDate,
         items: resolvedItems,
         mealTotals: { calories: mealKcal, protein_g: mealP, carbs_g: mealC, fat_g: mealF },
         dayTotals: { calories: Math.round(dayKcal), protein_g: dayP, carbs_g: dayC, fat_g: dayF },
         water_ml: waterMl,
         total_water_today: totalWaterToday,
+        goals: { calories: goalKcal, protein_g: goalP },
+        message: replyMsg,
+      };
+    }
+
+    // 6.1 AÇÃO: DUPLICAR OU REPETIR REFEIÇÃO ("Hermes, repete meu almoço de ontem no almoço de hoje", "duplica o que jantei ontem")
+    if (data.action === "duplicate_meal") {
+      const rawText = data.payload.raw_text ? String(data.payload.raw_text).trim() : "";
+      let sourceDate = data.payload.source_date || data.payload.from_date ? String(data.payload.source_date || data.payload.from_date) : "";
+      if (!sourceDate && rawText) {
+        sourceDate = inferDateFromRelativeText(rawText) || "";
+      }
+      if (!sourceDate) {
+        sourceDate = getLocalDateMinusDays(1); // padrão: ontem
+      }
+
+      let targetDate = data.payload.target_date || data.payload.to_date || data.payload.meal_date || data.payload.date
+        ? String(data.payload.target_date || data.payload.to_date || data.payload.meal_date || data.payload.date)
+        : getLocalDate(); // padrão: hoje
+
+      let mealType = data.payload.meal_type || data.payload.source_meal_type;
+      if (!mealType && rawText) {
+        mealType = inferMealTypeFromTimeOrText(rawText);
+      }
+      if (!mealType) {
+        mealType = inferMealTypeFromTimeOrText();
+      }
+      if (mealType === "Lanche") {
+        mealType = "Lanche da tarde";
+      }
+
+      // 1. Busca as refeições da data de origem
+      const { data: sourceMeals, error: smErr } = await supabase
+        .from("meals")
+        .select("id, meal_type, meal_date")
+        .eq("user_id", userId)
+        .eq("meal_date", sourceDate);
+
+      const isSourceYesterday = sourceDate === getLocalDateMinusDays(1);
+      const isSourceToday = sourceDate === getLocalDate();
+      const sourceDateLabel = isSourceYesterday ? "ontem" : isSourceToday ? "hoje" : sourceDate.split("-").reverse().join("/");
+
+      if (smErr) {
+        return { success: false, error: `Erro ao buscar refeições de ${sourceDateLabel}: ${smErr.message}` };
+      }
+
+      if (!sourceMeals || sourceMeals.length === 0) {
+        return {
+          success: false,
+          error: `Nenhuma refeição foi encontrada registrada no FitWell Hub para ${sourceDateLabel} (${sourceDate}).`,
+        };
+      }
+
+      // 2. Localiza a refeição de origem correspondente
+      let matchedMeal = sourceMeals.find(
+        (m: any) => m.meal_type.toLowerCase() === String(mealType).toLowerCase()
+      );
+
+      if (!matchedMeal) {
+        matchedMeal = sourceMeals.find((m: any) =>
+          m.meal_type.toLowerCase().includes(String(mealType).toLowerCase()) ||
+          String(mealType).toLowerCase().includes(m.meal_type.toLowerCase())
+        );
+      }
+
+      if (!matchedMeal && sourceMeals.length === 1) {
+        matchedMeal = sourceMeals[0];
+      }
+
+      if (!matchedMeal) {
+        const available = sourceMeals.map((m: any) => `"${m.meal_type}"`).join(", ");
+        return {
+          success: false,
+          error: `Não encontrei a refeição "${mealType}" em ${sourceDateLabel}. As refeições registradas foram: ${available}.`,
+        };
+      }
+
+      // 3. Buscar os itens da refeição de origem
+      const { data: sourceItems, error: siErr } = await supabase
+        .from("meal_items")
+        .select("name, grams, calories, protein_g, carbs_g, fat_g")
+        .eq("meal_id", matchedMeal.id);
+
+      if (siErr) {
+        return { success: false, error: `Erro ao buscar alimentos da refeição de origem: ${siErr.message}` };
+      }
+
+      if (!sourceItems || sourceItems.length === 0) {
+        return {
+          success: false,
+          error: `A refeição "${matchedMeal.meal_type}" de ${sourceDateLabel} não possui alimentos cadastrados para duplicar.`,
+        };
+      }
+
+      // 4. Criar ou localizar a refeição de destino
+      const targetMealType = (data.payload.target_meal_type as string) || matchedMeal.meal_type;
+      const { data: existingTargetMeal } = await supabase
+        .from("meals")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("meal_date", targetDate)
+        .eq("meal_type", targetMealType)
+        .maybeSingle();
+
+      let targetMealId = existingTargetMeal?.id;
+      if (!targetMealId) {
+        const { data: newTargetMeal, error: mErr } = await supabase
+          .from("meals")
+          .insert({
+            user_id: userId,
+            meal_date: targetDate,
+            meal_type: targetMealType,
+          })
+          .select("id")
+          .single();
+
+        if (mErr || !newTargetMeal) {
+          return {
+            success: false,
+            error: `Erro ao criar refeição de destino no diário: ${mErr?.message || "falha desconhecida"}`,
+          };
+        }
+        targetMealId = newTargetMeal.id;
+      }
+
+      // 5. Inserir os alimentos na refeição de destino
+      const itemsToInsert = sourceItems.map((it: any) => ({
+        meal_id: targetMealId,
+        user_id: userId,
+        name: it.name,
+        grams: it.grams,
+        calories: it.calories,
+        protein_g: it.protein_g,
+        carbs_g: it.carbs_g,
+        fat_g: it.fat_g,
+      }));
+
+      const { error: insErr } = await supabase.from("meal_items").insert(itemsToInsert);
+      if (insErr) {
+        return { success: false, error: `Erro ao copiar alimentos: ${insErr.message}` };
+      }
+
+      // 6. Calcular totais da refeição duplicada
+      const mealKcal = itemsToInsert.reduce((acc: number, it: any) => acc + (it.calories || 0), 0);
+      const mealP = Math.round(itemsToInsert.reduce((acc: number, it: any) => acc + (it.protein_g || 0), 0) * 10) / 10;
+      const mealC = Math.round(itemsToInsert.reduce((acc: number, it: any) => acc + (it.carbs_g || 0), 0) * 10) / 10;
+      const mealF = Math.round(itemsToInsert.reduce((acc: number, it: any) => acc + (it.fat_g || 0), 0) * 10) / 10;
+
+      // 7. Calcular totais do dia de destino
+      const { data: dayMeals } = await supabase
+        .from("meals")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("meal_date", targetDate);
+
+      const dayMealIds = (dayMeals || []).map((m: any) => m.id);
+      let dayKcal = 0;
+      let dayP = 0;
+      let dayC = 0;
+      let dayF = 0;
+
+      if (dayMealIds.length > 0) {
+        const { data: allItems } = await supabase
+          .from("meal_items")
+          .select("calories, protein_g, carbs_g, fat_g")
+          .in("meal_id", dayMealIds);
+
+        (allItems || []).forEach((it: any) => {
+          dayKcal += Number(it.calories || 0);
+          dayP += Number(it.protein_g || 0);
+          dayC += Number(it.carbs_g || 0);
+          dayF += Number(it.fat_g || 0);
+        });
+      }
+      dayP = Math.round(dayP * 10) / 10;
+      dayC = Math.round(dayC * 10) / 10;
+      dayF = Math.round(dayF * 10) / 10;
+
+      // Meta do usuário
+      const { data: userGoal } = await supabase
+        .from("goals")
+        .select("calories, protein_g, carbs_g, fat_g")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      const goalKcal = userGoal?.calories || 2000;
+      const goalP = userGoal?.protein_g || 140;
+      const proteinPercent = Math.round((dayP / goalP) * 100);
+      const kcalPercent = Math.round((dayKcal / goalKcal) * 100);
+
+      const isTargetToday = targetDate === getLocalDate();
+      const targetDateLabel = isTargetToday ? "hoje" : targetDate.split("-").reverse().join("/");
+
+      let replyMsg = `🔄 **${matchedMeal.meal_type} de ${sourceDateLabel} duplicado para ${targetDateLabel}!**\n\n`;
+      itemsToInsert.forEach((ri: any) => {
+        replyMsg += `• **${ri.name}** (${ri.grams}g): ${ri.calories} kcal | ${ri.protein_g}g P | ${ri.carbs_g}g C | ${ri.fat_g}g G\n`;
+      });
+
+      replyMsg += `\n📊 **Total da Refeição:** ${mealKcal} kcal | ${mealP}g P | ${mealC}g C | ${mealF}g G\n`;
+      replyMsg += `🎯 **Progresso de ${isTargetToday ? "Hoje" : targetDateLabel}:** ${Math.round(dayKcal)}/${goalKcal} kcal (${kcalPercent}%) • ${dayP}/${goalP}g Proteína (${proteinPercent}%)\n`;
+      if (proteinPercent >= 100) {
+        replyMsg += `🔥 Parabéns! Você bateu a meta de proteínas do dia! 🚀`;
+      } else {
+        const remainingP = Math.max(0, Math.round(goalP - dayP));
+        replyMsg += `Faltam ${remainingP}g de proteína para completar sua meta diária.`;
+      }
+
+      return {
+        success: true,
+        sourceMeal: matchedMeal.meal_type,
+        sourceDate,
+        targetMeal: targetMealType,
+        targetDate,
+        items: itemsToInsert,
+        mealTotals: { calories: mealKcal, protein_g: mealP, carbs_g: mealC, fat_g: mealF },
+        dayTotals: { calories: Math.round(dayKcal), protein_g: dayP, carbs_g: dayC, fat_g: dayF },
         goals: { calories: goalKcal, protein_g: goalP },
         message: replyMsg,
       };
@@ -1601,8 +1846,15 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
 
     // 10. AÇÃO: APAGAR UMA REFEIÇÃO INTEIRA ("Hermes, apaga o meu lanche da tarde")
     if (data.action === "delete_meal") {
-      const rawMealType = String(data.payload.meal_type || data.payload.type || "").trim();
-      const targetDate = data.payload.meal_date ? String(data.payload.meal_date) : getLocalDate();
+      const rawText = data.payload.raw_text ? String(data.payload.raw_text).trim() : "";
+      const rawMealType = String(data.payload.meal_type || data.payload.type || "").trim() || (rawText ? inferMealTypeFromTimeOrText(rawText) : "");
+      let targetDate = data.payload.meal_date || data.payload.date ? String(data.payload.meal_date || data.payload.date) : "";
+      if (!targetDate && rawText) {
+        targetDate = inferDateFromRelativeText(rawText) || "";
+      }
+      if (!targetDate) {
+        targetDate = getLocalDate();
+      }
 
       if (!rawMealType) {
         return { success: false, error: "Informe qual refeição deseja excluir (ex: 'Lanche da tarde', 'Almoço')." };
@@ -1620,8 +1872,11 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
         .eq("meal_date", targetDate)
         .in("meal_type", typesToMatch);
 
+      const isToday = targetDate === getLocalDate();
+      const dateDesc = isToday ? "hoje" : targetDate.split("-").reverse().join("/");
+
       if (!mealsToDelete || mealsToDelete.length === 0) {
-        return { success: false, error: `Nenhuma refeição "${rawMealType}" encontrada para hoje (${targetDate}).` };
+        return { success: false, error: `Nenhuma refeição "${rawMealType}" encontrada para ${dateDesc} (${targetDate}).` };
       }
 
       const mealIds = mealsToDelete.map((m) => m.id);
@@ -1631,7 +1886,7 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
       return {
         success: true,
         deletedMeal: mealsToDelete[0].meal_type,
-        message: `🗑️ Refeição **${mealsToDelete[0].meal_type}** e todos os seus alimentos foram excluídos com sucesso do seu diário de hoje!`,
+        message: `🗑️ Refeição **${mealsToDelete[0].meal_type}** e todos os seus alimentos foram excluídos com sucesso do seu diário (${isToday ? "de hoje" : `data: ${dateDesc}`})!`,
       };
     }
 
@@ -1718,7 +1973,14 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
 
     // 13. AÇÃO: CONSULTAR DIÁRIO DO DIA / LISTAR REFEIÇÕES ("get_day", "list_meals")
     if (data.action === "get_day" || data.action === "list_meals") {
-      const targetDate = data.payload.date ? String(data.payload.date) : getLocalDate();
+      const rawText = data.payload.raw_text ? String(data.payload.raw_text).trim() : "";
+      let targetDate = data.payload.date || data.payload.meal_date ? String(data.payload.date || data.payload.meal_date) : "";
+      if (!targetDate && rawText) {
+        targetDate = inferDateFromRelativeText(rawText) || "";
+      }
+      if (!targetDate) {
+        targetDate = getLocalDate();
+      }
 
       // 1. Buscar refeições do dia
       const { data: meals } = await supabase
@@ -1814,10 +2076,13 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
         .order("completed_at", { ascending: false });
 
       // 6. Texto formatado
-      let summaryText = `📅 **Diário de Hoje (${targetDate})**\n\n`;
+      const isToday = targetDate === getLocalDate();
+      const isYesterday = targetDate === getLocalDateMinusDays(1);
+      const dateTitle = isToday ? "Hoje" : isYesterday ? "Ontem" : targetDate.split("-").reverse().join("/");
+      let summaryText = `📅 **Diário de ${dateTitle} (${targetDate})**\n\n`;
 
       if (structuredMeals.length === 0) {
-        summaryText += `🍽️ **Refeições:** Nenhuma refeição cadastrada hoje ainda.\n\n`;
+        summaryText += `🍽️ **Refeições:** Nenhuma refeição cadastrada para ${dateTitle.toLowerCase()}.\n\n`;
       } else {
         summaryText += `🍽️ **Refeições (${structuredMeals.length}):**\n`;
         structuredMeals.forEach((m) => {

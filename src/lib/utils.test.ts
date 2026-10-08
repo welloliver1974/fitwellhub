@@ -4,6 +4,7 @@ import {
   getLocalDateMinusDays,
   formatLocalDate,
   todayBoundsSaoPaulo,
+  inferDateFromRelativeText,
 } from "@/lib/utils";
 
 // Os testes usam instants absolutos via "new Date('...Z')" (meio-dia UTC = longe das
@@ -63,5 +64,37 @@ describe("todayBoundsSaoPaulo", () => {
     const e = new Date(end).getTime();
     expect(e - s).toBe(86400000 - 1); // 23:59:59.999
     expect(new Date(start).getUTCHours()).toBe(3); // 00:00 SP = 03:00Z (UTC-3)
+  });
+});
+
+describe("inferDateFromRelativeText", () => {
+  const fixedRef = new Date("2026-10-07T12:00:00Z"); // 07/10/2026
+
+  it("reconhece 'ontem' e calcula dia anterior em SP", () => {
+    expect(inferDateFromRelativeText("ontem no almoço comi 200g de frango", fixedRef)).toBe("2026-10-06");
+    expect(inferDateFromRelativeText("Esqueci de anotar ontem", fixedRef)).toBe("2026-10-06");
+  });
+
+  it("reconhece 'anteontem' e 'antes de ontem'", () => {
+    expect(inferDateFromRelativeText("anteontem jantei pizza", fixedRef)).toBe("2026-10-05");
+    expect(inferDateFromRelativeText("antes de ontem no jantar", fixedRef)).toBe("2026-10-05");
+  });
+
+  it("reconhece 'hoje'", () => {
+    expect(inferDateFromRelativeText("hoje comi 3 ovos", fixedRef)).toBe("2026-10-07");
+  });
+
+  it("reconhece datas no padrão brasileiro DD/MM ou DD/MM/YYYY", () => {
+    expect(inferDateFromRelativeText("no dia 05/10 comi peixe", fixedRef)).toBe("2026-10-05");
+    expect(inferDateFromRelativeText("em 15/09/2026", fixedRef)).toBe("2026-09-15");
+  });
+
+  it("reconhece datas no formato ISO", () => {
+    expect(inferDateFromRelativeText("refeição de 2026-10-04", fixedRef)).toBe("2026-10-04");
+  });
+
+  it("retorna null quando não há menção a datas", () => {
+    expect(inferDateFromRelativeText("almocei 150g de carne com salada", fixedRef)).toBeNull();
+    expect(inferDateFromRelativeText(undefined, fixedRef)).toBeNull();
   });
 });
