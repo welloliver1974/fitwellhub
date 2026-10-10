@@ -1,5 +1,30 @@
 # FIXLOG — FitWell Hub
 
+## Sessão: 10/10/2026 — Suporte a Detalhes de Treinos, Séries, Cargas e Cardio no Hermes Agent (get_workout_session & get_day) + Validação ao Vivo
+
+### 🎯 Diagnóstico & Implementação
+1. **Limitação Relatada pelo Usuário e pelo Hermes**:
+   - O Hermes informava que conseguia saber que o treino ("B - Treino Costas") havia sido concluído, mas não tinha acesso a exercícios, séries, repetições, cargas, anotações de cardio e volume total da sessão.
+   - O `get_day` trazia apenas resumo raso da sessão em `workout_sessions` sem consultar as séries em `workout_session_sets`.
+2. **Solução Implementada**:
+   - **Enriquecimento do `get_day`**:
+     - Converte a data solicitada para a janela de tempo de São Paulo (UTC-3).
+     - Busca a sessão em `workout_sessions` e todas as séries correspondentes em `workout_session_sets`.
+     - Agrupa séries por exercício, identificando cardio via `isCardioExercise(exercise_name)` para exibir tempo/velocidade, ou séries convencionais com `reps x weight_kg` e cálculo do volume total (kg).
+     - Inclui anotações de cardio e notas gerais da sessão no texto de resumo e no payload `workouts`.
+   - **Nova Ação Dedicada `get_workout_session` (`src/server-fns/telegram.functions.ts`)**:
+     - Adicionado `get_workout_session` ao `hermesActionSchema`.
+     - Permite filtrar por `date`, `routine_name` ou `session_id`. Se omitido, busca a sessão mais recente.
+     - Retorna: `routine_name`, `started_at`, `completed_at`, `duration_minutes`, `notes`, `total_volume_kg`, `total_sets`, `exercises` (com cada série, carga, reps e volume por exercício) e mensagem pronta em Markdown.
+   - **Instruções e Interface do Hermes (`src/routes/app.ia.tsx`)**:
+     - Adicionada instrução 17 no `hermesSystemInstruction` instruindo o Hermes sobre como consultar treinos detalhados.
+     - Adicionado o Card 14 na Central de IA com exemplos de uso.
+3. **Validação ao Vivo em Produção**:
+   - Build e deploy efetuados no Cloudflare Workers (`fitwellhub.welloliver.workers.dev`, Version ID `c9d9320b-d3a1-4edf-abe3-21116ce1e171`).
+   - Teste ao vivo executado via RPC com o usuário Wellington (`497789001`):
+     - `get_workout_session`: retornou a sessão de hoje "B - Treino Costas" com todas as anotações de cardio (esteira 10 min @ 4.5km/h 8%, esteira 15 min @ 4.5km/h 11%), 8 exercícios detalhados (Remada Cavalinho, Puxadas, Crucifixo Invertido, etc.), cargas de até 45kg por série e volume total de 12.975 kg.
+     - `get_day`: retornou o diário consolidado de hoje com alimentação, água, passos e o treino "B - Treino Costas" 100% detalhado.
+
 ## Sessão: 10/10/2026 — Integração de Bioimpedância no Hermes Agent (get_bioimpedance & log_bioimpedance) + Validação ao Vivo
 
 ### 🎯 Diagnóstico & Implementação

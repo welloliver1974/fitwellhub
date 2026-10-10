@@ -2,6 +2,26 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [10/10/2026] - Antigravity (Acesso Completo a Detalhes de Treinos, Séries, Cargas e Cardio para o Hermes: get_workout_session & get_day)
+- **Enriquecimento de `get_day` com Detalhes Completos de Exercícios e Cargas**:
+  - Anteriormente, o `get_day` retornava apenas metadados básicos da sessão (`routine_name`, `completed_at`, `duration_minutes`).
+  - Agora, busca todas as séries de `workout_session_sets` indexadas por `session_id`, anotações de cardio e notas gerais da sessão (`workout_sessions.notes`).
+  - Agrupa séries por exercício, exibindo quantidade de séries, repetições, cargas em kg (ou min / km/h se for cardio detectado via `isCardioExercise`), anotações de cardio e cálculo do volume total levantado (kg).
+  - Inclui esses detalhes tanto no `summaryText` (mensagem formatada do Telegram com emojis) quanto no array `workouts` do payload JSON.
+- **Implementação da Nova Ação Dedicada `get_workout_session` (`src/server-fns/telegram.functions.ts`)**:
+  - Adicionado `get_workout_session` ao `hermesActionSchema`.
+  - Permite ao Hermes buscar sessões detalhadas filtrando opcionalmente por `date` (YYYY-MM-DD), `routine_name` ou `session_id`. Se omitido, busca a sessão mais recente.
+  - Retorna estrutura rica com: `routine_name`, `started_at`, `completed_at`, `duration_minutes`, `notes`, `total_volume_kg`, `total_sets`, `exercises` (com cada série, carga, reps e volume por exercício) e mensagem pronta em Markdown.
+- **Atualização das Instruções e Central de IA (`src/routes/app.ia.tsx`)**:
+  - Adicionada regra 17 no `hermesSystemInstruction` instruindo o bot a utilizar `get_workout_session` para acompanhar progressão de carga, séries e notas de cardio.
+  - Adicionado card visual 14 de Ações Rápidas do Hermes na tela `/app/ia` com exemplos de consulta.
+- **Validação ao Vivo e Deploy no Cloudflare Workers**:
+  - Build de produção gerado com sucesso (`npm run build`).
+  - Deploy efetuado no Cloudflare Workers (`fitwellhub.welloliver.workers.dev`, Version ID `c9d9320b-d3a1-4edf-abe3-21116ce1e171`).
+  - Validação ao vivo via RPC com chat ID `497789001`:
+    - `get_workout_session`: retornou a sessão de hoje "B - Treino Costas" com todas as anotações de cardio (esteira 10 min @ 4.5km/h 8%, esteira 15 min @ 4.5km/h 11%), 8 exercícios detalhados (Remada Cavalinho, Puxadas, Crucifixo Invertido, etc.), cargas de até 45kg por série e volume total de 12.975 kg.
+    - `get_day`: retornou o diário consolidado de hoje com alimentação, água, passos e o treino "B - Treino Costas" 100% detalhado.
+
 ## [10/10/2026] - Antigravity (Suporte a Bioimpedância para o Hermes Agent: get_bioimpedance & log_bioimpedance + Deploy no Cloudflare Workers)
 - **Implementação das Ações `get_bioimpedance` e `log_bioimpedance` (`src/server-fns/telegram.functions.ts`)**:
   - `get_bioimpedance`: Permite ao bot do Telegram consultar o histórico e o exame mais recente de bioimpedância do usuário via `SUPABASE_SERVICE_ROLE_KEY`.

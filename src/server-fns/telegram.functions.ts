@@ -15,6 +15,7 @@ import {
   getDeterministicRoutineFallback,
   type GeneratedRoutine,
 } from "@/lib/workout-ai-utils";
+import { isCardioExercise } from "@/lib/cardio-utils";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -502,6 +503,7 @@ const hermesActionSchema = z.object({
     "get_profile",
     "get_bioimpedance",
     "log_bioimpedance",
+    "get_workout_session",
   ]),
   payload: z.record(z.any()).default({}),
 });
@@ -2067,15 +2069,99 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
         water_ml: Math.max(0, goals.water_ml - totalWaterMl),
       };
 
-      // 5. Treinos concluídos hoje
-      const bounds = todayBoundsSaoPaulo();
+      // 5. Treinos concluídos na data (convertido para limites de São Paulo UTC-3)
+      const [ty, tm, td] = targetDate.split("-").map(Number);
+      const targetStartMs = Date.UTC(ty, tm - 1, td, 3, 0, 0, 0); // 00:00 SP = 03:00 UTC
+      const targetBounds = {
+        start: new Date(targetStartMs).toISOString(),
+        end: new Date(targetStartMs + 86400000 - 1).toISOString(),
+      };
+
       const { data: workouts } = await supabase
         .from("workout_sessions")
-        .select("id, name, completed_at")
+        .select("id, name, completed_at, notes")
         .eq("user_id", userId)
-        .gte("completed_at", bounds.start)
-        .lte("completed_at", bounds.end)
+        .gte("completed_at", targetBounds.start)
+        .lte("completed_at", targetBounds.end)
         .order("completed_at", { ascending: false });
+
+      const workoutIds = (workouts || []).map((w) => w.id);
+      const sessionSetsMap: Record<string, any[]> = {};
+      if (workoutIds.length > 0) {
+        const { data: setsData } = await supabase
+          .from("workout_session_sets")
+          .select("session_id, exercise_name, set_number, reps, weight_kg, completed")
+          .in("session_id", workoutIds)
+          .order("set_number", { ascending: true });
+
+        (setsData || []).forEach((st) => {
+          if (!sessionSetsMap[st.session_id]) sessionSetsMap[st.session_id] = [];
+          sessionSetsMap[st.session_id].push(st);
+        });
+      }
+
+      const structuredWorkouts = (workouts || []).map((w) => {
+        const sSets = sessionSetsMap[w.id] || [];
+        const exMap = new Map<string, any[]>();
+        sSets.forEach((st) => {
+          if (!exMap.has(st.exercise_name)) exMap.set(st.exercise_name, []);
+          exMap.get(st.exercise_name)!.push(st);
+        });
+
+        let totalVol = 0;
+        const exercises = Array.from(exMap.entries()).map(([exName, stList]) => {
+          const isCardio = isCardioExercise(exName);
+          let maxW = 0;
+          let exVol = 0;
+          stList.forEach((st) => {
+            const weight = Number(st.weight_kg) || 0;
+            const reps = Number(st.reps) || 0;
+            if (weight > maxW) maxW = weight;
+            if (!isCardio && st.completed) exVol += weight * reps;
+          });
+          totalVol += exVol;
+
+          let setsSummary = "";
+          if (isCardio) {
+            const totalMins = stList.reduce((acc, st) => acc + (Number(st.reps) || 0), 0);
+            const topSpeed = Math.max(...stList.map((st) => Number(st.weight_kg) || 0), 0);
+            setsSummary = `${totalMins} min${topSpeed > 0 ? ` @ ${topSpeed} km/h` : ""}`;
+          } else {
+            const summaryParts = stList.map((st) => `${st.reps}x ${Number(st.weight_kg) || 0}kg`);
+            setsSummary = summaryParts.join(", ");
+          }
+
+          return {
+            name: exName,
+            is_cardio: isCardio,
+            sets_count: stList.length,
+            max_weight_kg: maxW,
+            total_volume_kg: exVol,
+            sets_summary: setsSummary,
+            sets: stList.map((st) => ({
+              set_number: st.set_number,
+              reps: st.reps,
+              weight_kg: Number(st.weight_kg) || 0,
+              completed: st.completed,
+            })),
+          };
+        });
+
+        const completedTimeBrt = w.completed_at
+          ? new Date(w.completed_at).toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })
+          : null;
+
+        return {
+          id: w.id,
+          name: w.name,
+          completed_at: w.completed_at,
+          completed_time_brt: completedTimeBrt,
+          notes: w.notes || null,
+          total_volume_kg: totalVol,
+          exercises_count: exercises.length,
+          exercises,
+        };
+      });
 
       // 6. Texto formatado
       const isToday = targetDate === getLocalDate();
@@ -2129,13 +2215,26 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
         summaryText += `👟 **Passos:** ${daySteps.toLocaleString("pt-BR")} passos (~${dayActiveCal} kcal ativas | ~${dayDistKm} km)\n\n`;
       }
 
-      if (workouts && workouts.length > 0) {
-        summaryText += `🏋️‍♂️ **Treinos Concluídos Hoje:**\n`;
-        workouts.forEach((w) => {
-          summaryText += `• ${w.name}\n`;
+      if (structuredWorkouts.length > 0) {
+        summaryText += `🏋️‍♂️ **Treinos Concluídos (${structuredWorkouts.length}):**\n`;
+        structuredWorkouts.forEach((w) => {
+          const timeTag = w.completed_time_brt ? ` às ${w.completed_time_brt}` : "";
+          summaryText += `• **${w.name}**${timeTag}:\n`;
+          if (w.notes) summaryText += `  *Anotações: ${w.notes}*\n`;
+          if (w.exercises.length === 0) {
+            summaryText += `  *(sem detalhes de exercícios)*\n`;
+          } else {
+            w.exercises.forEach((ex) => {
+              const icon = ex.is_cardio ? "🏃" : "💪";
+              summaryText += `  ${icon} **${ex.name}**: ${ex.sets_summary}\n`;
+            });
+            if (w.total_volume_kg > 0) {
+              summaryText += `  📊 Volume Total: **${w.total_volume_kg.toLocaleString("pt-BR")} kg**\n`;
+            }
+          }
         });
       } else {
-        summaryText += `🏋️‍♂️ Nenhum treino concluído hoje.\n`;
+        summaryText += `🏋️‍♂️ Nenhum treino concluído para ${dateTitle.toLowerCase()}.\n`;
       }
 
       return {
@@ -2155,7 +2254,7 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
         },
         goals,
         remaining,
-        workouts: workouts || [],
+        workouts: structuredWorkouts,
         summaryText,
         message: summaryText,
       };
@@ -3109,6 +3208,159 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
           notes: notesVal,
         },
         message: msg,
+      };
+    }
+
+    // 23. AÇÃO: CONSULTAR DETALHES DE SESSÕES DE TREINO ("Hermes, quais foram as cargas do meu treino de hoje?")
+    if (data.action === "get_workout_session") {
+      const routineNameQuery = data.payload.routine_name || data.payload.workout || data.payload.name
+        ? String(data.payload.routine_name || data.payload.workout || data.payload.name).trim()
+        : null;
+      const targetDate = data.payload.date ? String(data.payload.date).trim() : null;
+      const sessionId = data.payload.session_id ? String(data.payload.session_id).trim() : null;
+      const limit = Math.min(20, Math.max(1, Number(data.payload.limit) || 1));
+
+      let query = supabase
+        .from("workout_sessions")
+        .select("id, name, completed_at, notes")
+        .eq("user_id", userId)
+        .order("completed_at", { ascending: false });
+
+      if (sessionId) {
+        query = query.eq("id", sessionId);
+      } else if (targetDate) {
+        const [ty, tm, td] = targetDate.split("-").map(Number);
+        const startMs = Date.UTC(ty, tm - 1, td, 3, 0, 0, 0);
+        query = query
+          .gte("completed_at", new Date(startMs).toISOString())
+          .lte("completed_at", new Date(startMs + 86400000 - 1).toISOString());
+      }
+
+      if (routineNameQuery) {
+        const clean = routineNameQuery.toLowerCase().replace(/^treino\s+/i, "").trim();
+        query = query.or(`name.ilike.%${clean}%,name.ilike.%${routineNameQuery}%`);
+      }
+
+      const { data: sessions, error: sessErr } = await query.limit(limit);
+
+      if (sessErr) {
+        console.error("[Hermes] Erro ao buscar workout_sessions:", sessErr);
+        return { success: false, error: `Erro ao consultar sessões de treino: ${sessErr.message}` };
+      }
+
+      if (!sessions || sessions.length === 0) {
+        const filterMsg = targetDate ? ` em ${targetDate}` : routineNameQuery ? ` para "${routineNameQuery}"` : "";
+        return {
+          success: true,
+          sessions: [],
+          current: null,
+          message: `🏋️‍♂️ Nenhuma sessão de treino encontrada${filterMsg}.`,
+        };
+      }
+
+      const sessionIds = sessions.map((s) => s.id);
+      const { data: setsData } = await supabase
+        .from("workout_session_sets")
+        .select("session_id, exercise_name, set_number, reps, weight_kg, completed")
+        .in("session_id", sessionIds)
+        .order("set_number", { ascending: true });
+
+      const setsBySession: Record<string, any[]> = {};
+      (setsData || []).forEach((st) => {
+        if (!setsBySession[st.session_id]) setsBySession[st.session_id] = [];
+        setsBySession[st.session_id].push(st);
+      });
+
+      const structuredSessions = sessions.map((s) => {
+        const sSets = setsBySession[s.id] || [];
+        const exMap = new Map<string, any[]>();
+        sSets.forEach((st) => {
+          if (!exMap.has(st.exercise_name)) exMap.set(st.exercise_name, []);
+          exMap.get(st.exercise_name)!.push(st);
+        });
+
+        let totalVol = 0;
+        const exercises = Array.from(exMap.entries()).map(([exName, stList]) => {
+          const isCardio = isCardioExercise(exName);
+          let maxW = 0;
+          let exVol = 0;
+          stList.forEach((st) => {
+            const weight = Number(st.weight_kg) || 0;
+            const reps = Number(st.reps) || 0;
+            if (weight > maxW) maxW = weight;
+            if (!isCardio && st.completed) exVol += weight * reps;
+          });
+          totalVol += exVol;
+
+          let setsSummary = "";
+          if (isCardio) {
+            const totalMins = stList.reduce((acc, st) => acc + (Number(st.reps) || 0), 0);
+            const topSpeed = Math.max(...stList.map((st) => Number(st.weight_kg) || 0), 0);
+            setsSummary = `${totalMins} min${topSpeed > 0 ? ` @ ${topSpeed} km/h` : ""}`;
+          } else {
+            const parts = stList.map((st) => `${st.reps}x ${Number(st.weight_kg) || 0}kg`);
+            setsSummary = parts.join(", ");
+          }
+
+          return {
+            name: exName,
+            is_cardio: isCardio,
+            sets_count: stList.length,
+            max_weight_kg: maxW,
+            total_volume_kg: exVol,
+            sets_summary: setsSummary,
+            sets: stList.map((st) => ({
+              set_number: st.set_number,
+              reps: st.reps,
+              weight_kg: Number(st.weight_kg) || 0,
+              completed: st.completed,
+            })),
+          };
+        });
+
+        const completedDate = s.completed_at ? s.completed_at.slice(0, 10) : null;
+        const completedTimeBrt = s.completed_at
+          ? new Date(s.completed_at).toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })
+          : null;
+
+        return {
+          id: s.id,
+          name: s.name,
+          completed_at: s.completed_at,
+          completed_date: completedDate,
+          completed_time_brt: completedTimeBrt,
+          notes: s.notes || null,
+          total_volume_kg: totalVol,
+          exercises_count: exercises.length,
+          exercises,
+        };
+      });
+
+      let msg = `🏋️‍♂️ **Detalhes de Treino Realizado:**\n\n`;
+      structuredSessions.forEach((s) => {
+        const timeTag = s.completed_time_brt ? ` às ${s.completed_time_brt}` : "";
+        msg += `📋 **${s.name}** (${s.completed_date}${timeTag})\n`;
+        if (s.notes) msg += `*Anotações: ${s.notes}*\n`;
+        if (s.exercises.length === 0) {
+          msg += `*(sem exercícios detalhados)*\n\n`;
+        } else {
+          s.exercises.forEach((ex) => {
+            const icon = ex.is_cardio ? "🏃" : "💪";
+            msg += `• ${icon} **${ex.name}**: ${ex.sets_summary}\n`;
+          });
+          if (s.total_volume_kg > 0) {
+            msg += `📊 Volume Total: **${s.total_volume_kg.toLocaleString("pt-BR")} kg**\n`;
+          }
+          msg += `\n`;
+        }
+      });
+
+      return {
+        success: true,
+        count: structuredSessions.length,
+        current: structuredSessions[0] || null,
+        sessions: structuredSessions,
+        message: msg.trim(),
       };
     }
 

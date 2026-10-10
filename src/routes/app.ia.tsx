@@ -1828,9 +1828,10 @@ Regras de Ação:
 11. Registrar Passos Diários: Quando o usuário relatar passos dados no dia (ex: "Hermes, dei 8500 passos hoje", "anota 10200 passos", "fiz 7000 passos"), use a ferramenta 'fitwell_action' com action='log_steps' e steps=8500. Isso atualiza o card de passos e o gasto calórico ativo no app.
 12. Consultar Passos: Quando o usuário perguntar quantos passos deu hoje (ex: "Hermes, quantos passos dei hoje?"), use a ferramenta 'fitwell_action' com action='get_steps'.
 13. Consultar Perfil e Metabolismo (TMB / TDEE): Quando o usuário perguntar sobre seu gasto calórico, TMB, TDEE, altura, peso ou idade, use a ferramenta 'fitwell_action' com action='get_profile'. IMPORTANTE: NUNCA tente consultar a tabela 'profiles' via REST anônimo (ela é protegida por RLS); use sempre action='get_profile', que retorna os dados oficiais calculados pelo Mifflin-St Jeor e o fator de atividade dos últimos 28 dias.
-14. Consultar Resumo do Dia / Status: Para saber o status geral de treinos, refeições, água, passos e metas de hoje (ou de ontem/outra data), use a ferramenta 'fitwell_action' com action='get_day' ou action='status' (e opcionalmente date='YYYY-MM-DD').
-15. Consultar Bioimpedância: Quando o usuário perguntar sobre seu exame ou histórico de bioimpedância (ex: "Hermes, como está minha bioimpedância?", "quais os resultados do meu último exame?"), use a ferramenta 'fitwell_action' com action='get_bioimpedance'. Retorna peso, % de gordura, massa muscular (kg e %), gordura visceral, idade metabólica, água, massa óssea e TMB da máquina.
-16. Registrar Bioimpedância: Quando o usuário relatar dados de um novo exame de bioimpedância (ex: "anota meu exame: 85.5kg, 11.6% de gordura, 41.3kg de músculo, visceral 7, idade metabólica 50"), use a ferramenta 'fitwell_action' com action='log_bioimpedance' com weight_kg=85.5, body_fat_pct=11.6, muscle_mass_kg=41.3, visceral_fat=7, metabolic_age=50 (o app salva o exame e sincroniza o peso automaticamente).`;
+14. Consultar Resumo do Dia / Status: Para saber o status geral de treinos (com exercícios, séries, cargas e cardio), refeições, água, passos e metas de hoje (ou de ontem/outra data), use a ferramenta 'fitwell_action' com action='get_day' ou action='status' (e opcionalmente date='YYYY-MM-DD'). O retorno inclui detalhamento completo de cada exercício e volume de treino.
+15. Consultar Detalhes de Treino Realizado (Cargas, Séries & Cardio): Quando o usuário perguntar sobre cargas, repetições, exercícios ou cardio de um treino específico (ex: "quais cargas usei no treino B hoje?", "como foi meu último treino de costas?", "o que fiz no treino de ontem?"), use a ferramenta 'fitwell_action' com action='get_workout_session' (e opcionalmente routine_name='B', date='YYYY-MM-DD' ou limit=1). Retorna detalhamento de cada série (reps, kg), etapas de cardio e volume total.
+16. Consultar Bioimpedância: Quando o usuário perguntar sobre seu exame ou histórico de bioimpedância (ex: "Hermes, como está minha bioimpedância?", "quais os resultados do meu último exame?"), use a ferramenta 'fitwell_action' com action='get_bioimpedance'. Retorna peso, % de gordura, massa muscular (kg e %), gordura visceral, idade metabólica, água, massa óssea e TMB da máquina.
+17. Registrar Bioimpedância: Quando o usuário relatar dados de um novo exame de bioimpedância (ex: "anota meu exame: 85.5kg, 11.6% de gordura, 41.3kg de músculo, visceral 7, idade metabólica 50"), use a ferramenta 'fitwell_action' com action='log_bioimpedance' com weight_kg=85.5, body_fat_pct=11.6, muscle_mass_kg=41.3, visceral_fat=7, metabolic_age=50 (o app salva o exame e sincroniza o peso automaticamente).`;
 
   if (loading) {
     return (
@@ -2065,6 +2066,13 @@ Regras de Ação:
             <div className="text-[11px] text-muted-foreground">
               Ação: <code>action: "log_bioimpedance"</code><br />
               Exemplo: <em>"Anota meu exame: 85.5kg, 11.6% gordura, 41.3kg músculo, visceral 7"</em>. Registra no banco, calcula variações vs exame anterior e sincroniza o peso.
+            </div>
+          </div>
+          <div className="p-2.5 rounded-lg bg-background border border-border/60 space-y-1 sm:col-span-2">
+            <div className="font-semibold text-foreground">14. Consultar Detalhes do Treino (Cargas, Séries & Cardio)</div>
+            <div className="text-[11px] text-muted-foreground">
+              Ação: <code>action: "get_workout_session"</code><br />
+              Exemplo: <em>"Hermes, quais foram as cargas do meu treino de costas de hoje?"</em>. Retorna a sessão com todas as séries, cargas executadas (kg), repetições, anotações de cardio e volume total acumulado.
             </div>
           </div>
         </div>
