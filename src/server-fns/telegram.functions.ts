@@ -500,6 +500,8 @@ const hermesActionSchema = z.object({
     "log_steps",
     "get_steps",
     "get_profile",
+    "get_bioimpedance",
+    "log_bioimpedance",
   ]),
   payload: z.record(z.any()).default({}),
 });
@@ -2763,6 +2765,349 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
           tdee,
         },
         goals: userGoals || null,
+        message: msg,
+      };
+    }
+
+    // 21. AÇÃO: CONSULTAR BIOIMPEDÂNCIA ("Hermes, como está minha bioimpedância?")
+    if (data.action === "get_bioimpedance") {
+      const limit = Math.min(100, Math.max(1, Number(data.payload.limit) || 10));
+      const sinceDate = data.payload.since ? String(data.payload.since).trim() : null;
+
+      let query = supabase
+        .from("bioimpedance_logs")
+        .select("id, log_date, weight_kg, body_fat_pct, muscle_mass_kg, bone_mass_kg, body_water_pct, visceral_fat, bmr_machine, metabolic_age, notes, created_at")
+        .eq("user_id", userId)
+        .order("log_date", { ascending: false })
+        .order("created_at", { ascending: false });
+
+      if (sinceDate) {
+        query = query.gte("log_date", sinceDate);
+      }
+
+      const { data: logs, error: logsErr } = await query.limit(limit);
+
+      if (logsErr) {
+        console.error("[Hermes] Erro ao buscar bioimpedance_logs:", logsErr);
+        return { success: false, error: `Erro ao consultar bioimpedância: ${logsErr.message}` };
+      }
+
+      if (!logs || logs.length === 0) {
+        return {
+          success: true,
+          current: null,
+          history: [],
+          message: "🔬 Nenhum registro de bioimpedância encontrado no FitWell Hub.",
+        };
+      }
+
+      const formatLogItem = (item: any) => {
+        const weight = item.weight_kg != null ? Number(item.weight_kg) : null;
+        const muscleKg = item.muscle_mass_kg != null ? Number(item.muscle_mass_kg) : null;
+        const fatPct = item.body_fat_pct != null ? Number(item.body_fat_pct) : null;
+        const musclePct = weight && muscleKg ? Math.round((muscleKg / weight) * 1000) / 10 : null;
+        const waterPct = item.body_water_pct != null ? Number(item.body_water_pct) : null;
+        const boneKg = item.bone_mass_kg != null ? Number(item.bone_mass_kg) : null;
+        const visceral = item.visceral_fat != null ? Number(item.visceral_fat) : null;
+        const bmr = item.bmr_machine != null ? Number(item.bmr_machine) : null;
+        const metabolicAge = item.metabolic_age != null ? Number(item.metabolic_age) : null;
+
+        return {
+          id: item.id,
+          log_date: item.log_date,
+          weight_kg: weight,
+          body_fat_pct: fatPct,
+          muscle_mass_kg: muscleKg,
+          muscle_mass_pct: musclePct,
+          visceral_fat: visceral,
+          metabolic_age: metabolicAge,
+          body_water_pct: waterPct,
+          bone_mass_kg: boneKg,
+          bmr_machine: bmr,
+          notes: item.notes || null,
+        };
+      };
+
+      const history = logs.map(formatLogItem);
+      const current = history[0];
+      const prev = history[1] || null;
+
+      let msg = `🔬 **Bioimpedância no FitWell Hub:**\n📅 Data: **${current.log_date}**\n\n`;
+      if (current.weight_kg != null) msg += `• Peso: **${current.weight_kg.toFixed(1)} kg**\n`;
+      if (current.body_fat_pct != null) {
+        let diffFat = "";
+        if (prev?.body_fat_pct != null) {
+          const d = Math.round((current.body_fat_pct - prev.body_fat_pct) * 10) / 10;
+          if (Math.abs(d) >= 0.1) {
+            const sig = d > 0 ? `+${d.toFixed(1)}` : d.toFixed(1);
+            diffFat = ` (${sig}% vs ${prev.log_date})`;
+          }
+        }
+        msg += `• Gordura Corporal: **${current.body_fat_pct.toFixed(1)}%**${diffFat}\n`;
+      }
+      if (current.muscle_mass_kg != null) {
+        let diffMus = "";
+        if (prev?.muscle_mass_kg != null) {
+          const d = Math.round((current.muscle_mass_kg - prev.muscle_mass_kg) * 10) / 10;
+          if (Math.abs(d) >= 0.1) {
+            const sig = d > 0 ? `+${d.toFixed(1)}` : d.toFixed(1);
+            diffMus = ` (${sig} kg vs ${prev.log_date})`;
+          }
+        }
+        const pctInfo = current.muscle_mass_pct != null ? ` (~${current.muscle_mass_pct.toFixed(1)}%)` : "";
+        msg += `• Massa Muscular: **${current.muscle_mass_kg.toFixed(1)} kg**${pctInfo}${diffMus}\n`;
+      }
+      if (current.visceral_fat != null) msg += `• Gordura Visceral: **Nível ${current.visceral_fat}**\n`;
+      if (current.metabolic_age != null) msg += `• Idade Metabólica: **${current.metabolic_age} anos**\n`;
+      if (current.body_water_pct != null) msg += `• Água Corporal: **${current.body_water_pct.toFixed(1)}%**\n`;
+      if (current.bone_mass_kg != null) msg += `• Massa Óssea: **${current.bone_mass_kg.toFixed(1)} kg**\n`;
+      if (current.bmr_machine != null) msg += `• TMB (Máquina): **~${current.bmr_machine} kcal**\n`;
+      if (current.notes) msg += `• Notas: *${current.notes}*\n`;
+
+      return {
+        success: true,
+        current,
+        history,
+        message: msg,
+      };
+    }
+
+    // 22. AÇÃO: REGISTRAR BIOIMPEDÂNCIA ("Hermes, anota meu exame de bioimpedância")
+    if (data.action === "log_bioimpedance") {
+      const targetDate = data.payload.log_date || data.payload.date ? String(data.payload.log_date || data.payload.date) : getLocalDate();
+
+      const parseNum = (v: any) => {
+        if (v == null || v === "") return null;
+        const n = Number(String(v).replace(",", "."));
+        return isNaN(n) ? null : n;
+      };
+
+      let weightVal = parseNum(data.payload.weight_kg ?? data.payload.weight ?? data.payload.kg);
+      let fatVal = parseNum(data.payload.body_fat_pct ?? data.payload.fat_pct ?? data.payload.body_fat ?? data.payload.gordura);
+      let muscleVal = parseNum(data.payload.muscle_mass_kg ?? data.payload.muscle_kg ?? data.payload.muscle ?? data.payload.massa_muscular);
+      const musclePctVal = parseNum(data.payload.muscle_mass_pct ?? data.payload.muscle_pct);
+      let boneVal = parseNum(data.payload.bone_mass_kg ?? data.payload.bone_kg ?? data.payload.bone ?? data.payload.massa_ossea);
+      let waterVal = parseNum(data.payload.body_water_pct ?? data.payload.water_pct ?? data.payload.water ?? data.payload.agua);
+      let visceralVal = parseNum(data.payload.visceral_fat ?? data.payload.visceral ?? data.payload.gordura_visceral);
+      let bmrVal = parseNum(data.payload.bmr_machine ?? data.payload.bmr ?? data.payload.tmb);
+      let ageVal = parseNum(data.payload.metabolic_age ?? data.payload.idade_metabolica);
+      let notesVal = data.payload.notes ? String(data.payload.notes).trim() : null;
+
+      // Parsing de texto livre se fornecido
+      const rawText = data.payload.raw_text ? String(data.payload.raw_text) : "";
+      if (rawText) {
+        if (weightVal == null) {
+          const matchWeight = /(?:peso|pesei|pesando|balan[çc]a)?\s*([0-9]+(?:[.,][0-9]+)?)\s*(?:kg|quilos)?/i.exec(rawText);
+          if (matchWeight && matchWeight[1]) weightVal = parseFloat(matchWeight[1].replace(",", "."));
+        }
+        if (fatVal == null) {
+          const matchFat = /(?:gordura|bf|fat|gordura corporal)\s*(?:de|em)?\s*([0-9]+(?:[.,][0-9]+)?)\s*%/i.exec(rawText);
+          if (matchFat && matchFat[1]) fatVal = parseFloat(matchFat[1].replace(",", "."));
+        }
+        if (muscleVal == null) {
+          const matchMus = /(?:m[úu]sculo|massa muscular)\s*(?:de|em)?\s*([0-9]+(?:[.,][0-9]+)?)\s*(?:kg|quilos)/i.exec(rawText);
+          if (matchMus && matchMus[1]) muscleVal = parseFloat(matchMus[1].replace(",", "."));
+        }
+        if (visceralVal == null) {
+          const matchVis = /(?:visceral|gordura visceral)\s*(?:de|em|n[íi]vel)?\s*([0-9]+)/i.exec(rawText);
+          if (matchVis && matchVis[1]) visceralVal = parseInt(matchVis[1], 10);
+        }
+        if (ageVal == null) {
+          const matchAge = /(?:idade metab[óo]lica)\s*(?:de|em)?\s*([0-9]+)\s*(?:anos)?/i.exec(rawText);
+          if (matchAge && matchAge[1]) ageVal = parseInt(matchAge[1], 10);
+        }
+      }
+
+      // Se forneceu apenas porcentagem de massa muscular e o peso corporal, calcula kg
+      if (muscleVal == null && musclePctVal != null && weightVal != null) {
+        muscleVal = Math.round((musclePctVal / 100) * weightVal * 10) / 10;
+      }
+
+      // Arredondamentos
+      if (weightVal != null) weightVal = Math.round(weightVal * 10) / 10;
+      if (fatVal != null) fatVal = Math.round(fatVal * 10) / 10;
+      if (muscleVal != null) muscleVal = Math.round(muscleVal * 10) / 10;
+      if (boneVal != null) boneVal = Math.round(boneVal * 10) / 10;
+      if (waterVal != null) waterVal = Math.round(waterVal * 10) / 10;
+      if (visceralVal != null) visceralVal = Math.round(visceralVal);
+      if (bmrVal != null) bmrVal = Math.round(bmrVal);
+      if (ageVal != null) ageVal = Math.round(ageVal);
+
+      // Validação de sanidade
+      if (weightVal == null && fatVal == null && muscleVal == null && visceralVal == null && waterVal == null && ageVal == null) {
+        return {
+          success: false,
+          error: "Nenhum dado válido de bioimpedância informado. Envie pelo menos peso, % de gordura ou massa muscular.",
+        };
+      }
+
+      // Busca bioimpedância anterior em outra data para calcular variações reais
+      const { data: prevList } = await supabase
+        .from("bioimpedance_logs")
+        .select("log_date, weight_kg, body_fat_pct, muscle_mass_kg, visceral_fat, metabolic_age")
+        .eq("user_id", userId)
+        .neq("log_date", targetDate)
+        .order("log_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      const prev = prevList?.[0] || null;
+
+      // Verifica se já existe registro na mesma data para atualizar em vez de duplicar
+      const { data: existing } = await supabase
+        .from("bioimpedance_logs")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("log_date", targetDate)
+        .limit(1);
+
+      let isUpdate = false;
+      let recordId = "";
+
+      if (existing && existing.length > 0) {
+        isUpdate = true;
+        recordId = existing[0].id;
+        const updatePayload: Record<string, any> = {};
+        if (weightVal != null) updatePayload.weight_kg = weightVal;
+        if (fatVal != null) updatePayload.body_fat_pct = fatVal;
+        if (muscleVal != null) updatePayload.muscle_mass_kg = muscleVal;
+        if (boneVal != null) updatePayload.bone_mass_kg = boneVal;
+        if (waterVal != null) updatePayload.body_water_pct = waterVal;
+        if (visceralVal != null) updatePayload.visceral_fat = visceralVal;
+        if (bmrVal != null) updatePayload.bmr_machine = bmrVal;
+        if (ageVal != null) updatePayload.metabolic_age = ageVal;
+        if (notesVal != null) updatePayload.notes = notesVal;
+
+        const { error: updErr } = await supabase
+          .from("bioimpedance_logs")
+          .update(updatePayload)
+          .eq("id", recordId);
+
+        if (updErr) {
+          console.error("[Hermes] Erro ao atualizar bioimpedance_logs:", updErr);
+          return { success: false, error: `Falha ao atualizar bioimpedância: ${updErr.message}` };
+        }
+      } else {
+        const { data: insData, error: insErr } = await supabase
+          .from("bioimpedance_logs")
+          .insert({
+            user_id: userId,
+            log_date: targetDate,
+            weight_kg: weightVal,
+            body_fat_pct: fatVal,
+            muscle_mass_kg: muscleVal,
+            bone_mass_kg: boneVal,
+            body_water_pct: waterVal,
+            visceral_fat: visceralVal,
+            bmr_machine: bmrVal,
+            metabolic_age: ageVal,
+            notes: notesVal,
+          })
+          .select("id")
+          .single();
+
+        if (insErr) {
+          console.error("[Hermes] Erro ao inserir bioimpedance_logs:", insErr);
+          return { success: false, error: `Falha ao gravar bioimpedância: ${insErr.message}` };
+        }
+        recordId = insData?.id || "";
+      }
+
+      // Sincroniza peso em body_weights se informado (regra do FitWell Hub)
+      if (weightVal != null) {
+        const { data: existingWeight } = await supabase
+          .from("body_weights")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("log_date", targetDate)
+          .limit(1);
+
+        if (existingWeight && existingWeight.length > 0) {
+          await supabase
+            .from("body_weights")
+            .update({ weight_kg: weightVal })
+            .eq("id", existingWeight[0].id);
+        } else {
+          await supabase.from("body_weights").insert({
+            user_id: userId,
+            log_date: targetDate,
+            weight_kg: weightVal,
+          });
+        }
+
+        await supabase
+          .from("profiles")
+          .update({ updated_at: new Date().toISOString() })
+          .eq("id", userId);
+      }
+
+      // Monta mensagem de retorno com variações
+      const tag = isUpdate ? " *(atualizado)*" : "";
+      let msg = `🔬 **Bioimpedância Registrada com Sucesso!**${tag}\n📅 Data: **${targetDate}**\n\n`;
+
+      if (weightVal != null) {
+        let diffStr = "";
+        if (prev?.weight_kg != null) {
+          const d = Math.round((weightVal - Number(prev.weight_kg)) * 10) / 10;
+          if (Math.abs(d) >= 0.1) {
+            const sig = d > 0 ? `+${d.toFixed(1)}` : d.toFixed(1);
+            diffStr = ` (${sig} kg vs ${prev.log_date})`;
+          }
+        }
+        msg += `• Peso: **${weightVal.toFixed(1)} kg**${diffStr}\n`;
+      }
+
+      if (fatVal != null) {
+        let diffStr = "";
+        if (prev?.body_fat_pct != null) {
+          const d = Math.round((fatVal - Number(prev.body_fat_pct)) * 10) / 10;
+          if (Math.abs(d) >= 0.1) {
+            const sig = d > 0 ? `+${d.toFixed(1)}` : d.toFixed(1);
+            diffStr = ` (${sig}% vs ${prev.log_date})`;
+          }
+        }
+        msg += `• Gordura Corporal: **${fatVal.toFixed(1)}%**${diffStr}\n`;
+      }
+
+      if (muscleVal != null) {
+        let diffStr = "";
+        if (prev?.muscle_mass_kg != null) {
+          const d = Math.round((muscleVal - Number(prev.muscle_mass_kg)) * 10) / 10;
+          if (Math.abs(d) >= 0.1) {
+            const sig = d > 0 ? `+${d.toFixed(1)}` : d.toFixed(1);
+            diffStr = ` (${sig} kg vs ${prev.log_date})`;
+          }
+        }
+        const pctInfo = weightVal ? ` (~${((muscleVal / weightVal) * 100).toFixed(1)}%)` : "";
+        msg += `• Massa Muscular: **${muscleVal.toFixed(1)} kg**${pctInfo}${diffStr}\n`;
+      }
+
+      if (visceralVal != null) msg += `• Gordura Visceral: **Nível ${visceralVal}**\n`;
+      if (ageVal != null) msg += `• Idade Metabólica: **${ageVal} anos**\n`;
+      if (waterVal != null) msg += `• Água Corporal: **${waterVal.toFixed(1)}%**\n`;
+      if (boneVal != null) msg += `• Massa Óssea: **${boneVal.toFixed(1)} kg**\n`;
+      if (bmrVal != null) msg += `• TMB (Máquina): **~${bmrVal} kcal**\n`;
+      if (notesVal) msg += `• Notas: *${notesVal}*\n`;
+
+      msg += `\nSeu exame foi salvo e já está visível na tela Meu Corpo do FitWell Hub! 📊`;
+
+      return {
+        success: true,
+        id: recordId,
+        date: targetDate,
+        updated: isUpdate,
+        data: {
+          weight_kg: weightVal,
+          body_fat_pct: fatVal,
+          muscle_mass_kg: muscleVal,
+          muscle_mass_pct: weightVal && muscleVal ? Math.round((muscleVal / weightVal) * 1000) / 10 : null,
+          bone_mass_kg: boneVal,
+          body_water_pct: waterVal,
+          visceral_fat: visceralVal,
+          bmr_machine: bmrVal,
+          metabolic_age: ageVal,
+          notes: notesVal,
+        },
         message: msg,
       };
     }

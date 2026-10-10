@@ -2,6 +2,24 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [10/10/2026] - Antigravity (Suporte a Bioimpedância para o Hermes Agent: get_bioimpedance & log_bioimpedance + Deploy no Cloudflare Workers)
+- **Implementação das Ações `get_bioimpedance` e `log_bioimpedance` (`src/server-fns/telegram.functions.ts`)**:
+  - `get_bioimpedance`: Permite ao bot do Telegram consultar o histórico e o exame mais recente de bioimpedância do usuário via `SUPABASE_SERVICE_ROLE_KEY`.
+    - Retorna objeto `current` com biomarcadores completos: `weight_kg`, `body_fat_pct`, `muscle_mass_kg` (coluna física do banco), `muscle_mass_pct` (cálculo derivado para compatibilidade), `visceral_fat`, `metabolic_age`, `body_water_pct`, `bone_mass_kg`, `bmr_machine` e `notes`.
+    - Calcula automaticamente deltas de evolução física em relação ao exame anterior (variação de gordura, ganho de massa muscular, etc.).
+    - Retorna lista `history` com exames anteriores e mensagem humanizada em Markdown com emojis.
+  - `log_bioimpedance`: Permite registrar novos exames de bioimpedância via Telegram por dados estruturados ou texto livre.
+    - Se já houver exame registrado na mesma data (`log_date`), atualiza em vez de duplicar.
+    - Regra de sincronização: Se `weight_kg` for informado, sincroniza automaticamente na tabela `body_weights` e atualiza o timestamp do perfil para recalcular TMB/TDEE.
+- **Instruções e Interface do Hermes Agent (`src/routes/app.ia.tsx`)**:
+  - Atualizado o prompt do sistema para o Hermes com instruções 15 (`get_bioimpedance`) e 16 (`log_bioimpedance`).
+  - Adicionados os cards 12 e 13 na interface com exemplos práticos de uso.
+- **Validação e Deploy**:
+  - Testes: 26 arquivos e 212 testes aprovados (100%).
+  - Build de produção gerado com sucesso.
+  - Deploy no Cloudflare Workers concluído com sucesso (`d473c851-15bc-4413-a6a3-b1d6b89789ca` / `https://fitwellhub.welloliver.workers.dev`).
+  - Testado ao vivo via RPC com o chat ID do usuário Wellington (`497789001`): exame de bioimpedância retornado perfeitamente com todas as métricas e deltas de evolução.
+
 ## [29/09/2026] - Antigravity (Correção de Schema da Tabela daily_steps_logs & Validação de Leitura/Escrita de Passos no Hermes)
 - **Correção da Coluna Inexistente `distance_meters` em `daily_steps_logs`**:
   - A tabela física possui as colunas `id, user_id, log_date, steps, active_calories, source, created_at, updated_at`.

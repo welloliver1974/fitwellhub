@@ -1,5 +1,26 @@
 # FIXLOG — FitWell Hub
 
+## Sessão: 10/10/2026 — Integração de Bioimpedância no Hermes Agent (get_bioimpedance & log_bioimpedance) + Validação ao Vivo
+
+### 🎯 Diagnóstico & Implementação
+1. **Atendimento ao Pedido do Hermes / Bot do Telegram**:
+   - Adicionadas as ações `get_bioimpedance` e `log_bioimpedance` ao schema `hermesActionSchema` e implementadas em `executeHermesAction` ([telegram.functions.ts](file:///e:/Apps/fitwell/fitwellhub/src/server-fns/telegram.functions.ts)).
+   - **Adequação de Schema e Unidade**:
+     - O pedido original sugeria `muscle_mass_pct`, porém a coluna física na tabela `bioimpedance_logs` é `muscle_mass_kg` (em quilogramas).
+     - A resposta agora entrega o campo físico oficial `muscle_mass_kg` e um campo calculado `muscle_mass_pct` (`(muscle_mass_kg / weight_kg) * 100`) para garantir compatibilidade plena.
+     - Retorno completo com `weight_kg`, `body_fat_pct`, `muscle_mass_kg`, `muscle_mass_pct`, `visceral_fat`, `metabolic_age`, `body_water_pct`, `bone_mass_kg`, `bmr_machine`, `notes`, `history` e mensagem formatada em Markdown com cálculos de evolução/delta vs exame anterior.
+   - **Ação de Registro (`log_bioimpedance`)**:
+     - Suporta cadastro por payload estruturado ou texto livre.
+     - Se já existir exame na mesma data (`log_date`), atualiza em vez de duplicar.
+     - Sincroniza automaticamente o peso na tabela `body_weights` e atualiza `profiles.updated_at` para recálculo do TMB/TDEE.
+2. **Atualização da Interface e Prompts (`src/routes/app.ia.tsx`)**:
+   - Instruções 15 e 16 adicionadas ao `hermesSystemInstruction`.
+   - Cards explicativos 12 e 13 adicionados na Central de IA com exemplos de uso.
+3. **Validação ao Vivo**:
+   - `npm run test`: 26 arquivos e 212 testes aprovados (100%).
+   - Deploy realizado no Cloudflare Workers (`fitwellhub.welloliver.workers.dev`, versão `d473c851-15bc-4413-a6a3-b1d6b89789ca`).
+   - Teste ao vivo executado com sucesso com os dados do usuário Wellington (`497789001`): exame mais recente retornado perfeitamente (85.5kg, 11.6% BF, 41.3kg músculo, visceral 7, idade metabólica 50) com histórico anterior e cálculos de evolução.
+
 ## Sessão: 29/09/2026 — Correção de Schema da Tabela daily_steps_logs (Remoção de distance_meters) & Validação de Leitura e Escrita do Hermes
 
 ### 🎯 Diagnóstico & Correção
