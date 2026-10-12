@@ -29,3 +29,4 @@
 | [plans/walkthrough.md](./plans/walkthrough.md) | Resultado da refatoração do Coach IA |
 | [plans/food_library.md](./plans/food_library.md) | Biblioteca de alimentos na aba Nutrição (tabela, pack TACO, recálculo de macros) |
 | [plans/auditoria-tecnica-2026-08-11.md](./plans/auditoria-tecnica-2026-08-11.md) | Runbook da varredura técnica: schema_completo defasado, types.ts sem body_measurements, baseline de tsc, monolitos e docs — com passos de execução p/ qualquer agente |
+| [plans/padronizacao-graficos.md](./plans/padronizacao-graficos.md) | Plano de padronização e modernização dos gráficos com backup redundante e checklist faseado |
