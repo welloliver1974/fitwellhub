@@ -7,7 +7,7 @@ export interface ChartTooltipPayloadItem {
   color?: string;
   dataKey?: string;
   unit?: string;
-  payload?: Record<string, any>;
+  payload?: Record<string, unknown>;
 }
 
 export interface ChartTooltipProps {
@@ -15,7 +15,11 @@ export interface ChartTooltipProps {
   payload?: ChartTooltipPayloadItem[];
   label?: string;
   unit?: string;
-  formatter?: (value: number, name?: string, item?: ChartTooltipPayloadItem) => [string, string] | string;
+  formatter?: (
+    value: number,
+    name?: string,
+    item?: ChartTooltipPayloadItem,
+  ) => [string, string] | string;
   labelFormatter?: (label: string) => string;
 }
 
@@ -72,7 +76,10 @@ export function ChartTooltip({
           }
 
           return (
-            <div key={`tooltip-item-${index}`} className="flex items-center justify-between gap-3 text-xs">
+            <div
+              key={`tooltip-item-${index}`}
+              className="flex items-center justify-between gap-3 text-xs"
+            >
               <div className="flex items-center gap-1.5">
                 <span
                   className="w-2 h-2 rounded-full shrink-0 shadow-sm"

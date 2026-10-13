@@ -13,7 +13,7 @@ import { chartColors, chartDefaults } from "./chart-theme";
 import { ChartTooltip } from "./ChartTooltip";
 
 export interface DualMetricChartProps {
-  data: Array<Record<string, any>>;
+  data: Array<Record<string, unknown>>;
   xAxisKey?: string;
   leftKey?: string;
   leftName?: string;
@@ -43,7 +43,7 @@ export function DualMetricChart({
 }: DualMetricChartProps) {
   // Custom dot dando destaque ao último registro
   const createDotRenderer = (color: string) => {
-    return (props: any) => {
+    return (props: { cx?: number; cy?: number; index?: number }) => {
       const { cx, cy, index } = props;
       const isLast = index === data.length - 1;
 
@@ -85,11 +85,7 @@ export function DualMetricChart({
             bottom: 0,
           }}
         >
-          <CartesianGrid
-            strokeDasharray="3 3"
-            stroke={chartColors.grid}
-            vertical={false}
-          />
+          <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} vertical={false} />
 
           <XAxis
             dataKey={xAxisKey}

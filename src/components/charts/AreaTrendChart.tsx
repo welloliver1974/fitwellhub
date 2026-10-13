@@ -13,7 +13,7 @@ import { chartColors, chartDefaults } from "./chart-theme";
 import { ChartTooltip } from "./ChartTooltip";
 
 export interface AreaTrendChartProps {
-  data: Array<Record<string, any>>;
+  data: Array<Record<string, unknown>>;
   dataKey: string;
   xAxisKey?: string;
   unit?: string;
@@ -45,7 +45,7 @@ export function AreaTrendChart({
   const gradientId = `trend_grad_${generatedId}`;
 
   // Custom dot rendering: dá destaque especial ao último ponto (registro mais recente)
-  const renderCustomDot = (props: any) => {
+  const renderCustomDot = (props: { cx?: number; cy?: number; index?: number }) => {
     const { cx, cy, index } = props;
     const isLast = index === data.length - 1;
 
@@ -55,22 +55,9 @@ export function AreaTrendChart({
       return (
         <g key={`dot-last-${index}`}>
           {/* Halo externo com brilho */}
-          <circle
-            cx={cx}
-            cy={cy}
-            r={7}
-            fill={color}
-            fillOpacity={0.25}
-          />
+          <circle cx={cx} cy={cy} r={7} fill={color} fillOpacity={0.25} />
           {/* Círculo com borda */}
-          <circle
-            cx={cx}
-            cy={cy}
-            r={4.5}
-            fill="#181b1c"
-            stroke={color}
-            strokeWidth={2.5}
-          />
+          <circle cx={cx} cy={cy} r={4.5} fill="#181b1c" stroke={color} strokeWidth={2.5} />
         </g>
       );
     }
@@ -108,11 +95,7 @@ export function AreaTrendChart({
             </linearGradient>
           </defs>
 
-          <CartesianGrid
-            strokeDasharray="3 3"
-            stroke={chartColors.grid}
-            vertical={false}
-          />
+          <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} vertical={false} />
 
           <XAxis
             dataKey={xAxisKey}

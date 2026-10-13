@@ -22,7 +22,7 @@ export interface NutritionSeriesItem {
 }
 
 export interface NutritionBarsChartProps {
-  data: Array<Record<string, any>>;
+  data: Array<Record<string, unknown>>;
   mode?: "calories" | "macros";
   range?: 7 | 30;
   dataKey?: string;
@@ -106,11 +106,7 @@ export function NutritionBarsChart({
             bottom: 0,
           }}
         >
-          <CartesianGrid
-            strokeDasharray="3 3"
-            stroke={chartColors.grid}
-            vertical={false}
-          />
+          <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} vertical={false} />
 
           <XAxis
             dataKey={xAxisKey}
@@ -180,17 +176,12 @@ export function NutritionBarsChart({
                 fill={item.color}
                 stackId={item.stackId}
                 radius={
-                  item.radius ||
-                  (idx === activeSeries!.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0])
+                  item.radius || (idx === activeSeries!.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0])
                 }
               />
             ))
           ) : (
-            <Bar
-              dataKey={activeDataKey}
-              fill={activeColor}
-              radius={[4, 4, 0, 0]}
-            />
+            <Bar dataKey={activeDataKey} fill={activeColor} radius={[4, 4, 0, 0]} />
           )}
         </BarChart>
       </ResponsiveContainer>

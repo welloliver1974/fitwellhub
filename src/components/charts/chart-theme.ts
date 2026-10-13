@@ -6,14 +6,14 @@
 
 export const chartColors = {
   // Cores principais (Paleta Dark Athletic)
-  primary: "#2dd4a8",       // Neon Mint principal
-  primaryLight: "#73ffb8",  // Mint brilhante (acento/halo)
-  secondary: "#38bdf8",     // Ciano / Azul atlético (Músculo / Cargas)
-  accent: "#818cf8",        // Indigo suave
-  destructive: "#f43f5e",   // Coral / Vermelho (Gordura / Alertas)
-  warning: "#fbbf24",       // Âmbar / Amarelo (Carboidratos)
-  purple: "#c084fc",        // Roxo / Violeta (Gorduras em macros)
-  muted: "#94a3b8",         // Cinza médio para textos e eixos
+  primary: "#2dd4a8", // Neon Mint principal
+  primaryLight: "#73ffb8", // Mint brilhante (acento/halo)
+  secondary: "#38bdf8", // Ciano / Azul atlético (Músculo / Cargas)
+  accent: "#818cf8", // Indigo suave
+  destructive: "#f43f5e", // Coral / Vermelho (Gordura / Alertas)
+  warning: "#fbbf24", // Âmbar / Amarelo (Carboidratos)
+  purple: "#c084fc", // Roxo / Violeta (Gorduras em macros)
+  muted: "#94a3b8", // Cinza médio para textos e eixos
 
   // Elementos estruturais do gráfico
   grid: "rgba(255, 255, 255, 0.07)",
@@ -24,18 +24,18 @@ export const chartColors = {
 
   // Macros específicos
   macros: {
-    protein: "#2dd4a8",   // Mint
-    carbs: "#fbbf24",     // Âmbar
-    fat: "#f43f5e",       // Coral
+    protein: "#2dd4a8", // Mint
+    carbs: "#fbbf24", // Âmbar
+    fat: "#f43f5e", // Coral
     calories: "#2dd4a8",
   },
 
   // Métricas corporais
   body: {
-    muscle: "#38bdf8",    // Ciano / Azul atlético
-    fat: "#f43f5e",       // Coral / Vermelho
-    weight: "#2dd4a8",    // Mint
-  }
+    muscle: "#38bdf8", // Ciano / Azul atlético
+    fat: "#f43f5e", // Coral / Vermelho
+    weight: "#2dd4a8", // Mint
+  },
 } as const;
 
 export const chartDefaults = {
