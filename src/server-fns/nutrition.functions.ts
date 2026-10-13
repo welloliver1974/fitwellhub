@@ -179,19 +179,35 @@ export const labelSchema = z.object({
   fat_g: z.number(),
 });
 
-const labelParamsSchema = {
-  type: "object",
-  properties: {
-    name: { type: "string", description: "Nome do produto visivel na embalagem, ou null" },
-    serving_g: { type: "number", description: "Porcao declarada em gramas (ex.: Porcao de 30g)" },
-    calories: { type: "number", description: "kcal POR PORCAO" },
-    protein_g: { type: "number" },
-    carbs_g: { type: "number" },
-    fat_g: { type: "number" },
-  },
-  required: ["name", "serving_g", "calories", "protein_g", "carbs_g", "fat_g"],
-  additionalProperties: false,
-};
+export function sanitizeRawLabelData(raw: any): {
+  name: string | null;
+  serving_g: number;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+} {
+  const parseNum = (val: any, fallback = 0): number => {
+    if (val === null || val === undefined) return fallback;
+    if (typeof val === "number") return Number.isFinite(val) ? val : fallback;
+    if (typeof val === "string") {
+      const clean = val.replace(",", ".").replace(/[^\d.-]/g, "");
+      const n = parseFloat(clean);
+      return Number.isFinite(n) ? n : fallback;
+    }
+    return fallback;
+  };
+
+  const serving = parseNum(raw?.serving_g, 100);
+  return {
+    name: typeof raw?.name === "string" && raw.name.trim() ? raw.name.trim() : null,
+    serving_g: serving > 0 ? serving : 100,
+    calories: parseNum(raw?.calories, 0),
+    protein_g: parseNum(raw?.protein_g, 0),
+    carbs_g: parseNum(raw?.carbs_g, 0),
+    fat_g: parseNum(raw?.fat_g, 0),
+  };
+}
 
 export const analyzeLabel = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -209,39 +225,61 @@ export const analyzeLabel = createServerFn({ method: "POST" })
       apiKey,
       model: photoModel,
       baseUrl: photoProvider === "omniroute" ? settings.omniroute_base_url : undefined,
-      maxTokens: 512,
+      maxTokens: 800,
       messages: [
         {
           role: "system",
           content:
-            "Voce e um nutricionista. Leia a tabela 'Informacao Nutricional' da embalagem na foto. name = nome visivel do produto (ou null se nao houver). serving_g = porcao declarada em gramas (ex.: 'Porcao de 30g'). calories/protein_g/carbs_g/fat_g = valores POR PORCAO. Se a tabela so mostrar valores por 100g, use serving_g=100 e os valores por 100g. Se algum campo nao estiver visivel, use null. Retorne APENAS a tool call.",
+            'Voce e um nutricionista especialista em leitura de rotulos de alimentos. Analise a foto da embalagem e leia com atencao a tabela "Informacao Nutricional". Retorne APENAS um JSON valido (sem blocos markdown, sem explicacoes antes ou depois) no formato exato: {"name":"Nome do produto visivel na embalagem ou null","serving_g":30,"calories":140,"protein_g":3,"carbs_g":20,"fat_g":5}. Regras: serving_g = porcao declarada em gramas ou ml (ex.: se for 30g, use 30; se so tiver valores por 100g, use 100; se nao encontrar, use 100). calories/protein_g/carbs_g/fat_g = valores numericos POR PORCAO declarada (kcal, proteina, carboidrato, gordura total). Se algum campo numerico nao estiver legivel, use 0.',
         },
         {
           role: "user",
           content: [
-            { type: "text", text: "Leia a tabela nutricional desta embalagem." },
+            { type: "text", text: "Leia a tabela nutricional desta embalagem e retorne apenas o JSON com os macros da porcao." },
             { type: "image_url", image_url: { url: data.imageBase64 } },
           ],
         },
       ],
-      tools: [
-        {
-          type: "function",
-          function: {
-            name: "report_label",
-            description: "Reporta os macros lidos da tabela nutricional da embalagem",
-            parameters: labelParamsSchema,
-          },
-        },
-      ],
-      toolChoice: { type: "function", function: { name: "report_label" } },
     });
 
     const json = res as any;
+    if (json?.error) {
+      const msg = json.error.message || (typeof json.error === "string" ? json.error : "Erro na chamada de IA");
+      throw new Error(`Erro na IA ao ler rótulo: ${msg}`);
+    }
+
+    let rawData: any = null;
     const call = json.choices?.[0]?.message?.tool_calls?.[0];
-    if (!call) throw new Error("IA nao retornou a leitura do rotulo (refaca a foto)");
-    const parsed = labelSchema.safeParse(JSON.parse(call.function.arguments));
-    if (!parsed.success) throw new Error("Leitura do rotulo em formato inesperado (refaca a foto)");
+    if (call?.function?.arguments) {
+      try {
+        rawData = JSON.parse(call.function.arguments);
+      } catch {
+        // fallback to content
+      }
+    }
+
+    if (!rawData) {
+      const content = json.choices?.[0]?.message?.content;
+      if (!content || typeof content !== "string") {
+        throw new Error("IA nao retornou a leitura do rotulo (refaca a foto com foco e boa luz)");
+      }
+      const cleaned = content.replace(/```json\s*/gi, "").replace(/```\s*/g, "");
+      const match = cleaned.match(/\{[\s\S]*\}/);
+      if (!match) {
+        throw new Error("IA nao conseguiu extrair os macros da tabela nutricional (refaca a foto)");
+      }
+      try {
+        rawData = JSON.parse(match[0]);
+      } catch {
+        throw new Error("Leitura do rotulo em formato invalido (refaca a foto)");
+      }
+    }
+
+    const sanitized = sanitizeRawLabelData(rawData);
+    const parsed = labelSchema.safeParse(sanitized);
+    if (!parsed.success) {
+      throw new Error("Leitura do rotulo em formato inesperado (refaca a foto)");
+    }
     return normalizeLabelMacros(parsed.data);
   });
 

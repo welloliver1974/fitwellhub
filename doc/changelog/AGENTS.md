@@ -901,5 +901,18 @@ Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hu
     - Atualizado `getSupabaseServiceClient()` em `src/server-fns/telegram.functions.ts` para ler a chave com fallback inteligente (`process.env`, `globalThis`, `import.meta.env`).
     - Chave mestra persistida no cofre de segredos criptografados do Worker via `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`.
     - Documentação e System Prompt atualizados na tela `/app/ia`.
-- **Status**: Concluído, build validado, deploy no Cloudflare Workers executado com sucesso e repositório Git sincronizado.
-
+## [13/10/2026] - Antigravity (Correção da Leitura de Rótulo por IA e Scanner de Código de Barras)
+- **Escopo**:
+  - **Correção da Leitura do Rótulo (`analyzeLabel` em `src/server-fns/nutrition.functions.ts`)**:
+    - **Causa-raiz**: A função forçava `tools` e `toolChoice` com imagem para modelos de visão (Qwen VL / Llama Vision). Modelos de visão ou provedores como OpenRouter frequentemente não suportam `tools` com imagem e respondem em `message.content` ou com erro HTTP 400. Como o código só buscava `tool_calls[0]`, disparava a exceção `"IA nao retornou a leitura do rotulo (refaca a foto)"` engolindo o erro real.
+    - **Solução**: Prompt refinado solicitando JSON direto em `content`; remoção do `toolChoice` forçado; extração resiliente inspecionando `json.error`, `tool_calls` e `content` (com regex e limpeza de blocos markdown).
+    - **Sanitização de Dados (`sanitizeRawLabelData`)**: Trata strings de unidades ("30g", "145 kcal"), vírgulas decimais ("1,5") e nulls com fallbacks seguros antes do `labelSchema.safeParse`.
+    - **Resolução de Imagem**: `resizeImageFileToDataUrl` no rótulo configurado para `maxSize: 1280` e `quality: 0.85` (evitando perda de nitidez em tabelas pequenas comparado ao corte antigo de 800px).
+    - **Testes Unitários**: Criados testes específicos em `src/server-fns/label.test.ts` cobrindo limpeza de unidades, vírgulas e fallbacks seguros.
+  - **Correção do Scanner e Consulta de Código de Barras (`BarcodeScanner.tsx` e `app.nutricao.tsx`)**:
+    - **Scanner Contínuo**: A detecção nativa em hardware (`detectFromSource(detector, video)`) agora roda em todos os ciclos de varredura (250ms), eliminando o delay e a falha de projeção de coordenadas de tela para vídeo em modo retrato.
+    - **Lanterna (Torch)**: Adicionado botão de lanterna na barra do scanner para leitura em ambientes escuros quando a câmera do aparelho suportar.
+    - **Busca Robusta no Open Food Facts**: Busca com variantes (exato, prefixo 0 para UPC-A de 12 dígitos, sem prefixo 0) e fallback para o nó brasileiro do OFF.
+    - **Fallback Inteligente de Macros**: Quando o produto existe no OFF com nome mas tabela nutricional vazia, utiliza o nome identificado para estimar automaticamente os macros com IA via `lookupNutrition`.
+    - **Fluxo quando não encontrado**: Não envia mais código numérico bruto (ex: "789...") para a IA de texto; abre o diálogo com o badge do código e exibe atalho direto "Ler foto do rótulo" junto ao campo do alimento.
+- **Status**: Concluído, 214 testes verdes no vitest sem regressões.

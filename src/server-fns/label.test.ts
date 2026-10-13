@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { labelSchema } from "./nutrition.functions";
+import { labelSchema, sanitizeRawLabelData } from "./nutrition.functions";
 
 describe("labelSchema (leitura da tabela nutricional pela foto)", () => {
   const validRead = {
@@ -51,5 +51,47 @@ describe("labelSchema (leitura da tabela nutricional pela foto)", () => {
 
   it("rejeita serving_g nao numerica", () => {
     expect(labelSchema.safeParse({ ...validRead, serving_g: "30g" }).success).toBe(false);
+  });
+});
+
+describe("sanitizeRawLabelData", () => {
+  it("limpa strings com unidades e vírgulas decimais", () => {
+    const raw = {
+      name: "   Iogurte Grego  ",
+      serving_g: "100g",
+      calories: "120,5 kcal",
+      protein_g: "6,8 g",
+      carbs_g: "12g",
+      fat_g: "3,5",
+    };
+    const sanitized = sanitizeRawLabelData(raw);
+    expect(sanitized.name).toBe("Iogurte Grego");
+    expect(sanitized.serving_g).toBe(100);
+    expect(sanitized.calories).toBe(120.5);
+    expect(sanitized.protein_g).toBe(6.8);
+    expect(sanitized.carbs_g).toBe(12);
+    expect(sanitized.fat_g).toBe(3.5);
+
+    expect(labelSchema.safeParse(sanitized).success).toBe(true);
+  });
+
+  it("trata nulls e valores vazios com fallbacks seguros", () => {
+    const raw = {
+      name: null,
+      serving_g: null,
+      calories: null,
+      protein_g: undefined,
+      carbs_g: "",
+      fat_g: null,
+    };
+    const sanitized = sanitizeRawLabelData(raw);
+    expect(sanitized.name).toBeNull();
+    expect(sanitized.serving_g).toBe(100);
+    expect(sanitized.calories).toBe(0);
+    expect(sanitized.protein_g).toBe(0);
+    expect(sanitized.carbs_g).toBe(0);
+    expect(sanitized.fat_g).toBe(0);
+
+    expect(labelSchema.safeParse(sanitized).success).toBe(true);
   });
 });

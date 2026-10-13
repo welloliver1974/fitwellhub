@@ -180,6 +180,10 @@ function NutricaoPage() {
   const today = getLocalDate();
 
   const onBarcode = async (code: string) => {
+    const raw = code.trim();
+    const cleanCode = raw.replace(/\D/g, "");
+    if (!cleanCode) return;
+
     setScanOpen(false);
     setOpen(false);
     setScanLoading(true);
@@ -193,65 +197,148 @@ function NutricaoPage() {
     setBarcodePortionLabel("");
     setBarcodePortionSource("");
     setRefGrams(null);
+
     try {
-      const r = await fetch(
-        `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`,
-      );
-      const j = await r.json();
-      if (j.status === 1 && j.product) {
-        const p = j.product;
-        const n = p.nutriments ?? {};
-        const name = p.product_name_pt || p.product_name || `EAN ${code}`;
-        const servingGrams =
-          parseFoodWeight(p.serving_size) ?? parseFoodWeight(p.quantity) ?? 100;
-        setQuery(name);
-        setGrams(servingGrams);
-        setBarcodePortionLabel(
-          p.serving_size
-            ? `Porção detectada: ${p.serving_size}`
-            : `Porção detectada: ${servingGrams}g`,
-        );
-        setBarcodePortionSource("barcode");
-        setManual(true);
-        const macros = scaleMacros(n, servingGrams);
-        setMCal(macros.calories);
-        setMProt(macros.protein_g);
-        setMCarb(macros.carbs_g);
-        setMFat(macros.fat_g);
-        // macros correspondem à porção escaneada → mudar "Porção (g)" reescala proporcional
-        setRefGrams(servingGrams);
-        setOpen(true);
-        toast.success(
-          servingGrams === 100 ? `${name} encontrado` : `${name} encontrado (${servingGrams}g)`,
-        );
-        return;
+      // 1. Tenta buscar no Open Food Facts (v2) com variantes do código
+      const candidates = [cleanCode];
+      if (cleanCode.length === 12) candidates.push(`0${cleanCode}`);
+      if (cleanCode.length === 13 && cleanCode.startsWith("0")) candidates.push(cleanCode.slice(1));
+
+      let productFound: any = null;
+      for (const c of candidates) {
+        try {
+          const r = await fetch(
+            `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(c)}.json`,
+          );
+          if (!r.ok) continue;
+          const j = await r.json();
+          if (j.status === 1 && j.product) {
+            productFound = j.product;
+            break;
+          }
+        } catch {
+          // segue para próximo candidato
+        }
       }
 
-      const macros = await lookupNutrition({
-        headers: session?.access_token
-          ? { Authorization: `Bearer ${session.access_token}` }
-          : undefined,
-        data: { query: code, grams: 100 },
-      });
-      setQuery(macros.name);
+      // Se ainda não achou, tenta no endpoint brasileiro do Open Food Facts
+      if (!productFound) {
+        try {
+          const r = await fetch(
+            `https://br.openfoodfacts.org/api/v2/product/${encodeURIComponent(cleanCode)}.json`,
+          );
+          if (r.ok) {
+            const j = await r.json();
+            if (j.status === 1 && j.product) {
+              productFound = j.product;
+            }
+          }
+        } catch {
+          // segue
+        }
+      }
+
+      if (productFound) {
+        const p = productFound;
+        const n = p.nutriments ?? {};
+        const name =
+          p.product_name_pt ||
+          p.product_name ||
+          p.generic_name_pt ||
+          p.generic_name ||
+          (p.brands ? `${p.brands} (${cleanCode})` : `EAN ${cleanCode}`);
+        const servingGrams =
+          parseFoodWeight(p.serving_size) ?? parseFoodWeight(p.quantity) ?? 100;
+
+        // Verifica se a tabela nutricional do Open Food Facts possui macros reais
+        const cal100 = n["energy-kcal_100g"] ?? n["energy-kcal"] ?? n["energy-kcal_value"];
+        const calServ = n["energy-kcal_serving"];
+        const prot100 = n["proteins_100g"];
+        const carb100 = n["carbohydrates_100g"];
+        const hasRealMacros =
+          Number(cal100) > 0 ||
+          Number(calServ) > 0 ||
+          Number(prot100) > 0 ||
+          Number(carb100) > 0;
+
+        if (hasRealMacros) {
+          setQuery(name);
+          setGrams(servingGrams);
+          setBarcodePortionLabel(
+            p.serving_size
+              ? `Porção detectada: ${p.serving_size}`
+              : `Porção detectada: ${servingGrams}g`,
+          );
+          setBarcodePortionSource("barcode");
+          setManual(true);
+          const macros = scaleMacros(n, servingGrams);
+          setMCal(macros.calories);
+          setMProt(macros.protein_g);
+          setMCarb(macros.carbs_g);
+          setMFat(macros.fat_g);
+          setRefGrams(servingGrams);
+          setOpen(true);
+          toast.success(
+            servingGrams === 100 ? `${name} encontrado` : `${name} encontrado (${servingGrams}g)`,
+          );
+          return;
+        }
+
+        // Produto identificado pelo nome no Open Food Facts, mas sem tabela nutricional cadastrada:
+        // Usa o nome real do alimento para estimar os macros via IA!
+        if (name && !name.startsWith("EAN ")) {
+          try {
+            const macros = await lookupNutrition({
+              headers: session?.access_token
+                ? { Authorization: `Bearer ${session.access_token}` }
+                : undefined,
+              data: { query: name, grams: servingGrams },
+            });
+            setQuery(name);
+            setGrams(servingGrams);
+            setBarcodePortionLabel(`Macros estimados por IA (${servingGrams}g)`);
+            setBarcodePortionSource("ai");
+            setManual(true);
+            setMCal(macros.calories);
+            setMProt(macros.protein_g);
+            setMCarb(macros.carbs_g);
+            setMFat(macros.fat_g);
+            setRefGrams(servingGrams);
+            setOpen(true);
+            toast.success(`${name} encontrado (macros estimados via IA)`);
+            return;
+          } catch {
+            setQuery(name);
+            setGrams(servingGrams);
+            setManual(true);
+            setBarcodePortionLabel("Tabela vazia no Open Food Facts");
+            setBarcodePortionSource("manual");
+            setOpen(true);
+            toast.info(`${name} encontrado, mas sem tabela cadastrada. Preencha os macros ou tire foto do rótulo.`);
+            return;
+          }
+        }
+      }
+
+      // Não encontrado no Open Food Facts:
+      // Abre o diálogo já com o badge do código e orienta o usuário
+      setQuery("");
+      setGrams(100);
       setManual(true);
-      setMCal(macros.calories);
-      setMProt(macros.protein_g);
-      setMCarb(macros.carbs_g);
-      setMFat(macros.fat_g);
-      // macros estimados para 100g → mudar "Porção (g)" reescala proporcional
-      setRefGrams(100);
-      setBarcodePortionLabel("Porção estimada pela IA");
-      setBarcodePortionSource("ai");
-      setOpen(true);
-      toast.success(`${macros.name} (estimado por IA)`);
-    } catch {
-      setQuery(`Código ${code}`);
-      setManual(true);
-      setBarcodePortionLabel("");
+      setBarcodePortionLabel(`Código ${cleanCode}`);
       setBarcodePortionSource("manual");
       setOpen(true);
-      toast("Preencha o nome e os macros manualmente");
+      toast.info(
+        `Código ${cleanCode} não encontrado na base. Digite o nome do alimento ou use a foto do rótulo!`,
+        { duration: 6000 },
+      );
+    } catch {
+      setQuery("");
+      setManual(true);
+      setBarcodePortionLabel(`Código ${cleanCode}`);
+      setBarcodePortionSource("manual");
+      setOpen(true);
+      toast.info(`Código ${cleanCode} lido. Digite o nome ou tire foto do rótulo.`);
     } finally {
       setScanLoading(false);
     }
@@ -275,7 +362,7 @@ function NutricaoPage() {
     setBarcodePortionSource("");
     setRefGrams(null);
     try {
-      const dataUrl = await resizeImageFileToDataUrl(file);
+      const dataUrl = await resizeImageFileToDataUrl(file, { maxSize: 1280, quality: 0.85 });
       const macros = await analyzeLabel({
         headers: session?.access_token
           ? { Authorization: `Bearer ${session.access_token}` }
@@ -1042,8 +1129,24 @@ function NutricaoPage() {
                 )}
 
                 <div>
-                  <Label>Alimento</Label>
+                  <div className="flex items-center justify-between">
+                    <Label>Alimento</Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-xs gap-1 text-primary hover:text-primary px-2"
+                      onClick={() => {
+                        setOpen(false);
+                        setLabelOpen(true);
+                      }}
+                    >
+                      <ScanText className="h-3.5 w-3.5" />
+                      Ler foto do rótulo
+                    </Button>
+                  </div>
                   <Input
+                    className="mt-1.5"
                     placeholder="Ex: arroz branco cozido…"
                     value={query}
                     onChange={(e) => {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Camera, X, ScanLine, ZoomIn, ZoomOut } from "lucide-react";
+import { Camera, X, ScanLine, ZoomIn, ZoomOut, Flashlight } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -28,10 +28,26 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
   const [manualCode, setManualCode] = useState("");
   const [zoom, setZoom] = useState(1);
   const [maxZoom, setMaxZoom] = useState(1);
+  const [hasTorch, setHasTorch] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
   const [hint, setHint] = useState("Aponte o codigo para a moldura");
   const [photoHint, setPhotoHint] = useState(false);
   const [captureLoading, setCaptureLoading] = useState(false);
   const [nativeLoading, setNativeLoading] = useState(false);
+
+  const toggleTorch = async () => {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track) return;
+    try {
+      const next = !torchOn;
+      await track.applyConstraints({
+        advanced: [{ torch: next } as any],
+      });
+      setTorchOn(next);
+    } catch (e) {
+      console.error("Failed to toggle torch:", e);
+    }
+  };
 
   const updateZoom = async (delta: number) => {
     const track = streamRef.current?.getVideoTracks()[0];
@@ -75,6 +91,16 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
 
       const detector = createBarcodeDetector();
       const bitmap = await createImageBitmap(file);
+
+      // Tenta primeiro o bitmap original sem perda de amostragem
+      try {
+        if (await detectFromSource(detector, bitmap)) {
+          bitmap.close?.();
+          return;
+        }
+      } catch {
+        // segue para o canvas se falhar
+      }
 
       const maxSide = 1400;
       const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
@@ -284,6 +310,10 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
             setZoom(capabilities.zoom.min || 1);
           }
 
+          if (capabilities.torch) {
+            setHasTorch(true);
+          }
+
           setScanning(true);
         }
       } catch (e) {
@@ -301,6 +331,8 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
 
     return () => {
       cancelAnimationFrame(rafRef.current);
+      setHasTorch(false);
+      setTorchOn(false);
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     };
@@ -337,64 +369,46 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
       }
 
       const now = Date.now();
-      if (now - lastDetectRef.current < 350) {
+      if (now - lastDetectRef.current < 250) {
         rafRef.current = requestAnimationFrame(detect);
         return;
       }
       lastDetectRef.current = now;
 
-      const canvas = canvasRef.current;
-      const guideEl = guideRef.current;
-      if (!canvas || !guideEl) {
-        rafRef.current = requestAnimationFrame(detect);
-        return;
-      }
-
-      const vw = video.videoWidth;
-      const vh = video.videoHeight;
-      const vpW = window.innerWidth;
-      const vpH = window.innerHeight;
-
-      // object-fit: cover math: map the guide area to native video coordinates
-      const scale = Math.max(vpW / vw, vpH / vh);
-      const guideRect = guideEl.getBoundingClientRect();
-      const gcX = guideRect.left + guideRect.width / 2;
-      const gcY = guideRect.top + guideRect.height / 2;
-      const offsetX = (vpW - vw * scale) / 2;
-      const offsetY = (vpH - vh * scale) / 2;
-
-      const scanWidth = Math.min(vw, (guideRect.width / scale) * 1.8);
-      const scanHeight = Math.min(vh, (guideRect.height / scale) * 2.4);
-      const sx = Math.max(0, Math.min(vw - scanWidth, (gcX - offsetX) / scale - scanWidth / 2));
-      const sy = Math.max(0, Math.min(vh - scanHeight, (gcY - offsetY) / scale - scanHeight / 2));
-
-      canvas.width = Math.max(80, Math.round(scanWidth));
-      canvas.height = Math.max(60, Math.round(scanHeight));
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
-      if (!ctx) {
-        rafRef.current = requestAnimationFrame(detect);
-        return;
-      }
-      ctx.drawImage(video, sx, sy, scanWidth, scanHeight, 0, 0, canvas.width, canvas.height);
-
+      // 1. Tenta PRIMEIRO o frame nativo do vídeo completo.
+      // O BarcodeDetector nativo no Chromium/Android analisa o frame com resolução total,
+      // cuidando de rotação, ângulo e iluminação sem distorção.
       try {
-        if (await detectFromSource(detector, canvas)) return;
+        if (await detectFromSource(detector, video)) return;
       } catch {
-        // keep scanning
+        // segue para o canvas se falhar
       }
 
       frameAttempts += 1;
-      // Detecção rodando há um tempo sem achar nada → mostra dica em vez do
-      // silêncio eterno; a leitura contínua segue tentando depois disso.
-      if (!stallNotified && frameAttempts * 350 > STALL_MS) {
+      if (!stallNotified && frameAttempts * 250 > STALL_MS) {
         stallNotified = true;
-        setHint("Sem deteccao ainda. Aproxime da moldura ou use Capturar e ler");
+        setHint("Aproxime o código de barras ou use 'Capturar foto' abaixo");
       }
-      if (frameAttempts % 4 === 0) {
-        try {
-          if (await detectFromSource(detector, video)) return;
-        } catch {
-          // keep scanning
+
+      // 2. Se não detectou no vídeo completo, tenta recorte central do frame
+      const canvas = canvasRef.current;
+      if (canvas && video.videoWidth && video.videoHeight) {
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        const cropW = Math.max(80, Math.round(vw * 0.7));
+        const cropH = Math.max(60, Math.round(vh * 0.5));
+        const sx = Math.max(0, Math.round((vw - cropW) / 2));
+        const sy = Math.max(0, Math.round((vh - cropH) / 2));
+        canvas.width = cropW;
+        canvas.height = cropH;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (ctx) {
+          ctx.drawImage(video, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
+          try {
+            if (await detectFromSource(detector, canvas)) return;
+          } catch {
+            // keep scanning
+          }
         }
       }
 
@@ -420,14 +434,27 @@ export function BarcodeScanner({ open, onClose, onDetected }: Props) {
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
       <div className="flex items-center justify-between px-5 py-4 text-white">
         <p className="font-display font-semibold">Escanear código de barras</p>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onClose}
-          className="text-white hover:bg-white/10"
-        >
-          <X className="h-5 w-5" />
-        </Button>
+        <div className="flex items-center gap-1">
+          {hasTorch && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleTorch}
+              className={`text-white hover:bg-white/10 ${torchOn ? "text-amber-400 bg-white/20" : ""}`}
+              title={torchOn ? "Desligar lanterna" : "Ligar lanterna"}
+            >
+              <Flashlight className="h-5 w-5" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="text-white hover:bg-white/10"
+          >
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
       </div>
 
       <div className="flex-1 relative flex items-center justify-center">

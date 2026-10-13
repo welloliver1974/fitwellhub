@@ -1911,6 +1911,47 @@ Na migration `supabase/migrations/20260913_allow_telegram_meals_and_nutrition.sq
 - Deploy realizado com sucesso no Cloudflare Workers (`fitwellhub.welloliver.workers.dev`).
 - Repositório Git sincronizado com a branch `main`.
 
+---
+
+## Sessão: 13/10/2026 — Correção da Leitura de Rótulo por IA e Scanner de Código de Barras
+
+### 🎯 Problema relatado pelo usuário
+1. Ao tirar foto para ler a tabela nutricional de um produto, o app exibia o erro: `"IA nao retornou a leitura do rotulo (refaca a foto)"`.
+2. Ao usar o scanner de código de barras, a leitura não encontrava nada.
+
+### 🔍 Causa-raiz
+1. **Foto do Rótulo (`analyzeLabel`)**:
+   - `analyzeLabel` forçava `tools` e `toolChoice` (`report_label`) em chamadas com imagem.
+   - Modelos de visão (como Qwen 2.5 VL e Llama 3.2 Vision) no OpenRouter/NVIDIA frequentemente ignoram `tools` com inputs multimodais ou retornam erro 400.
+   - O backend só buscava `tool_calls[0]`; ao não encontrá-lo, disparava `"IA nao retornou a leitura do rotulo (refaca a foto)"`, ignorando o JSON presente em `content` e mascarando erros reais da API.
+   - A foto do rótulo era redimensionada para 800px a 70% de qualidade, deixando letrinhas de tabelas nutricionais ilegíveis para a IA.
+2. **Scanner e Busca de Código de Barras**:
+   - O scanner de câmera (`BarcodeScanner.tsx`) executava um cálculo de recorte em canvas sujeito a distorções de orientação retrato/paisagem no mobile, e só tentava a detecção direta no vídeo 1 vez a cada 4 frames.
+   - Quando o código não estava no Open Food Facts, o app chamava `lookupNutrition` passando o código numérico bruto (ex: `"7896336000078"`). A IA de texto falhava por não associar números a alimentos e caía no bloco de erro.
+   - Para produtos no Open Food Facts sem tabela nutricional preenchida, o app preenchia tudo com zeros (0 kcal, 0g proteína).
+
+### 🛠️ Correções Realizadas
+1. **`src/server-fns/nutrition.functions.ts` (`analyzeLabel`)**:
+   - Prompt refinado exigindo JSON direto no `content`; remoção do `toolChoice` forçado em chamadas de visão.
+   - Extração híbrida e tolerante: inspeciona `json.error`, `tool_calls` e `content` (com limpeza de markdown ````json ... ````).
+   - Nova função `sanitizeRawLabelData`: trata unidades ("30g", "145 kcal"), vírgulas decimais ("1,5") e nulls com fallbacks seguros.
+   - `maxTokens` ampliado para 800.
+2. **`src/server-fns/label.test.ts`**:
+   - Novos testes unitários cobrindo limpeza de unidades, vírgulas e fallbacks de `sanitizeRawLabelData`.
+3. **`src/components/BarcodeScanner.tsx`**:
+   - `BarcodeDetector` nativo agora analisa diretamente o fluxo de vídeo completo em hardware a cada 250ms, acelerando a leitura.
+   - Adicionado botão de lanterna (Flashlight/Torch) no cabeçalho do scanner para leitura em locais com pouca iluminação.
+   - Detecção direta de `ImageBitmap` ao ler arquivos de imagem.
+4. **`src/routes/app.nutricao.tsx`**:
+   - `onPickLabel`: imagem do rótulo agora preserva nitidez com `maxSize: 1280` e `quality: 0.85`.
+   - `onBarcode`: busca com variantes (com e sem zero à esquerda para UPC-A/EAN-13) + nó brasileiro do Open Food Facts.
+   - Estimativa inteligente: se o produto for achado pelo nome mas a tabela do OFF estiver vazia, estima automaticamente os macros com IA pelo nome real.
+   - Se o código não existir na base, abre o formulário com o código registrado e exibe o botão rápido **"Ler foto do rótulo"** acima do campo de alimento.
+
+### ✅ Estado final
+- ✅ `npm test` → **214 testes verdes** (26 arquivos de teste passando 100%).
+- ✅ Documentação sincronizada em `AGENTS.md` e `FIXLOG.md`.
+
 
 
 
