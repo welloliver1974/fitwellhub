@@ -41,15 +41,7 @@ import {
 } from "lucide-react";
 import { analyzeMeasurements, compareMeasurementsWithAi } from "@/server-fns/medidas.functions";
 import { toast } from "sonner";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from "recharts";
+import { AreaTrendChart } from "@/components/charts";
 
 export const Route = createFileRoute("/app/medidas")({
   component: MedidasPage,
@@ -769,47 +761,15 @@ function MedidasPage() {
                           {chartData.length} registros
                         </span>
                       </div>
-                      <div className="h-52 w-full mt-2">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={chartData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
-                            <XAxis 
-                              dataKey="date" 
-                              fontSize={9} 
-                              fontWeight={600} 
-                              tickLine={false} 
-                              axisLine={false} 
-                              dy={8}
-                            />
-                            <YAxis 
-                              fontSize={9} 
-                              fontWeight={600} 
-                              domain={["auto", "auto"]} 
-                              tickLine={false} 
-                              axisLine={false}
-                              dx={-4}
-                            />
-                            <Tooltip
-                              contentStyle={{ 
-                                borderRadius: "16px", 
-                                border: "1px solid hsl(var(--border))", 
-                                background: "hsl(var(--card))",
-                                fontSize: "12px",
-                                fontWeight: 600,
-                                boxShadow: "0 2px 8px rgba(0,0,0,0.05)"
-                              }}
-                              formatter={(v: number) => [`${v.toFixed(1)} cm`, "Medida"]}
-                            />
-                            <Line
-                              type="monotone"
-                              dataKey="cm"
-                              stroke="hsl(var(--primary))"
-                              strokeWidth={3}
-                              dot={{ r: 4, stroke: "hsl(var(--background))", strokeWidth: 2, fill: "hsl(var(--primary))" }}
-                              activeDot={{ r: 6, strokeWidth: 0 }}
-                            />
-                          </LineChart>
-                        </ResponsiveContainer>
+                      <div className="mt-2">
+                        <AreaTrendChart
+                          data={chartData}
+                          dataKey="cm"
+                          xAxisKey="date"
+                          unit="cm"
+                          name={activeGroup}
+                          height={210}
+                        />
                       </div>
                     </Card>
                   ) : (

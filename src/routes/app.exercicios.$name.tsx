@@ -5,15 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import { formatLocalDate, getLocalDate } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, TrendingUp } from "lucide-react";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from "recharts";
+import { AreaTrendChart, chartColors } from "@/components/charts";
 import { isCardioExercise } from "@/lib/cardio-utils";
 
 export const Route = createFileRoute("/app/exercicios/$name")({ component: ExerciseHistory });
@@ -139,34 +131,31 @@ function ExerciseHistory() {
           Registre mais sessões para ver a evolução.
         </Card>
       ) : (
-        <Card className="p-4">
-          <p className="text-xs text-muted-foreground mb-3">
-            {isCardio ? "Tempo total (minutos) por sessão" : "Carga máxima (kg) por sessão"}
-          </p>
-          <div className="h-56">
-            <ResponsiveContainer>
-              <LineChart data={chart}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="label" fontSize={11} />
-                <YAxis fontSize={11} />
-                <Tooltip
-                  formatter={(val: any, name: any) => {
-                    if (isCardio) {
-                      return [`${val} min`, "Tempo"];
-                    }
-                    return [`${val} kg`, "Carga máx"];
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey={isCardio ? "maxReps" : "maxWeight"}
-                  stroke="hsl(var(--primary))"
-                  strokeWidth={2}
-                  dot
-                />
-              </LineChart>
-            </ResponsiveContainer>
+        <Card className="p-4 rounded-3xl border-border/70 shadow-sm bg-card/60 backdrop-blur-sm">
+          <div className="flex items-center justify-between mb-2 px-1">
+            <div>
+              <p className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Evolução do Exercício</p>
+              <p className="text-xs font-semibold text-foreground">
+                {isCardio ? "Tempo total (minutos) por sessão" : "Carga máxima (kg) por sessão"}
+              </p>
+            </div>
+            {pr && (
+              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-secondary/15 text-secondary border border-secondary/30">
+                PR: {isCardio ? `${pr.reps} min` : `${pr.weight} kg`}
+              </span>
+            )}
           </div>
+          <AreaTrendChart
+            data={chart}
+            dataKey={isCardio ? "maxReps" : "maxWeight"}
+            xAxisKey="label"
+            unit={isCardio ? "min" : "kg"}
+            name={isCardio ? "Tempo" : "Carga máx"}
+            color={isCardio ? chartColors.primary : chartColors.secondary}
+            height={210}
+            targetValue={pr ? (isCardio ? pr.reps : pr.weight) : undefined}
+            targetLabel="Recorde (PR)"
+          />
         </Card>
       )}
 

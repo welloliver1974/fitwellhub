@@ -16,15 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { ArrowLeft, Plus, Scale, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from "recharts";
+import { AreaTrendChart } from "@/components/charts";
 
 export const Route = createFileRoute("/app/peso")({
   component: WeightPage,
@@ -150,25 +142,24 @@ function WeightPage() {
           </div>
 
           {entries.length >= 2 && (
-            <Card className="p-4">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-3">Evolução</p>
-              <div className="h-48">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                    <XAxis dataKey="date" fontSize={10} />
-                    <YAxis fontSize={10} domain={["auto", "auto"]} />
-                    <Tooltip />
-                    <Line
-                      type="monotone"
-                      dataKey="peso"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth={2}
-                      dot={{ r: 3 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+            <Card className="p-4 rounded-3xl border-border/70 shadow-sm bg-card/60 backdrop-blur-sm">
+              <div className="flex items-center justify-between mb-2 px-1">
+                <div>
+                  <p className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Evolução do Peso</p>
+                  <p className="text-xs font-semibold text-foreground">Últimos {entries.length} registros</p>
+                </div>
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                  {last.weight_kg.toFixed(1)} kg atual
+                </span>
               </div>
+              <AreaTrendChart
+                data={chartData}
+                dataKey="peso"
+                xAxisKey="date"
+                unit="kg"
+                name="Peso"
+                height={190}
+              />
             </Card>
           )}
 

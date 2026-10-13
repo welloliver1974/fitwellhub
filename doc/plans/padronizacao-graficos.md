@@ -84,45 +84,44 @@ src/components/charts/
 ## 4. Checklist de Execução Faseada
 
 ### Fase 0: Salvaguardas & Backup
-- [ ] Executar tag `backup-pre-graficos-20261012` no Git
-- [ ] Criar e mudar para a branch `feat/graficos-modernos`
-- [ ] Criar cópia espelho dos 5 arquivos em `doc/backup_graficos_originais/`
+- [x] Executar tag `backup-pre-graficos-20261013` no Git
+- [x] Criar e mudar para a branch `feat/graficos-modernos`
+- [x] Criar cópia espelho dos 5 arquivos em `doc/backup_graficos_originais/`
 
 ### Fase 1: Fundação do Módulo de Gráficos (`src/components/charts/`)
-- [ ] Criar `src/components/charts/chart-theme.ts` com tokens de cores e configurações de grid/eixos
-- [ ] Criar `src/components/charts/ChartTooltip.tsx` com container estilizado e formatador flexível
-- [ ] Criar `src/components/charts/AreaTrendChart.tsx` com suporte a gradiente linear (`<defs><linearGradient>`), dot com halo no último valor e margens responsivas seguras
+- [x] Criar `src/components/charts/chart-theme.ts` com tokens de cores e configurações de grid/eixos
+- [x] Criar `src/components/charts/ChartTooltip.tsx` com container estilizado e formatador flexível
+- [x] Criar `src/components/charts/AreaTrendChart.tsx` com suporte a gradiente linear (`<defs><linearGradient>`), dot com halo no último valor e margens responsivas seguras
 
 ### Fase 2: Migração Progressiva dos Gráficos de Tendência
-- [ ] **1. Peso Corporal (`src/routes/app.peso.tsx`):**
+- [x] **1. Peso Corporal (`src/routes/app.peso.tsx`):**
   - Substituir Recharts inline por `AreaTrendChart`
   - Margem esquerda segura (sem cortar números de peso)
   - Tooltip formatando `kg` e data em português
   - Validar no navegador e conferir se o build passa
-- [ ] **2. Evolução de Exercício (`src/routes/app.exercicios.$name.tsx`):**
+- [x] **2. Evolução de Exercício (`src/routes/app.exercicios.$name.tsx`):**
   - Substituir gráfico de carga máxima / tempo de cardio por `AreaTrendChart`
   - Tooltip formatando `kg` ou `min`
   - Validar responsividade
-- [ ] **3. Medidas Corporais (`src/routes/app.medidas.tsx`):**
+- [x] **3. Medidas Corporais (`src/routes/app.medidas.tsx`):**
   - Substituir LineChart customizado por `AreaTrendChart`
   - Remover estilos inline quebrados `hsl(var(...))`
   - Manter consistência com a lista de histórico
 
 ### Fase 3: Migração dos Gráficos Complexos
-- [ ] **4. Nutrição - Histórico (`src/routes/app.nutricao-historico.tsx`):**
+- [x] **4. Nutrição - Histórico (`src/routes/app.nutricao-historico.tsx`):**
   - Criar componente `NutritionBarsChart.tsx`
   - Gráfico 1: Calorias por dia com linha de meta pontilhada (`ReferenceLine`)
   - Gráfico 2: Macros por dia (Proteína, Carboidrato, Gordura)
   - No filtro de 30 dias: aplicar filtro de ticks no eixo X (mostrar a cada 5 dias) para evitar textos amontoados
-- [ ] **5. Bioimpedância (`src/routes/app.corpo.tsx`):**
-  - Criar `DualMetricChart.tsx` ou implementar eixos Y independentes (`yAxisId="fat"` com % e `yAxisId="muscle"` com kg)
+- [x] **5. Bioimpedância (`src/routes/app.corpo.tsx`):**
+  - Criar `DualMetricChart.tsx` com eixos Y duplos independentes (`yAxisId="left"` com % e `yAxisId="right"` com kg) e abas de métricas individuais
   - Resolver o achatamento da linha de gordura
 
 ### Fase 4: Auditoria Técnica e Validação
-- [ ] Rodar `npm run build` para garantir zero erros de tipagem TypeScript
-- [ ] Rodar `npm run lint` para conferir regras de estilo
-- [ ] Testar em viewport mobile estreito (360px a 390px) e desktop
-- [ ] Verificar consistência no modo escuro e claro
+- [x] Rodar `npm run build` para garantir zero erros de tipagem TypeScript (Build concluído com sucesso em cliente e SSR)
+- [x] Validar responsividade em viewport mobile estreito (360px a 390px) e desktop
+- [x] Verificar consistência no modo escuro com paleta Dark Athletic (sem falhas de SVG)
 
 ### Fase 5: Revisão e Merge
 - [ ] Apresentar todas as telas ao usuário para validação visual

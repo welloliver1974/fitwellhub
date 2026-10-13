@@ -7,16 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { NutDayDetail } from "@/components/nutrition-day-detail";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-  Legend,
-} from "recharts";
+import { NutritionBarsChart } from "@/components/charts";
 
 export const Route = createFileRoute("/app/nutricao-historico")({ component: NutHistoryPage });
 
@@ -113,37 +104,40 @@ function NutHistoryPage() {
         </Card>
       </div>
 
-      <Card className="p-4">
-        <p className="text-xs text-muted-foreground mb-3">Calorias por dia</p>
-        <div className="h-56">
-          <ResponsiveContainer>
-            <BarChart data={chart}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="label" fontSize={11} />
-              <YAxis fontSize={11} />
-              <Tooltip />
-              <Bar dataKey="calories" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+      <Card className="p-4 rounded-3xl border-border/70 shadow-sm bg-card/60 backdrop-blur-sm">
+        <div className="flex items-center justify-between mb-2 px-1">
+          <div>
+            <p className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Consumo Calórico</p>
+            <p className="text-xs font-semibold text-foreground">Calorias por dia ({range} dias)</p>
+          </div>
+          {goal > 0 && (
+            <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+              Meta: {goal} kcal
+            </span>
+          )}
         </div>
+        <NutritionBarsChart
+          data={chart}
+          mode="calories"
+          range={range}
+          targetValue={goal}
+          height={210}
+        />
       </Card>
 
-      <Card className="p-4">
-        <p className="text-xs text-muted-foreground mb-3">Macros (g) por dia</p>
-        <div className="h-56">
-          <ResponsiveContainer>
-            <BarChart data={chart}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="label" fontSize={11} />
-              <YAxis fontSize={11} />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="protein_g" name="Proteína" fill="hsl(var(--primary))" stackId="m" />
-              <Bar dataKey="carbs_g" name="Carbo" fill="hsl(var(--accent))" stackId="m" />
-              <Bar dataKey="fat_g" name="Gordura" fill="hsl(var(--muted-foreground))" stackId="m" />
-            </BarChart>
-          </ResponsiveContainer>
+      <Card className="p-4 rounded-3xl border-border/70 shadow-sm bg-card/60 backdrop-blur-sm">
+        <div className="flex items-center justify-between mb-2 px-1">
+          <div>
+            <p className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Distribuição de Macronutrientes</p>
+            <p className="text-xs font-semibold text-foreground">Macros (g) por dia</p>
+          </div>
         </div>
+        <NutritionBarsChart
+          data={chart}
+          mode="macros"
+          range={range}
+          height={210}
+        />
       </Card>
     </div>
   );

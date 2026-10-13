@@ -46,16 +46,7 @@ import {
   analyzeBioimpedancePhoto,
 } from "@/server-fns/corpo.functions";
 import { toast } from "sonner";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-  Legend,
-} from "recharts";
+import { DualMetricChart } from "@/components/charts";
 
 export const Route = createFileRoute("/app/corpo")({
   component: CorpoPage,
@@ -1144,57 +1135,8 @@ function CorpoPage() {
                       {chartData.length} leituras
                     </span>
                   </div>
-                  <div className="h-64 w-full mt-2">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={chartData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
-                        <XAxis
-                          dataKey="date"
-                          fontSize={9}
-                          fontWeight={600}
-                          tickLine={false}
-                          axisLine={false}
-                          dy={8}
-                        />
-                        <YAxis
-                          fontSize={9}
-                          fontWeight={600}
-                          domain={["auto", "auto"]}
-                          tickLine={false}
-                          axisLine={false}
-                          dx={-4}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            borderRadius: "16px",
-                            border: "1px solid hsl(var(--border))",
-                            background: "hsl(var(--card))",
-                            fontSize: "12px",
-                            fontWeight: 600,
-                            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-                          }}
-                        />
-                        <Legend wrapperStyle={{ fontSize: "10px", fontWeight: 700 }} />
-                        <Line
-                          type="monotone"
-                          name="Gordura (%)"
-                          dataKey="fat"
-                          stroke="hsl(var(--destructive))"
-                          strokeWidth={2.5}
-                          dot={{ r: 4, stroke: "hsl(var(--background))", strokeWidth: 1.5, fill: "hsl(var(--destructive))" }}
-                          activeDot={{ r: 6, strokeWidth: 0 }}
-                        />
-                        <Line
-                          type="monotone"
-                          name="Músculo (kg)"
-                          dataKey="muscle"
-                          stroke="hsl(var(--primary))"
-                          strokeWidth={2.5}
-                          dot={{ r: 4, stroke: "hsl(var(--background))", strokeWidth: 1.5, fill: "hsl(var(--primary))" }}
-                          activeDot={{ r: 6, strokeWidth: 0 }}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
+                  <div className="mt-3">
+                    <DualMetricChart data={chartData} height={230} />
                   </div>
                 </Card>
               ) : (
