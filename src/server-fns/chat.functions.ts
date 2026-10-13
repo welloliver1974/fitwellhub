@@ -418,7 +418,7 @@ export const sendChat = createServerFn({ method: "POST" })
         type: "function",
         function: {
           name: "record_meal",
-          description: "Registra uma refeição com múltiplos itens e macros.",
+          description: "Registra uma refeição que o usuário JÁ CONSUMIU/COMEU no dia. NUNCA use se o usuário estiver apenas pedindo sugestões de dieta, lanche, plano ou dicas de refeições.",
           parameters: {
             type: "object",
             properties: {
@@ -446,7 +446,7 @@ export const sendChat = createServerFn({ method: "POST" })
         type: "function",
         function: {
           name: "record_workout",
-          description: "Registra um treino com exercícios e séries.",
+          description: "Registra uma sessão de treino que o usuário JÁ REALIZOU/EXECUTOU hoje ou recentemente. NUNCA use se o usuário estiver pedindo uma sugestão de treino, rotina ou divisão.",
           parameters: {
             type: "object",
             properties: {
@@ -481,13 +481,13 @@ export const sendChat = createServerFn({ method: "POST" })
         type: "function",
         function: {
           name: "record_water",
-          description: "Registra a ingestão de água do usuário. Use quando o usuário mencionar que bebeu água ou liquidos (ex: 'Bebi 500ml de água', 'tomei um copo de água').",
+          description: "Registra água que o usuário JÁ BEBEU hoje (ex: 'bebi 500ml', 'tomei um copo'). NUNCA use para orientações sobre quanta água beber.",
           parameters: {
             type: "object",
             properties: {
               ml: {
                 type: "number",
-                description: "Quantidade em mililitros (ml). Converta para ml se o usuário disser litros, copos (240ml) ou garrafinhas (500ml).",
+                description: "Quantidade em mililitros (ml). Converta copos para 240ml e garrafinhas para 500ml.",
               },
             },
             required: ["ml"],
@@ -499,17 +499,29 @@ export const sendChat = createServerFn({ method: "POST" })
     let messages: any[] = [
       { 
         role: "system", 
-        content: `Você é um coach de nutrição e treino altamente analítico. Use português brasileiro. 
+        content: `Você é um coach de nutrição e treino altamente qualificado, prestativo, humanizado e analítico. Use português brasileiro.
 IMPORTANTE: Se o usuário enviar fotos, analise TODAS elas antes de chamar qualquer ferramenta.
 - Se as fotos forem do mesmo treino ou refeição, use apenas UMA chamada de ferramenta consolidando todos os dados.
 - Treinos têm exercícios, séries e repetições. NÃO calcule macros para treinos.
-- Use APENAS as chamadas de ferramentas nativas. NÃO gere JSON manualmente.
+- Use APENAS as chamadas de ferramentas nativas quando houver ação de registro. NÃO gere JSON manualmente.
 - Seja preciso com nomes de exercícios e pesos.
 
-REGISTRO POR CONVERSA — use as ferramentas quando o usuário mencionar:
-- record_meal: alimentos, refeições, o que comeu (ex: "comi uma banana com aveia no café")
-- record_workout: treinos, exercícios realizados, séries e repetições (ex: "fiz agachamento com 80kg")
-- record_water: água ou liquidos ingeridos (ex: "bebi 500ml de água", "tomei um copo", "tomei uma garrafa"). Converta copos para 240ml e garrafinhas para 500ml.
+REGISTRO POR CONVERSA VS. ORIENTAÇÃO/DÚVIDAS:
+- Use as ferramentas APENAS quando o usuário relatar explicitamente fatos que JÁ OCORRERAM:
+  • record_meal: alimentos e refeições já consumidos (ex: "comi 2 ovos com aveia agora")
+  • record_workout: treino já executado hoje ou recentemente (ex: "fiz agachamento 3x10 com 80kg")
+  • record_water: água ou líquidos já ingeridos (ex: "bebi 500ml de água", "tomei um copo")
+- NUNCA CHAME FERRAMENTAS quando o usuário estiver:
+  • Pedindo um treino novo, uma rotina, uma divisão (ex: "me passa um treino de perna", "o que treinar hoje?")
+  • Pedindo sugestões de refeição, lanche ou substituição
+  • Fazendo perguntas biomecânicas, fisiológicas ou sobre seus dados
+  Nesses casos, responda DIRETAMENTE com o seu melhor conselho técnico e didático.
+
+COMPLETUDE OBRIGATÓRIA E FORMATAÇÃO:
+- Suas respostas devem ser SEMPRE completas, conclusivas e bem estruturadas.
+- NUNCA deixe frases inacabadas, listas pela metade ou tabelas cortadas.
+- Organize o texto com parágrafos claros, tópicos com marcadores e destaques em negrito.
+- Finalize sempre de forma amigável e motivadora.
 
 DIRETRIZES DE EXPLICABILIDADE E TRANSPARÊNCIA:
 - Suas análises, recomendações e sugestões devem ser explicitamente justificadas citando os dados de origem correspondentes.
@@ -531,15 +543,34 @@ Dados do usuário:\n${ctxText}` + (process.env.COACH_ALWAYS_SUGGEST === "true" ?
       model: modelToUse,
       messages,
       tools,
+      maxTokens: 2500,
       baseUrl: provider === "omniroute" ? settings.omniroute_base_url : undefined,
     });
-    let choice = response.choices[0];
-    const createdWorkoutNames = new Set<string>();
 
-    while (choice.message.tool_calls) {
+    let choice = response?.choices?.[0];
+    if (!choice) {
+      const errDetail = response?.error?.message || response?.error || "A IA não retornou resposta.";
+      console.error("[sendChat] Erro ao obter resposta da IA:", response);
+      throw new Error(`Erro ao conectar com a IA (${provider} / ${modelToUse}): ${errDetail}`);
+    }
+
+    const createdWorkoutNames = new Set<string>();
+    let loopCount = 0;
+
+    while (choice?.message?.tool_calls?.length && loopCount < 5) {
+      loopCount++;
       messages.push(choice.message);
       for (const toolCall of choice.message.tool_calls) {
-        const args = JSON.parse(toolCall.function.arguments);
+        let args: any = {};
+        try {
+          args = typeof toolCall.function.arguments === "string"
+            ? JSON.parse(toolCall.function.arguments)
+            : (toolCall.function.arguments || {});
+        } catch (err) {
+          console.warn("[sendChat] Erro no JSON.parse dos argumentos do toolCall:", err);
+          args = {};
+        }
+
         let result = "";
 
         try {
@@ -563,19 +594,25 @@ Dados do usuário:\n${ctxText}` + (process.env.COACH_ALWAYS_SUGGEST === "true" ?
           content: result 
         });
       }
+
       response = await callAiChatCompletion({
         provider,
         apiKey,
         model: modelToUse,
         messages,
         tools,
+        maxTokens: 2500,
         baseUrl: provider === "omniroute" ? settings.omniroute_base_url : undefined,
       });
-      choice = response.choices[0];
+      choice = response?.choices?.[0];
+      if (!choice) break;
     }
 
     // 4. Save assistant reply and return
-    const reply = choice.message.content || "Registro concluído.";
+    let reply = choice?.message?.content?.trim() || "Registro concluído.";
+    if (choice?.finish_reason === "length") {
+      reply += "\n\n*(Resposta pausada pelo limite de tamanho: me mande 'continua' para eu prosseguir com os detalhes restantes!)*";
+    }
     await saveChatMessage(supabase, userId, "assistant", reply);
     // Confiança + próxima ação derivadas dos dados (heurística), não da IA. O banco persiste
     // apenas o reply; esses campos vão só no retorno para a UI exibir chips na última mensagem.

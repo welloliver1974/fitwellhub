@@ -69,6 +69,8 @@ export const Route = createFileRoute("/app/ia")({
 });
 
 const DEFAULT_GROQ_MODELS = [
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant",
   "openai/gpt-oss-120b",
   "qwen/qwen3.8-27b",
   "groq/compound-mini",
@@ -555,13 +557,13 @@ function AiSettingsPage() {
                 <SelectContent>
                   {groqModels.map((m) => (
                     <SelectItem key={m} value={m} className="text-xs">
-                      {m === "openai/gpt-oss-120b" ? "⭐ " : ""}{m}
+                      {m === "llama-3.3-70b-versatile" || m === "openai/gpt-oss-120b" ? "⭐ " : ""}{m}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <p className="text-[11px] text-muted-foreground">
-                Recomendado: <strong>openai/gpt-oss-120b</strong> ou <strong>qwen/qwen3.8-27b</strong>.
+                Recomendado: <strong>llama-3.3-70b-versatile</strong> (mais completo e ágil) ou <strong>openai/gpt-oss-120b</strong>.
               </p>
             </div>
 

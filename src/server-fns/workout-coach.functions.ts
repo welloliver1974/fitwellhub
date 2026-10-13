@@ -381,7 +381,7 @@ DIRETRIZES DE RESPOSTA:
         model,
         messages: apiMessages,
         temperature: 0.7,
-        maxTokens: 2000,
+        maxTokens: 2500,
         baseUrl: settings.custom_base_url || settings.omniroute_base_url,
       });
 

@@ -69,6 +69,8 @@ export const fetchGroqModels = createServerFn({ method: "POST" })
 
     // Ordena colocando os recomendados no topo
     const priority = [
+      "llama-3.3-70b-versatile",
+      "llama-3.1-8b-instant",
       "openai/gpt-oss-120b",
       "qwen/qwen3.8-27b",
       "groq/compound-mini",
@@ -167,29 +169,21 @@ export async function callAiChatCompletion(options: {
   baseUrl?: string | null;
 }) {
   let model = options.model;
-  let maxTokens = options.maxTokens;
+  let maxTokens = options.maxTokens ?? 2500;
 
   // Proteções e calibragens automáticas para o provedor GROQ:
-  // 1. Substituir modelos descontinuados/inacessíveis (ex: llama-3.3-70b-versatile, llama-3.1-8b-instant, etc.)
-  // 2. Apenas modelos qwen possuem teto baixo de 1000 OTPM no free tier; modelos como gpt-oss-120b e compound suportam 2000-4000 tokens com folga.
+  // 1. Substituir modelos descontinuados/aposentados pela Groq para equivalentes modernos ativos
+  // 2. Garantir um teto de tokens saudável (padrão 2500) para evitar que respostas longas e estruturadas sejam cortadas
   if (options.provider === "groq") {
-    const deprecated = [
-      "llama-3.3-70b-versatile",
-      "llama-3.1-8b-instant",
-      "deepseek-r1-distill-llama-70b",
+    const retired = [
+      "llama-3.1-70b-versatile",
+      "llama3-70b-8192",
+      "llama3-8b-8192",
       "mixtral-8x7b-32768",
       "gemma2-9b-it",
     ];
-    if (!model || deprecated.includes(model)) {
-      model = "openai/gpt-oss-120b";
-    }
-
-    if (model.includes("qwen")) {
-      if (!maxTokens || maxTokens > 700) {
-        maxTokens = 700;
-      }
-    } else if (!maxTokens) {
-      maxTokens = 2000;
+    if (!model || retired.includes(model)) {
+      model = "llama-3.3-70b-versatile";
     }
   }
 
@@ -223,21 +217,29 @@ export async function callAiChatCompletion(options: {
 
   let data = await response.json();
 
-  // Se der model_not_found ou rate_limit no Groq, tenta fallback transparente com modelo alternativo funcional
+  // Se der model_not_found ou rate_limit no Groq, tenta fallback transparente com modelo alternativo funcional e ágil
   if (
     options.provider === "groq" &&
     data?.error &&
     (data.error.code === "model_not_found" || data.error.code === "rate_limit_exceeded")
   ) {
-    const fallbackModel = model === "openai/gpt-oss-120b" ? "qwen/qwen3.8-27b" : "openai/gpt-oss-120b";
+    const fallbackModel =
+      model === "llama-3.1-8b-instant" ? "llama-3.3-70b-versatile" : "llama-3.1-8b-instant";
     body.model = fallbackModel;
-    body.max_tokens = 500;
-    const retryRes = await fetch(endpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-    });
-    data = await retryRes.json();
+    body.max_tokens = Math.max(maxTokens, 2000);
+    try {
+      const retryRes = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+      const retryData = await retryRes.json();
+      if (!retryData?.error) {
+        data = retryData;
+      }
+    } catch {
+      // Mantém data original se o fetch falhar
+    }
   }
 
   return data;
