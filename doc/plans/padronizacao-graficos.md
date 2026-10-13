@@ -127,7 +127,7 @@ src/components/charts/
 - [ ] Apresentar todas as telas ao usuário para validação visual
 - [ ] Se aprovado: mesclar a branch `feat/graficos-modernos` na `main`
 - [ ] Remover a pasta temporária `doc/backup_graficos_originais/`
-- [ ] Registrar no changelog (`doc/changelog/FIXLOG.md` e `doc/changelog/AGENTS.md`)
+- [x] Registrar no changelog (`doc/changelog/FIXLOG.md` e `doc/changelog/AGENTS.md`)
 
 ---
 

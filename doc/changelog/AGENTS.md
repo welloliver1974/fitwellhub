@@ -2,6 +2,26 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [13/10/2026] - Antigravity (Padronização e Modernização Visual dos Gráficos com Módulo Centralizado @/components/charts)
+- **Criação do Módulo Centralizado de Gráficos (`src/components/charts/`)**:
+  - `chart-theme.ts`: Tokens dark athletic puros compatíveis com SVG (Neon Mint, Cyan, Coral, Âmbar). Elimina o bug onde `stroke="hsl(var(--primary))"` falhava devido a variáveis CSS em formato `oklch()`.
+  - `ChartTooltip.tsx`: Tooltip dark glassmorphism com backdrop blur, halos brilhantes de dados e formatação adaptativa de unidades (kg, cm, %, min, kcal, g).
+  - `AreaTrendChart.tsx`: Gráfico de área/tendência com gradiente linear suave (`linearGradient`), glow halo no ponto mais recente e margens responsivas sem corte de eixos.
+  - `NutritionBarsChart.tsx`: Gráfico de barras verticais e empilhadas para calorias e macronutrientes com filtro de densidade inteligente para 30 dias no mobile e linha de meta (`ReferenceLine`).
+  - `DualMetricChart.tsx`: Gráfico com eixos Y duplos independentes (Gordura em % na esquerda e Músculo em kg na direita), corrigindo o esmagamento das métricas de bioimpedância.
+  - `index.ts`: Barrel export para consumo em todas as páginas do app.
+- **Refatoração e Migração das Rotas**:
+  - `src/routes/app.peso.tsx`: Migrado para `AreaTrendChart`, eliminando estilos inline inválidos e cortes de numeração no mobile.
+  - `src/routes/app.exercicios.$name.tsx`: Migrado para `AreaTrendChart`, unificando visual para cargas de musculação e tempos de cardio.
+  - `src/routes/app.medidas.tsx`: Migrado para `AreaTrendChart`, exibindo histórico individual de circunferências com precisão.
+  - `src/routes/app.nutricao-historico.tsx`: Migrado para `NutritionBarsChart`, suportando visualização de 7 e 30 dias com macros empilhados.
+  - `src/routes/app.corpo.tsx`: Migrado para `DualMetricChart`, separando as escalas de % e kg.
+- **Validação e Qualidade**:
+  - Build de produção (`npm run build`): 100% aprovado para cliente e SSR.
+  - Vitest (`npm test`): 26 suítes e 212 testes aprovados (100%).
+  - ESLint: 0 erros nos componentes do novo módulo.
+  - Validação de renderização no navegador sem exceções de console.
+
 ## [10/10/2026] - Antigravity (Acesso Completo a Detalhes de Treinos, Séries, Cargas e Cardio para o Hermes: get_workout_session & get_day)
 - **Enriquecimento de `get_day` com Detalhes Completos de Exercícios e Cargas**:
   - Anteriormente, o `get_day` retornava apenas metadados básicos da sessão (`routine_name`, `completed_at`, `duration_minutes`).

@@ -1,6 +1,32 @@
 # FIXLOG — FitWell Hub
 
-## Sessão: 10/10/2026 — Suporte a Detalhes de Treinos, Séries, Cargas e Cardio no Hermes Agent (get_workout_session & get_day) + Validação ao Vivo
+## Sessão: 13/10/2026 — Padronização e Modernização Visual dos Gráficos (Módulo Centralizado @/components/charts)
+
+### 🎯 Diagnóstico & Implementação
+1. **Problemas Estruturais Identificados e Resolvidos**:
+   - **Bug Crítico de Cores SVG (`hsl(oklch(...))`):** Variáveis do tema CSS usavam formato OKLCH, mas SVG/Recharts chamava `hsl(var(--primary))`, gerando CSS inválido e fazendo as linhas caírem em cor preta/currentColor invisível no dark mode. Corrigido com tokens hexadecimais puros em `src/components/charts/chart-theme.ts`.
+   - **Eixo Y Cortado em Telas Mobile:** Margens negativas antigas (`margin={{ left: -25 }}`) cortavam os primeiros dígitos (ex: "7" de "78.5 kg"). Corrigido com margens calibradas e largura fixa no eixo Y (`width={38}`, `left: -12` / `-14`).
+   - **Escalas Distorcidas na Bioimpedância (`app.corpo.tsx`):** Gordura (%) e Músculo (kg) dividiam o mesmo eixo Y simples, esmagando a curva de gordura no fundo do gráfico. Criado o componente `DualMetricChart` com eixos independentes esquerdo (`yAxisId="left"`, %) e direito (`yAxisId="right"`, kg).
+   - **Tooltips Genéricas e Brancas:** Recharts usava caixas brancas sem contraste. Criado `ChartTooltip` dark glassmorphism com backdrop-blur, ícones com halo brilhante e formatação de unidades dinâmicas (kg, cm, %, min, kcal, g).
+   - **Amontoamento nos 30 Dias de Nutrição (`app.nutricao-historico.tsx`):** 30 barras espremidas no mobile de 360px sem agrupamento. Criado `NutritionBarsChart` com cálculo de densidade inteligente (`xInterval = range === 30 ? ceil(data.length / 6) - 1 : 0`), suporte a meta calórica (`ReferenceLine`) e barras empilhadas de macros.
+2. **Componentes Criados (`src/components/charts/`)**:
+   - `chart-theme.ts`: Tokens dark athletic (Neon Mint `#2dd4a8`, Cyan `#38bdf8`, Coral `#f43f5e`, Âmbar `#fbbf24`).
+   - `ChartTooltip.tsx`: Tooltip dark glassmorphism com halo e formatação flexível.
+   - `AreaTrendChart.tsx`: Gráfico de área/linha contínua com gradiente suave (`linearGradient`) e destaque no ponto recente.
+   - `NutritionBarsChart.tsx`: Gráfico de barras com suporte a modos `calories` e `macros` empilhados.
+   - `DualMetricChart.tsx`: Gráfico com eixos Y duplos independentes e dot com halo.
+   - `index.ts`: Barrel export para consumo em todas as páginas.
+3. **Páginas Migradas**:
+   - `src/routes/app.peso.tsx` → `AreaTrendChart`
+   - `src/routes/app.exercicios.$name.tsx` → `AreaTrendChart` (com carga máx ou tempo de cardio)
+   - `src/routes/app.medidas.tsx` → `AreaTrendChart` (evolução individual por parte do corpo)
+   - `src/routes/app.nutricao-historico.tsx` → `NutritionBarsChart` (calorias e macros 7d/30d)
+   - `src/routes/app.corpo.tsx` → `DualMetricChart` (gordura % vs massa muscular kg)
+4. **Validação Técnica**:
+   - Build de produção (`npm run build`): 100% aprovado (client e SSR).
+   - Suíte de testes (`npm test`): 26 arquivos e 212 testes aprovados (100%).
+   - Linting em `src/components/charts/`: 0 erros.
+   - Validação no navegador via subagent: carregamento limpo e zero erros de runtime no console.
 
 ### 🎯 Diagnóstico & Implementação
 1. **Limitação Relatada pelo Usuário e pelo Hermes**:
