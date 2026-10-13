@@ -1,7 +1,7 @@
 # Plano de Ação: Padronização e Modernização dos Gráficos (FitWell Hub)
 
-> **Status:** Pronto para Execução  
-> **Data:** 12/10/2026  
+> **Status:** Concluído e Validado (Merge na Main)  
+> **Data:** 13/10/2026  
 > **Objetivo:** Resolver problemas visuais e de renderização nos gráficos do app, eliminando erros de CSS/SVG, truncamento em telas mobile, tooltips genéricas e ausência de identidade visual fitness moderna.
 
 ---
@@ -124,9 +124,9 @@ src/components/charts/
 - [x] Verificar consistência no modo escuro com paleta Dark Athletic (sem falhas de SVG)
 
 ### Fase 5: Revisão e Merge
-- [ ] Apresentar todas as telas ao usuário para validação visual
-- [ ] Se aprovado: mesclar a branch `feat/graficos-modernos` na `main`
-- [ ] Remover a pasta temporária `doc/backup_graficos_originais/`
+- [x] Apresentar todas as telas ao usuário para validação visual
+- [x] Se aprovado: mesclar a branch `feat/graficos-modernos` na `main`
+- [x] Remover a pasta temporária `doc/backup_graficos_originais/`
 - [x] Registrar no changelog (`doc/changelog/FIXLOG.md` e `doc/changelog/AGENTS.md`)
 
 ---
