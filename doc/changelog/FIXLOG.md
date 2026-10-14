@@ -1,5 +1,41 @@
 # FIXLOG — FitWell Hub
 
+## Sessão: 14/10/2026 — Central de Configuração, Seleção e Teste em Tempo Real de Modelos de Visão Multimodal (OCR Rótulos & Fotos de Pratos)
+
+### 🎯 Diagnóstico & Implementação
+1. **Problemas Identificados**:
+   - Falha 404/400 ao ler tabelas nutricionais ou fotos de bioimpedância devido a ID de modelo incorreto no OpenRouter (`qwen2.5-vl-72b-instruct` sem hífen em vez do oficial `qwen/qwen-2.5-vl-72b-instruct`).
+   - Falta de controle na interface para o usuário selecionar o provedor e modelo de visão multimodal específico, configurar chaves de API dedicadas e testar previamente a visão antes de usar a câmera.
+   - Dificuldade na leitura de rótulos por rigidez no parsing de sinônimos da ANVISA (Vitamina C, Sódio, kJ vs kcal).
+2. **Solução Implementada**:
+   - **Central de IA (`src/routes/app.ia.tsx`)**:
+     - Criada seção dedicada **"2. Inteligência Visual (Foto do Prato & Tabelas Nutricionais)"**.
+     - Seletor de provedor de visão multimodal: OpenRouter, Groq e NVIDIA.
+     - Campo de chave de API dedicada com detecção automática (mostra se está ativa via `.env` do sistema ou chave customizada).
+     - Catálogo de modelos recomendados com 1 clique:
+       - OpenRouter: `qwen/qwen-2.5-vl-72b-instruct`, `google/gemini-2.0-flash-001`, `openai/gpt-4o-mini`.
+       - Groq: `llama-3.2-90b-vision-preview`, `llama-3.2-11b-vision-preview`.
+       - NVIDIA: `meta/llama-3.2-90b-vision-instruct`.
+     - Campo para inserção livre de modelos personalizados.
+     - **Botão "Testar Modelo de Visão 🧪"**: dispara requisição multimodal real com imagem PNG 1x1 em base64 e exibe card com status de sucesso/erro e latência em milissegundos.
+   - **Server Function de Teste (`src/server-fns/ai-settings.functions.ts`)**:
+     - Implementada `testAiVisionModel` testando chamadas multimodais reais com payload de imagem para garantir compatibilidade antes de usar no app.
+   - **Camada de Configurações (`src/lib/ai-settings.ts`)**:
+     - Suporte a `groq` em `VisionAiProvider`.
+     - Normalização automática do ID do Qwen VL corrigindo variações sem hífen para `qwen/qwen-2.5-vl-72b-instruct`.
+     - Fallbacks inteligentes de chaves de API e modelos padrão.
+   - **Leitura de Rótulos e Pratos (`src/server-fns/nutrition.functions.ts`)**:
+     - Função `sanitizeRawLabelData` tolerante a sinônimos de rótulos (ANVISA/internacionais), objetos aninhados e priorização de kcal sobre kJ.
+     - `analyzeLabel` e `analyzePhoto` consomem a configuração salva em `ai_settings` via `resolveVisionConfig`.
+   - **Interface de Nutrição e Câmera (`src/routes/app.nutricao.tsx`)**:
+     - Abas comutáveis "🍽️ Prato de comida" e "🏷️ Tabela Nutricional (Rótulo)" no modal de câmera.
+     - Suporte a foto direta da câmera ou upload pela galeria.
+   - **Bioimpedância (`src/server-fns/corpo.functions.ts`)**:
+     - Atualizado `analyzeBioimpedancePhoto` para o identificador oficial `qwen/qwen-2.5-vl-72b-instruct`.
+3. **Validação Técnica**:
+   - Suíte de testes (`npm test`): 26 arquivos e 219 testes aprovados (100%).
+   - Testes unitários dedicados em `src/lib/ai-settings.test.ts` e `src/server-fns/label.test.ts`.
+
 ## Sessão: 13/10/2026 — Padronização e Modernização Visual dos Gráficos (Módulo Centralizado @/components/charts)
 
 ### 🎯 Diagnóstico & Implementação
@@ -1949,8 +1985,49 @@ Na migration `supabase/migrations/20260913_allow_telegram_meals_and_nutrition.sq
    - Se o código não existir na base, abre o formulário com o código registrado e exibe o botão rápido **"Ler foto do rótulo"** acima do campo de alimento.
 
 ### ✅ Estado final
-- ✅ `npm test` → **214 testes verdes** (26 arquivos de teste passando 100%).
+- ✅ `npm test` → **219 testes verdes** (26 arquivos de teste passando 100%).
 - ✅ Documentação sincronizada em `AGENTS.md` e `FIXLOG.md`.
+
+---
+
+## [14/10/2026] - Correção da Leitura de Tabela Nutricional por IA na Opção de Câmera
+
+### 🚩 Sintomas
+1. Usuário relatava erro ao ler a tabela nutricional via IA ao utilizar a opção de câmera.
+2. A leitura da embalagem retornava erro de IA ou campos zerados (0 kcal, 0g de proteína/carbo/gordura).
+3. Na toolbar, o ícone de câmera abria apenas "Foto do prato", gerando confusão para quem desejava fotografar rótulos/tabelas nutricionais.
+
+### 🔍 Causas-raiz
+1. **Identificador inválido no OpenRouter (`qwen2.5-vl` vs `qwen-2.5-vl`)**:
+   - `getVisionModel` e chamadas no backend utilizavam o ID `"qwen/qwen2.5-vl-72b-instruct"` (sem o hífen), enquanto no OpenRouter o ID oficial é `"qwen/qwen-2.5-vl-72b-instruct"`. Isso causava erro 404 da API do OpenRouter.
+2. **Falta de fallback inteligente para usuários Groq**:
+   - O app resolvia visão para OpenRouter por padrão mesmo quando o usuário só havia configurado a chave da Groq, causando erro `"Configure uma chave de IA nas configurações."`.
+   - Groq suporta visão via `llama-3.2-90b-vision-preview`, agora integrado com fallback gracioso.
+3. **Fragilidade na extração de sinônimos de tabelas ANVISA/Internacionais (`sanitizeRawLabelData`)**:
+   - Respostas da IA contendo chaves comuns em português (`produto`, `porcao`, `valor_energetico`, `proteinas`, `carboidratos`, `gorduras_totais`) ou objetos aninhados (`tabela_nutricional`, `product`) tinham seus valores descartados pelo sanitizador anterior, resultando em macros zerados.
+   - Textos contendo simultaneamente `kJ` e `kcal` (ex.: "540 kJ / 129 kcal") podiam extrair o valor em kJ.
+4. **UX da Câmera**:
+   - Quem clicava no ícone de Câmera na barra superior caía no diálogo estrito de "Foto do prato" sem opção de alternar para leitura de rótulo.
+   - A captura no mobile forçava `capture="environment"` sem permitir escolher fotos salvas da galeria.
+
+### 🛠️ Correções Realizadas
+1. **`src/lib/ai-settings.ts` & `src/lib/ai-settings.test.ts`**:
+   - Normalização automática do ID do modelo para `qwen/qwen-2.5-vl-72b-instruct`.
+   - Adicionado suporte a `groq` como provedor de visão (`llama-3.2-90b-vision-preview`).
+   - Fallback de chaves quando o usuário possui chave Groq configurada.
+2. **`src/server-fns/nutrition.functions.ts` & `src/server-fns/label.test.ts`**:
+   - `sanitizeRawLabelData` expandido com suporte a desaninhamento de objetos/arrays, sinônimos em PT/EN de todos os macronutrientes, priorização de `kcal` sobre `kJ` e tolerância a unidades.
+   - Prompt de visão calibrado para normas ANVISA (priorizar coluna da porção, ignorar kJ).
+   - Extração de JSON resiliente contra introduções/conclusões em markdown.
+3. **`src/server-fns/corpo.functions.ts` & `src/server-fns/ai-settings.functions.ts`**:
+   - Corrigido o ID do modelo Qwen VL em bioimpedância e listas de sugestões.
+4. **`src/routes/app.nutricao.tsx`**:
+   - Diálogo de Câmera (`photoOpen`) agora possui seletor com abas **"Prato de comida"** e **"Tabela Nutricional (Rótulo)"**.
+   - Adicionados botões dedicados de **"Tirar foto com câmera"** e **"Escolher da galeria"**.
+   - Spinner animado com mensagem de status durante a leitura pela IA.
+
+### ✅ Estado final
+- ✅ `npm test` → **219 testes verdes** (26 arquivos de teste passando 100%).
 
 
 

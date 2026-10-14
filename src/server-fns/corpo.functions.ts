@@ -1,4 +1,4 @@
-﻿import { createServerFn } from "@tanstack/react-start";
+import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { getLocalDate, getLocalDateMinusDays } from "@/lib/utils";
@@ -543,7 +543,7 @@ export const analyzeBioimpedancePhoto = createServerFn({ method: "POST" })
     const res = await callAiChatCompletion({
       provider: photoProvider,
       apiKey,
-      model: "qwen/qwen2.5-vl-72b-instruct",
+      model: "qwen/qwen-2.5-vl-72b-instruct",
       baseUrl: settings.omniroute_base_url,
       maxTokens: 800,
       messages: [

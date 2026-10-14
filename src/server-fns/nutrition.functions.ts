@@ -112,61 +112,6 @@ const photoSchema = z.object({
   imageBase64: z.string().min(50),
 });
 
-export const analyzePhoto = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => photoSchema.parse(d))
-  .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-    const settings = await fetchAiSettings(supabase, userId);
-    const photoProvider = resolveVisionProvider(settings);
-    const apiKey = resolveAiApiKey(settings, photoProvider);
-    if (!apiKey) throw new Error("Configure uma chave de IA nas configuracoes.");
-    const photoModel = getVisionModel(photoProvider, settings);
-
-    const res = await callAiChatCompletion({
-      provider: photoProvider,
-      apiKey,
-      model: photoModel,
-      baseUrl: photoProvider === "omniroute" ? settings.omniroute_base_url : undefined,
-      maxTokens: 512,
-      messages: [
-        {
-          role: "system",
-          content:
-            'Voce e nutricionista. Identifique cada alimento visivel na foto do prato, estime gramas e macros (kcal, proteina, carboidrato, gordura) por item. Use a tabela TACO como referencia. Retorne APENAS um JSON valido (sem markdown, sem explicacao) no formato: {"items":[{"name":"...","grams":N,"calories":N,"protein_g":N,"carbs_g":N,"fat_g":N}]}',
-        },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: "Analise este prato e estime macros por item. Retorne apenas o JSON." },
-            { type: "image_url", image_url: { url: data.imageBase64 } },
-          ],
-        },
-      ],
-    });
-
-    const json = res as any;
-    const content = json.choices?.[0]?.message?.content;
-    if (!content) throw new Error("Resposta vazia da IA");
-
-    const match = content.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("IA nao retornou um JSON valido");
-
-    const args = JSON.parse(match[0]);
-    if (!args.items || !Array.isArray(args.items)) throw new Error("Formato de resposta inesperado");
-
-    return args as {
-      items: Array<{
-        name: string;
-        grams: number;
-        calories: number;
-        protein_g: number;
-        carbs_g: number;
-        fat_g: number;
-      }>;
-    };
-  });
-
 // Leitura da tabela "Informacao Nutricional" de uma embalagem pela foto.
 // name aceita null (produto sem nome visivel); os macros numericos sao
 // obrigatorios para o safeParse, normalizados depois em normalizeLabelMacros.
@@ -187,27 +132,260 @@ export function sanitizeRawLabelData(raw: any): {
   carbs_g: number;
   fat_g: number;
 } {
+  if (!raw || typeof raw !== "object") {
+    return { name: null, serving_g: 100, calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+  }
+
+  // Se a IA devolver um array (ex.: [{ name: ... }]), usa o primeiro item
+  const base = Array.isArray(raw) ? raw[0] : raw;
+  if (!base || typeof base !== "object") {
+    return { name: null, serving_g: 100, calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+  }
+
+  // Desaninhamento: se a IA colocar a tabela ou produto dentro de um subobjeto
+  const nested =
+    base.tabela_nutricional ||
+    base.informacao_nutricional ||
+    base.tabela ||
+    base.nutrition_facts ||
+    base.nutrition ||
+    base.macros ||
+    base.product ||
+    base.produto ||
+    base.item ||
+    base.data;
+
+  const merged = typeof nested === "object" && nested !== null ? { ...nested, ...base } : base;
+
   const parseNum = (val: any, fallback = 0): number => {
     if (val === null || val === undefined) return fallback;
     if (typeof val === "number") return Number.isFinite(val) ? val : fallback;
     if (typeof val === "string") {
-      const clean = val.replace(",", ".").replace(/[^\d.-]/g, "");
+      const trimmed = val.trim();
+      // Se tiver indicação explícita de kcal (ex: "540 kJ / 129 kcal" ou "129 kcal"), prioriza o valor em kcal
+      if (/kcal/i.test(trimmed)) {
+        const kcalMatch = trimmed.match(/([\d.,]+)\s*kcal/i) || trimmed.match(/kcal\s*[:=]?\s*([\d.,]+)/i);
+        if (kcalMatch?.[1]) {
+          const n = parseFloat(kcalMatch[1].replace(",", "."));
+          if (Number.isFinite(n)) return n;
+        }
+      }
+      const clean = trimmed.replace(",", ".").replace(/[^\d.-]/g, "");
       const n = parseFloat(clean);
       return Number.isFinite(n) ? n : fallback;
     }
     return fallback;
   };
 
-  const serving = parseNum(raw?.serving_g, 100);
+  const findValue = (keys: string[]) => {
+    for (const k of keys) {
+      if (merged[k] !== undefined && merged[k] !== null && merged[k] !== "") {
+        return merged[k];
+      }
+    }
+    // Busca case-insensitive
+    const lowerKeys = Object.keys(merged).reduce((acc, curr) => {
+      acc[curr.toLowerCase()] = merged[curr];
+      return acc;
+    }, {} as Record<string, any>);
+    for (const k of keys) {
+      const lk = k.toLowerCase();
+      if (lowerKeys[lk] !== undefined && lowerKeys[lk] !== null && lowerKeys[lk] !== "") {
+        return lowerKeys[lk];
+      }
+    }
+    return undefined;
+  };
+
+  const nameVal = findValue([
+    "name",
+    "nome",
+    "produto",
+    "product",
+    "product_name",
+    "item_name",
+    "title",
+    "alimento",
+    "description",
+  ]);
+  const name =
+    typeof nameVal === "string" &&
+    nameVal.trim() &&
+    nameVal.trim().toLowerCase() !== "null" &&
+    nameVal.trim().toLowerCase() !== "desconhecido"
+      ? nameVal.trim()
+      : null;
+
+  const servingVal = findValue([
+    "serving_g",
+    "serving_size",
+    "serving_size_g",
+    "serving",
+    "porcao_g",
+    "porcao",
+    "portion_g",
+    "portion",
+    "peso_porcao",
+    "tamanho_porcao",
+    "servingSize",
+  ]);
+  const serving = parseNum(servingVal, 100);
+
+  const caloriesVal = findValue([
+    "calories",
+    "calorie",
+    "kcal",
+    "calorias",
+    "energy_kcal",
+    "energy",
+    "valor_energetico_kcal",
+    "valor_energetico",
+    "valorEnergetico",
+    "caloria",
+  ]);
+  const calories = parseNum(caloriesVal, 0);
+
+  const proteinVal = findValue([
+    "protein_g",
+    "protein",
+    "proteina_g",
+    "proteina",
+    "proteinas",
+    "proteins",
+    "proteinGrams",
+  ]);
+  const protein_g = parseNum(proteinVal, 0);
+
+  const carbsVal = findValue([
+    "carbs_g",
+    "carbs",
+    "carboidrato_g",
+    "carboidrato",
+    "carboidratos",
+    "carbohydrate",
+    "carbohydrates",
+    "carbo",
+    "carbo_g",
+    "carbsGrams",
+  ]);
+  const carbs_g = parseNum(carbsVal, 0);
+
+  const fatVal = findValue([
+    "fat_g",
+    "fat",
+    "fats",
+    "gordura_g",
+    "gordura",
+    "gorduras",
+    "gordura_total",
+    "gorduras_totais",
+    "total_fat",
+    "lipideos",
+    "lipides",
+    "fatGrams",
+  ]);
+  const fat_g = parseNum(fatVal, 0);
+
   return {
-    name: typeof raw?.name === "string" && raw.name.trim() ? raw.name.trim() : null,
+    name,
     serving_g: serving > 0 ? serving : 100,
-    calories: parseNum(raw?.calories, 0),
-    protein_g: parseNum(raw?.protein_g, 0),
-    carbs_g: parseNum(raw?.carbs_g, 0),
-    fat_g: parseNum(raw?.fat_g, 0),
+    calories,
+    protein_g,
+    carbs_g,
+    fat_g,
   };
 }
+
+export function resolveVisionConfig(settings: any): {
+  provider: VisionAiProvider;
+  apiKey: string;
+  model: string;
+} {
+  let provider = resolveVisionProvider(settings);
+  let apiKey = resolveAiApiKey(settings, provider);
+
+  // Fallback inteligente: se o provedor preferido não possui chave cadastrada,
+  // tenta os outros provedores com suporte a visão antes de falhar
+  if (!apiKey) {
+    const fallbacks: VisionAiProvider[] = ["groq", "openrouter", "nvidia", "omniroute"];
+    for (const f of fallbacks) {
+      if (f !== provider) {
+        const k = resolveAiApiKey(settings, f);
+        if (k) {
+          provider = f;
+          apiKey = k;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!apiKey) {
+    throw new Error("Configure uma chave de IA (Groq, OpenRouter ou NVIDIA) nas configurações para usar a câmera.");
+  }
+
+  const model = getVisionModel(provider, settings);
+  return { provider, apiKey, model };
+}
+
+export const analyzePhoto = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => photoSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const settings = await fetchAiSettings(supabase, userId);
+    const { provider: photoProvider, apiKey, model: photoModel } = resolveVisionConfig(settings);
+
+    const res = await callAiChatCompletion({
+      provider: photoProvider,
+      apiKey,
+      model: photoModel,
+      baseUrl: photoProvider === "omniroute" ? settings.omniroute_base_url : undefined,
+      maxTokens: 600,
+      messages: [
+        {
+          role: "system",
+          content:
+            'Voce e nutricionista. Identifique cada alimento visivel na foto do prato, estime gramas e macros (kcal, proteina, carboidrato, gordura) por item. Use a tabela TACO como referencia. Retorne APENAS um JSON valido (sem markdown, sem explicacao) no formato: {"items":[{"name":"...","grams":N,"calories":N,"protein_g":N,"carbs_g":N,"fat_g":N}]}',
+        },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Analise este prato e estime macros por item. Retorne apenas o JSON." },
+            { type: "image_url", image_url: { url: data.imageBase64 } },
+          ],
+        },
+      ],
+    });
+
+    const json = res as any;
+    if (json?.error) {
+      const msg = json.error.message || (typeof json.error === "string" ? json.error : "Erro na chamada de IA");
+      throw new Error(`Erro na IA ao analisar foto: ${msg}`);
+    }
+
+    const content = json.choices?.[0]?.message?.content;
+    if (!content) throw new Error("Resposta vazia da IA (tente refazer a foto com melhor enquadramento)");
+
+    const jsonCodeBlock = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    const jsonCandidate = jsonCodeBlock ? jsonCodeBlock[1] : content;
+    const match = jsonCandidate.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("IA nao retornou um JSON valido dos alimentos");
+
+    const args = JSON.parse(match[0]);
+    if (!args.items || !Array.isArray(args.items)) throw new Error("Formato de resposta inesperado");
+
+    return args as {
+      items: Array<{
+        name: string;
+        grams: number;
+        calories: number;
+        protein_g: number;
+        carbs_g: number;
+        fat_g: number;
+      }>;
+    };
+  });
 
 export const analyzeLabel = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -215,10 +393,7 @@ export const analyzeLabel = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const settings = await fetchAiSettings(supabase, userId);
-    const photoProvider = resolveVisionProvider(settings);
-    const apiKey = resolveAiApiKey(settings, photoProvider);
-    if (!apiKey) throw new Error("Configure uma chave de IA nas configuracoes.");
-    const photoModel = getVisionModel(photoProvider, settings);
+    const { provider: photoProvider, apiKey, model: photoModel } = resolveVisionConfig(settings);
 
     const res = await callAiChatCompletion({
       provider: photoProvider,
@@ -230,7 +405,14 @@ export const analyzeLabel = createServerFn({ method: "POST" })
         {
           role: "system",
           content:
-            'Voce e um nutricionista especialista em leitura de rotulos de alimentos. Analise a foto da embalagem e leia com atencao a tabela "Informacao Nutricional". Retorne APENAS um JSON valido (sem blocos markdown, sem explicacoes antes ou depois) no formato exato: {"name":"Nome do produto visivel na embalagem ou null","serving_g":30,"calories":140,"protein_g":3,"carbs_g":20,"fat_g":5}. Regras: serving_g = porcao declarada em gramas ou ml (ex.: se for 30g, use 30; se so tiver valores por 100g, use 100; se nao encontrar, use 100). calories/protein_g/carbs_g/fat_g = valores numericos POR PORCAO declarada (kcal, proteina, carboidrato, gordura total). Se algum campo numerico nao estiver legivel, use 0.',
+            'Você é um nutricionista especialista em leitura de rótulos e tabelas nutricionais (padrão ANVISA e internacional). Analise a foto e localize com atenção a tabela "Informação Nutricional" ou "Nutrition Facts". ' +
+            'Retorne ESTRITAMENTE um JSON no formato: {"name":"Nome do produto ou null","serving_g":30,"calories":120,"protein_g":4.5,"carbs_g":18,"fat_g":3.2}. ' +
+            'Regras fundamentais: ' +
+            '1. Priorize a coluna PORÇÃO se houver colunas de "100g" e "Porção", informando o peso da porção em serving_g (ex: 30 se a porção for 30g). Se só houver valores para 100g, use serving_g: 100. ' +
+            '2. calories: use o valor energético em kcal (calorias). NUNCA use o valor em kJ. ' +
+            '3. protein_g, carbs_g, fat_g: use os valores por porção em gramas. ' +
+            '4. name: nome da marca/produto visível na embalagem, ou null se não estiver visível. ' +
+            '5. Retorne APENAS o JSON puro, sem blocos de texto ou explicações antes ou depois.',
         },
         {
           role: "user",
@@ -263,10 +445,11 @@ export const analyzeLabel = createServerFn({ method: "POST" })
       if (!content || typeof content !== "string") {
         throw new Error("IA nao retornou a leitura do rotulo (refaca a foto com foco e boa luz)");
       }
-      const cleaned = content.replace(/```json\s*/gi, "").replace(/```\s*/g, "");
-      const match = cleaned.match(/\{[\s\S]*\}/);
+      const jsonCodeBlock = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+      const jsonCandidate = jsonCodeBlock ? jsonCodeBlock[1] : content;
+      const match = jsonCandidate.match(/\{[\s\S]*\}/);
       if (!match) {
-        throw new Error("IA nao conseguiu extrair os macros da tabela nutricional (refaca a foto)");
+        throw new Error("IA nao conseguiu extrair os macros da tabela nutricional (refaca a foto focando na tabela)");
       }
       try {
         rawData = JSON.parse(match[0]);

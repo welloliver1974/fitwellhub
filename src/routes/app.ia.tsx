@@ -41,6 +41,7 @@ import {
   fetchGroqModels,
   fetchOpenRouterModels,
   testAiProviderModel,
+  testAiVisionModel,
 } from "@/server-fns/ai-settings.functions";
 import {
   getTelegramIntegrationStatus,
@@ -53,7 +54,9 @@ import {
   normalizeAiSettings,
   saveAiSettingsLocal,
   getAiSettingsLocal,
+  getVisionModel,
   type AiProvider,
+  type VisionAiProvider,
 } from "@/lib/ai-settings";
 import {
   getGoogleFitStatus,
@@ -94,6 +97,22 @@ const DEFAULT_NVIDIA_MODELS = [
   "meta/llama-3.1-8b-instruct",
 ];
 
+const POPULAR_VISION_MODELS: Record<string, Array<{ id: string; name: string; desc: string }>> = {
+  groq: [
+    { id: "llama-3.2-90b-vision-preview", name: "Llama 3.2 90B Vision", desc: "Recomendado (Maior precisão para tabelas)" },
+    { id: "llama-3.2-11b-vision-preview", name: "Llama 3.2 11B Vision", desc: "Ultra-rápido" },
+  ],
+  openrouter: [
+    { id: "qwen/qwen-2.5-vl-72b-instruct", name: "Qwen 2.5 VL 72B", desc: "Recomendado (OCR cirúrgico de tabelas ANVISA)" },
+    { id: "google/gemini-2.0-flash-001", name: "Gemini 2.0 Flash", desc: "Google Multimodal rápido" },
+    { id: "openai/gpt-4o-mini", name: "GPT-4o Mini Vision", desc: "OpenAI Multimodal" },
+    { id: "meta-llama/llama-3.2-11b-vision-instruct", name: "Llama 3.2 11B Vision", desc: "Econômico" },
+  ],
+  nvidia: [
+    { id: "meta/llama-3.2-90b-vision-instruct", name: "Llama 3.2 90B Vision NIM", desc: "Recomendado NVIDIA" },
+  ],
+};
+
 function AiSettingsPage() {
   const { user, session } = useAuth();
 
@@ -121,8 +140,15 @@ function AiSettingsPage() {
   const [customModel, setCustomModel] = useState("");
 
   // Visão (Foto do prato e Scanner de rótulos)
-  const [photoProvider, setPhotoProvider] = useState<"auto" | "openrouter" | "omniroute" | "nvidia">("auto");
+  const [photoProvider, setPhotoProvider] = useState<"auto" | "groq" | "openrouter" | "omniroute" | "nvidia">("auto");
   const [photoModel, setPhotoModel] = useState("");
+  const [testingVision, setTestingVision] = useState(false);
+  const [visionTestResult, setVisionTestResult] = useState<{
+    success: boolean;
+    message?: string;
+    error?: string;
+    latencyMs: number;
+  } | null>(null);
 
   // Visualização de Chaves
   const [showKeys, setShowKeys] = useState(false);
@@ -319,6 +345,71 @@ function AiSettingsPage() {
       toast.error(errRes.error);
     } finally {
       setTestingProvider(null);
+    }
+  };
+
+  // Testar conexão e capacidade visual com imagem
+  const handleTestVision = async () => {
+    const effectiveProvider: VisionAiProvider =
+      photoProvider === "auto"
+        ? (provider === "nvidia"
+            ? "nvidia"
+            : provider === "omniroute"
+              ? "omniroute"
+              : provider === "groq" && groqKey.trim() && !openrouterKey.trim()
+                ? "groq"
+                : openrouterKey.trim()
+                  ? "openrouter"
+                  : groqKey.trim()
+                    ? "groq"
+                    : "openrouter")
+        : photoProvider;
+
+    let apiKey = "";
+    if (effectiveProvider === "groq") apiKey = groqKey.trim();
+    else if (effectiveProvider === "openrouter") apiKey = openrouterKey.trim();
+    else if (effectiveProvider === "nvidia") apiKey = nvidiaKey.trim() || openrouterKey.trim();
+    else if (effectiveProvider === "omniroute") apiKey = omniKey.trim() || "local";
+
+    if (!apiKey && effectiveProvider !== "omniroute") {
+      return toast.error(
+        `Preencha a chave de API do provedor de visão (${effectiveProvider.toUpperCase()}) antes de testar.`,
+      );
+    }
+
+    const effectiveModel = getVisionModel(effectiveProvider, {
+      photo_model: photoModel.trim() || null,
+    });
+
+    setTestingVision(true);
+    setVisionTestResult(null);
+    try {
+      const res = await testAiVisionModel({
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+        data: {
+          provider: effectiveProvider,
+          apiKey,
+          model: effectiveModel,
+          baseUrl: effectiveProvider === "omniroute" ? customBaseUrl.trim() || null : null,
+        },
+      });
+
+      setVisionTestResult(res);
+      if (res.success) {
+        toast.success(`Visão (${effectiveProvider.toUpperCase()} - ${effectiveModel}): Conectado em ${res.latencyMs}ms!`);
+      } else {
+        toast.error(`Falha no teste de visão: ${res.error || "Erro desconhecido"}`);
+      }
+    } catch (err: any) {
+      const errRes = {
+        success: false,
+        error: err?.message || "Erro inesperado ao testar visão",
+        latencyMs: 0,
+      };
+      setVisionTestResult(errRes);
+      toast.error(errRes.error);
+    } finally {
+      setTestingVision(false);
     }
   };
 
@@ -949,50 +1040,192 @@ function AiSettingsPage() {
         )}
       </Card>
 
-      {/* Seção de Visão (Foto do Prato & Scanner) */}
+      {/* Seção de Visão (Foto do Prato & Scanner de Rótulos) */}
       <Card className="p-4 sm:p-5 rounded-2xl border-border/60 space-y-4">
-        <div>
-          <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold flex items-center gap-1.5">
-            <Camera className="h-4 w-4 text-primary" /> 2. Provedor de Visão (Foto do Prato & Rótulos)
-          </Label>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Analisa fotos de refeições para estimar calorias e macronutrientes automaticamente.
-          </p>
+        <div className="flex items-start justify-between flex-wrap gap-2">
+          <div>
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold flex items-center gap-1.5">
+              <Camera className="h-4 w-4 text-primary" /> 2. Inteligência Visual (Foto do Prato & Tabelas Nutricionais)
+            </Label>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Configura o provedor e modelo de visão multimodal que lê pratos de comida e tabelas nutricionais na câmera.
+            </p>
+          </div>
+          <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
+            Ativo agora: {effectiveVisionProvider.toUpperCase()}
+          </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          {/* Provedor de Visão */}
           <div className="space-y-1.5">
-            <Label className="text-xs">Provedor para Análise Visual</Label>
+            <Label className="text-xs font-semibold">Provedor para Visão</Label>
             <Select
               value={photoProvider}
-              onValueChange={(v) => setPhotoProvider(v as any)}
+              onValueChange={(v) => {
+                setPhotoProvider(v as any);
+                setVisionTestResult(null);
+              }}
             >
               <SelectTrigger className="text-xs h-9">
-                <SelectValue placeholder="Selecione" />
+                <SelectValue placeholder="Selecione o provedor de visão" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="auto" className="text-xs">
-                  Automático (Segue o provedor principal ativo)
+                  Automático (Segue {provider.toUpperCase()} se compatível)
+                </SelectItem>
+                <SelectItem value="groq" className="text-xs">
+                  Groq (Llama 3.2 Vision - Gratuito & Rápido)
                 </SelectItem>
                 <SelectItem value="openrouter" className="text-xs">
-                  OpenRouter (Qwen 2.5 VL / Llama 3.2 Vision)
+                  OpenRouter (Qwen 2.5 VL, Gemini, GPT-4o)
                 </SelectItem>
                 <SelectItem value="nvidia" className="text-xs">
-                  NVIDIA (Llama 3.2 90B Vision)
+                  NVIDIA (Llama 3.2 90B Vision NIM)
                 </SelectItem>
               </SelectContent>
             </Select>
           </div>
 
+          {/* Chave de API correspondente */}
           <div className="space-y-1.5">
-            <Label className="text-xs">Modelo de Visão Customizado (Opcional)</Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold">
+                Chave de API ({effectiveVisionProvider.toUpperCase()})
+              </Label>
+              <span className="text-[10px] text-muted-foreground">
+                {visionApiKey ? "✅ Chave detectada" : "⚠️ Chave não preenchida"}
+              </span>
+            </div>
             <Input
-              value={photoModel}
-              onChange={(e) => setPhotoModel(e.target.value)}
-              placeholder="Padrão: qwen/qwen2.5-vl-72b-instruct"
+              type={showKeys ? "text" : "password"}
+              value={visionApiKey}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (effectiveVisionProvider === "groq") setGroqKey(val);
+                else if (effectiveVisionProvider === "openrouter") setOpenrouterKey(val);
+                else if (effectiveVisionProvider === "nvidia") setNvidiaKey(val);
+                else if (effectiveVisionProvider === "omniroute") setOmniKey(val);
+              }}
+              placeholder={`Chave para ${effectiveVisionProvider.toUpperCase()}...`}
               className="text-xs h-9"
+              autoComplete="off"
             />
           </div>
+        </div>
+
+        {/* Seleção do Modelo de Visão */}
+        <div className="p-3.5 rounded-xl bg-secondary/30 border border-border/50 space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <Label className="text-xs font-semibold flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-primary" /> Modelo Multimodal / Visão
+            </Label>
+            <span className="text-[11px] text-muted-foreground">
+              Padrão atual: <code className="text-primary font-mono">{getVisionModel(effectiveVisionProvider, { photo_model: photoModel })}</code>
+            </span>
+          </div>
+
+          {/* Sugestões de Modelos para o Provedor Efetivo */}
+          {POPULAR_VISION_MODELS[effectiveVisionProvider]?.length > 0 && (
+            <div className="space-y-1.5">
+              <Label className="text-[11px] text-muted-foreground">Modelos populares recomendados para {effectiveVisionProvider.toUpperCase()}:</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {POPULAR_VISION_MODELS[effectiveVisionProvider].map((m) => {
+                  const isSelected = (photoModel.trim() || getVisionModel(effectiveVisionProvider)) === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => {
+                        setPhotoModel(m.id);
+                        setVisionTestResult(null);
+                      }}
+                      className={`p-2 rounded-lg text-left border transition-all text-xs flex flex-col justify-between ${
+                        isSelected
+                          ? "bg-primary/10 border-primary text-foreground shadow-sm"
+                          : "bg-background/60 border-border/60 text-muted-foreground hover:border-border hover:text-foreground"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between font-semibold">
+                        <span>{m.name}</span>
+                        {isSelected && <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0" />}
+                      </div>
+                      <span className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{m.desc}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Campo de Modelo Customizado */}
+          <div className="space-y-1.5 pt-1">
+            <Label className="text-xs">ID do Modelo de Visão (ou digite outro de sua preferência)</Label>
+            <Input
+              value={photoModel}
+              onChange={(e) => {
+                setPhotoModel(e.target.value);
+                setVisionTestResult(null);
+              }}
+              placeholder={`Ex: ${getVisionModel(effectiveVisionProvider)}`}
+              className="text-xs h-9 font-mono"
+            />
+          </div>
+
+          {/* Botão de Teste com Imagem Real de Visão */}
+          <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleTestVision}
+              disabled={testingVision}
+              className="rounded-xl text-xs font-semibold gap-2 border-primary/40 hover:bg-primary/10"
+            >
+              {testingVision ? (
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              ) : (
+                <FlaskConical className="h-4 w-4 text-primary" />
+              )}
+              {testingVision
+                ? "Testando visão multimodal com imagem..."
+                : `Testar Modelo de Visão (${effectiveVisionProvider.toUpperCase()}) 🧪`}
+            </Button>
+            <p className="text-[11px] text-muted-foreground">
+              Envia uma imagem de teste para validar se o modelo aceita dados visuais.
+            </p>
+          </div>
+
+          {/* Resultado do Teste de Visão */}
+          {visionTestResult && (
+            <div
+              className={`p-3 rounded-lg text-xs border flex items-start gap-2.5 animate-in fade-in-50 ${
+                visionTestResult.success
+                  ? "bg-emerald-950/30 border-emerald-500/40 text-emerald-200"
+                  : "bg-rose-950/30 border-rose-500/40 text-rose-200"
+              }`}
+            >
+              {visionTestResult.success ? (
+                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+              ) : (
+                <XCircle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+              )}
+              <div className="space-y-0.5 min-w-0 flex-1">
+                <p className="font-semibold text-xs flex items-center justify-between">
+                  <span>
+                    {visionTestResult.success
+                      ? "Modelo de visão testado e aprovado com sucesso! 🎉"
+                      : "Falha ao testar visão no modelo"}
+                  </span>
+                  <span className="text-[10px] font-mono opacity-80">{visionTestResult.latencyMs}ms</span>
+                </p>
+                <p className="text-[11px] opacity-90 break-words font-mono">
+                  {visionTestResult.success
+                    ? `"${visionTestResult.message}"`
+                    : visionTestResult.error}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </Card>
 

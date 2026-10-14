@@ -2,6 +2,27 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [14/10/2026] - Antigravity (Configuração, Seleção e Teste em Tempo Real de Modelos de Visão Multimodal para OCR e Fotos)
+- **Central de Configuração de Visão Multimodal (`src/routes/app.ia.tsx`)**:
+  - Nova seção dedicada **"2. Inteligência Visual (Foto do Prato & Tabelas Nutricionais)"**.
+  - Suporte a seleção de provedor visual dedicado: OpenRouter, Groq e NVIDIA.
+  - Inclusão de chaves de API personalizadas por provedor com feedback de presença de chave.
+  - Catálogo de modelos recomendados em botões de 1 clique (`qwen/qwen-2.5-vl-72b-instruct`, `google/gemini-2.0-flash-001`, `openai/gpt-4o-mini`, `llama-3.2-90b-vision-preview`, `llama-3.2-11b-vision-preview`, `meta/llama-3.2-90b-vision-instruct`) e suporte a modelos customizados.
+  - Implementação do botão **"Testar Modelo de Visão 🧪"** com chamada em tempo real e retorno de status e latência.
+- **Server Function de Teste de Visão (`src/server-fns/ai-settings.functions.ts`)**:
+  - Criação da RPC `testAiVisionModel` que submete imagem de teste 1x1 base64 garantindo que o modelo e a chave configurados suportam requisições multimodais.
+- **Normalização e Compatibilidade de Modelos e Provedores (`src/lib/ai-settings.ts`)**:
+  - Inclusão do Groq como opção válida de `VisionAiProvider`.
+  - Normalização automática de IDs de modelos de visão (ex: converte `qwen2.5-vl-72b-instruct` legado para `qwen/qwen-2.5-vl-72b-instruct` com hífen, evitando HTTP 404).
+  - Atualização dos testes unitários em `src/lib/ai-settings.test.ts`.
+- **Melhorias de OCR de Tabelas Nutricionais e Câmera (`src/server-fns/nutrition.functions.ts` & `src/routes/app.nutricao.tsx`)**:
+  - Sanitização de dados de rótulo via `sanitizeRawLabelData` tolerante a variações ANVISA/internacionais e múltiplos formatos.
+  - Abas de modo no modal da câmera ("🍽️ Prato de comida" vs "🏷️ Tabela Nutricional") e suporte a upload direto da galeria.
+- **Correção em Bioimpedância (`src/server-fns/corpo.functions.ts`)**:
+  - Ajuste do modelo de visão de foto de bioimpedância para `qwen/qwen-2.5-vl-72b-instruct`.
+- **Validação de Testes**:
+  - 26 suítes e 219 testes aprovados (100%).
+
 ## [13/10/2026] - Antigravity (Padronização e Modernização Visual dos Gráficos com Módulo Centralizado @/components/charts)
 - **Criação do Módulo Centralizado de Gráficos (`src/components/charts/`)**:
   - `chart-theme.ts`: Tokens dark athletic puros compatíveis com SVG (Neon Mint, Cyan, Coral, Âmbar). Elimina o bug onde `stroke="hsl(var(--primary))"` falhava devido a variáveis CSS em formato `oklch()`.
@@ -916,3 +937,14 @@ Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hu
     - **Fallback Inteligente de Macros**: Quando o produto existe no OFF com nome mas tabela nutricional vazia, utiliza o nome identificado para estimar automaticamente os macros com IA via `lookupNutrition`.
     - **Fluxo quando não encontrado**: Não envia mais código numérico bruto (ex: "789...") para a IA de texto; abre o diálogo com o badge do código e exibe atalho direto "Ler foto do rótulo" junto ao campo do alimento.
 - **Status**: Concluído, 214 testes verdes no vitest sem regressões.
+
+## [14/10/2026] - Antigravity (Correção da Leitura de Tabela Nutricional por IA na Opção de Câmera)
+- **Escopo**:
+  - **Correção do Model ID no OpenRouter**: Corrigido de `"qwen/qwen2.5-vl-72b-instruct"` para o identificador canônico `"qwen/qwen-2.5-vl-72b-instruct"` (com hífen), eliminando erro HTTP 404 da API.
+  - **Integração do Groq para Visão**: Suporte a Groq como provedor de visão (`llama-3.2-90b-vision-preview`), além de fallback automático quando o usuário possui apenas chave Groq configurada.
+  - **Sanitização de Sinônimos e Tabelas ANVISA (`sanitizeRawLabelData`)**: Suporte a desaninhamento de objetos/arrays, mapeamento completo de chaves em PT/EN (`produto`, `porcao`, `valor_energetico`, `proteinas`, `carboidratos`, `gorduras_totais`), priorização de `kcal` sobre `kJ` e tolerância a unidades.
+  - **Experiência de Câmera na Nutrição (`app.nutricao.tsx`)**:
+    - Diálogo da Câmera (`photoOpen`) recebeu abas comutáveis **"Prato de comida"** e **"Tabela Nutricional (Rótulo)"**, permitindo ler rótulos diretamente ao tocar na Câmera.
+    - Botões duplos de captura: **"Tirar foto com câmera"** (`capture="environment"`) e **"Escolher da galeria"**.
+    - Mensagens animadas de progresso durante a leitura.
+- **Status**: Concluído, 219 testes verdes no vitest (26 arquivos de teste passando 100%).

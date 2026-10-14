@@ -44,6 +44,7 @@ import {
   Minus,
   ScanText,
   Zap,
+  Image as ImageIcon,
 } from "lucide-react";
 import { lookupNutrition, analyzePhoto, analyzeLabel } from "@/server-fns/nutrition.functions";
 import { calculateTdee } from "@/server-fns/corpo.functions";
@@ -126,6 +127,7 @@ function NutricaoPage() {
 
   // photo analysis
   const [photoOpen, setPhotoOpen] = useState(false);
+  const [photoMode, setPhotoMode] = useState<"plate" | "label">("plate");
   const [photoMeal, setPhotoMeal] = useState(MEAL_TYPES[1]);
   const [photoLoading, setPhotoLoading] = useState(false);
   const [photoItems, setPhotoItems] = useState<
@@ -349,6 +351,7 @@ function NutricaoPage() {
   // meal_items. O usuário revisa macros e porção antes de "Adicionar".
   const onPickLabel = async (file: File) => {
     setLabelOpen(false);
+    setPhotoOpen(false);
     setOpen(false);
     setLabelLoading(true);
     setQuery("");
@@ -369,7 +372,7 @@ function NutricaoPage() {
           : undefined,
         data: { imageBase64: dataUrl },
       });
-      setQuery(macros.name);
+      setQuery(macros.name || "");
       setGrams(macros.serving_g);
       setBarcodePortionLabel(`Porção do rótulo: ${macros.serving_g}g`);
       setBarcodePortionSource("ai");
@@ -381,7 +384,11 @@ function NutricaoPage() {
       // macros correspondem à porção do rótulo → mudar "Porção (g)" reescala proporcional
       setRefGrams(macros.serving_g);
       setOpen(true);
-      toast.success(macros.name ? `${macros.name} (do rótulo)` : "Rótulo lido — revise e edite");
+      if (macros.calories === 0 && macros.protein_g === 0 && macros.carbs_g === 0 && macros.fat_g === 0) {
+        toast.info("Tabela detectada, mas os números estavam pouco legíveis. Complete os macros manualmente.");
+      } else {
+        toast.success(macros.name ? `${macros.name} (do rótulo)` : "Rótulo lido — revise e edite");
+      }
     } catch (e) {
       console.error(e);
       toast.error(e instanceof Error ? e.message : "Erro ao ler o rótulo");
@@ -1022,16 +1029,21 @@ function NutricaoPage() {
             <Button
               size="icon"
               variant="ghost"
-              title="Foto do prato"
-              onClick={() => setPhotoOpen(true)}
+              title="Foto por IA (Prato ou Rótulo)"
+              onClick={() => {
+                setPhotoMode("plate");
+                setPhotoOpen(true);
+              }}
             >
               <Camera className="h-5 w-5" />
             </Button>
             <Button
               size="icon"
               variant="ghost"
-              title="Foto do rótulo"
-              onClick={() => setLabelOpen(true)}
+              title="Ler tabela nutricional / rótulo"
+              onClick={() => {
+                setLabelOpen(true);
+              }}
               disabled={labelLoading}
             >
               {labelLoading ? (
@@ -1342,7 +1354,7 @@ function NutricaoPage() {
       </div>
       {/* end header section */}
 
-      {/* Photo analyze dialog */}
+      {/* Photo analyze dialog (Prato ou Rótulo) */}
       <Dialog
         open={photoOpen}
         onOpenChange={(o) => {
@@ -1353,126 +1365,252 @@ function NutricaoPage() {
         <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Camera className="h-4 w-4 text-primary" /> Foto do prato
+              <Camera className="h-4 w-4 text-primary" /> Análise por Foto (IA)
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>Refeição</Label>
-              <Select value={photoMeal} onValueChange={setPhotoMeal}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MEAL_TYPES.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-xl p-6 cursor-pointer hover:bg-secondary/30 transition-colors">
-              {photoLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <Camera className="h-5 w-5 text-muted-foreground" />
-              )}
-              <span className="text-sm text-muted-foreground">
-                {photoLoading ? "Analisando…" : "Tirar foto ou enviar imagem"}
-              </span>
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                disabled={photoLoading}
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) onPickPhoto(f);
-                }}
-              />
-            </label>
-            {photoItems.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Itens detectados
-                </p>
-                {photoItems.map((i, idx) => (
-                  <div key={idx} className="flex items-start gap-2 rounded-lg border p-2">
-                    <input
-                      type="checkbox"
-                      checked={i.selected}
-                      onChange={(e) =>
-                        setPhotoItems((arr) =>
-                          arr.map((x, j) => (j === idx ? { ...x, selected: e.target.checked } : x)),
-                        )
-                      }
-                      className="mt-1 h-4 w-4"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{i.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {Math.round(i.grams)}g · {Math.round(i.calories)} kcal · P{" "}
-                        {Math.round(i.protein_g)} · C {Math.round(i.carbs_g)} · G{" "}
-                        {Math.round(i.fat_g)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-                <div className="flex flex-col gap-2">
-                  <Button onClick={confirmPhotoItems} className="w-full">
-                    Adicionar selecionados
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={savePhotoItemsToLibrary}
-                    className="w-full"
-                    disabled={photoItems.filter((i) => i.selected).length === 0}
-                  >
-                    <Apple className="h-4 w-4 mr-1" /> Salvar na biblioteca
-                  </Button>
-                </div>
-              </div>
-            )}
+
+          {/* Abas para alternar entre Foto do Prato e Tabela Nutricional */}
+          <div className="flex rounded-lg bg-secondary/50 p-1 mb-2">
+            <button
+              type="button"
+              onClick={() => setPhotoMode("plate")}
+              className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5 ${
+                photoMode === "plate"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Camera className="h-3.5 w-3.5" /> Prato de comida
+            </button>
+            <button
+              type="button"
+              onClick={() => setPhotoMode("label")}
+              className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5 ${
+                photoMode === "label"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <ScanText className="h-3.5 w-3.5" /> Tabela Nutricional (Rótulo)
+            </button>
           </div>
+
+          {photoMode === "plate" ? (
+            <div className="space-y-3">
+              <div>
+                <Label>Refeição</Label>
+                <Select value={photoMeal} onValueChange={setPhotoMeal}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MEAL_TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {photoLoading ? (
+                <div className="flex flex-col items-center justify-center py-8 gap-3 border-2 border-dashed rounded-xl">
+                  <Loader2 className="h-7 w-7 animate-spin text-primary" />
+                  <p className="text-sm text-muted-foreground font-medium">Analisando prato com IA…</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <label className="flex items-center justify-center gap-2 border-2 border-dashed border-primary/40 rounded-xl p-4 cursor-pointer hover:bg-primary/5 transition-colors text-center">
+                    <Camera className="h-4 w-4 text-primary" />
+                    <span className="text-xs font-medium">Tirar foto com câmera</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) onPickPhoto(f);
+                      }}
+                    />
+                  </label>
+                  <label className="flex items-center justify-center gap-2 border-2 border-dashed border-border rounded-xl p-4 cursor-pointer hover:bg-secondary/40 transition-colors text-center">
+                    <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-xs font-medium text-muted-foreground">Escolher da galeria</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) onPickPhoto(f);
+                      }}
+                    />
+                  </label>
+                </div>
+              )}
+
+              {photoItems.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Itens detectados
+                  </p>
+                  {photoItems.map((i, idx) => (
+                    <div key={idx} className="flex items-start gap-2 rounded-lg border p-2">
+                      <input
+                        type="checkbox"
+                        checked={i.selected}
+                        onChange={(e) =>
+                          setPhotoItems((arr) =>
+                            arr.map((x, j) => (j === idx ? { ...x, selected: e.target.checked } : x)),
+                          )
+                        }
+                        className="mt-1 h-4 w-4"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{i.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {Math.round(i.grams)}g · {Math.round(i.calories)} kcal · P{" "}
+                          {Math.round(i.protein_g)} · C {Math.round(i.carbs_g)} · G{" "}
+                          {Math.round(i.fat_g)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex flex-col gap-2">
+                    <Button onClick={confirmPhotoItems} className="w-full">
+                      Adicionar selecionados
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={savePhotoItemsToLibrary}
+                      className="w-full"
+                      disabled={photoItems.filter((i) => i.selected).length === 0}
+                    >
+                      <Apple className="h-4 w-4 mr-1" /> Salvar na biblioteca
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Modo Tabela Nutricional (Rótulo) dentro do modal da Câmera */
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Fotografe a tabela <strong>"Informação Nutricional"</strong> da embalagem. A IA extrairá calorias, porção, proteínas, carboidratos e gorduras.
+              </p>
+
+              {labelLoading ? (
+                <div className="flex flex-col items-center justify-center py-8 gap-3 border-2 border-dashed rounded-xl">
+                  <Loader2 className="h-7 w-7 animate-spin text-primary" />
+                  <div className="text-center">
+                    <p className="text-sm font-medium">Lendo tabela nutricional com IA…</p>
+                    <p className="text-xs text-muted-foreground">Extraindo macros da embalagem</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <label className="flex items-center justify-center gap-2 border-2 border-dashed border-primary/40 rounded-xl p-4 cursor-pointer hover:bg-primary/5 transition-colors text-center">
+                    <Camera className="h-4 w-4 text-primary" />
+                    <span className="text-xs font-medium">Tirar foto da tabela</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      disabled={labelLoading}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) onPickLabel(f);
+                      }}
+                    />
+                  </label>
+                  <label className="flex items-center justify-center gap-2 border-2 border-dashed border-border rounded-xl p-4 cursor-pointer hover:bg-secondary/40 transition-colors text-center">
+                    <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-xs font-medium text-muted-foreground">Escolher da galeria</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={labelLoading}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) onPickLabel(f);
+                      }}
+                    />
+                  </label>
+                </div>
+              )}
+
+              <div className="rounded-lg bg-secondary/30 p-2.5 text-xs text-muted-foreground space-y-1">
+                <p className="font-medium text-foreground">💡 Dica de captura:</p>
+                <p>Mantenha a tabela bem enquadrada e iluminada para leitura precisa.</p>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
-      {/* Label analyze dialog */}
+      {/* Label analyze dialog dedicado */}
       <Dialog open={labelOpen} onOpenChange={setLabelOpen}>
         <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <ScanText className="h-4 w-4 text-primary" /> Foto do rótulo
+              <ScanText className="h-4 w-4 text-primary" /> Ler Tabela Nutricional
             </DialogTitle>
             <p className="text-sm text-muted-foreground text-pretty">
-              Fotografe a tabela "Informação Nutricional" da embalagem. Os macros lidos abrem no
-              formulário para você revisar e editar antes de adicionar.
+              Fotografe a tabela "Informação Nutricional" ou envie uma imagem da embalagem. Os macros serão lidos pela IA e abrirão no formulário para você revisar.
             </p>
           </DialogHeader>
+
           <div className="space-y-3">
-            <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-xl p-6 cursor-pointer hover:bg-secondary/30 transition-colors">
-              {labelLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <ScanText className="h-5 w-5 text-muted-foreground" />
-              )}
-              <span className="text-sm text-muted-foreground">
-                {labelLoading ? "Lendo rótulo…" : "Fotografar ou enviar imagem"}
-              </span>
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                disabled={labelLoading}
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) onPickLabel(f);
-                }}
-              />
-            </label>
+            {labelLoading ? (
+              <div className="flex flex-col items-center justify-center py-8 gap-3 border-2 border-dashed rounded-xl">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <div className="text-center">
+                  <p className="text-sm font-medium">Lendo tabela nutricional com IA…</p>
+                  <p className="text-xs text-muted-foreground">Identificando porção, kcal, proteínas, carboidratos e gorduras</p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <label className="flex items-center justify-center gap-2 border-2 border-dashed border-primary/40 rounded-xl p-5 cursor-pointer hover:bg-primary/5 transition-colors text-center">
+                  <Camera className="h-5 w-5 text-primary" />
+                  <span className="text-xs font-medium">Tirar foto com a câmera</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    disabled={labelLoading}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) onPickLabel(f);
+                    }}
+                  />
+                </label>
+                <label className="flex items-center justify-center gap-2 border-2 border-dashed border-border rounded-xl p-5 cursor-pointer hover:bg-secondary/40 transition-colors text-center">
+                  <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-xs font-medium text-muted-foreground">Escolher da galeria</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={labelLoading}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) onPickLabel(f);
+                    }}
+                  />
+                </label>
+              </div>
+            )}
+
+            <div className="rounded-lg bg-secondary/30 p-3 text-xs text-muted-foreground space-y-1">
+              <p className="font-medium text-foreground">💡 Dica para boa leitura:</p>
+              <p>• Aproxime a câmera da tabela nutricional e garanta boa luz.</p>
+              <p>• Se o rótulo tiver colunas de "100g" e "Porção", a IA priorizará os dados da porção.</p>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

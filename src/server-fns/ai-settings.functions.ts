@@ -125,7 +125,7 @@ export const fetchOpenRouterModels = createServerFn({ method: "POST" })
       "openai/gpt-4o-mini",
       "openai/gpt-4o",
       "qwen/qwen-2.5-72b-instruct",
-      "qwen/qwen2.5-vl-72b-instruct",
+      "qwen/qwen-2.5-vl-72b-instruct",
     ];
 
     allIds.sort((a, b) => {
@@ -298,6 +298,87 @@ export const testAiProviderModel = createServerFn({ method: "POST" })
       } catch {
         // Usa mensagem direta se não for JSON
       }
+
+      return {
+        success: false,
+        error: errorMsg,
+        latencyMs,
+      };
+    }
+  });
+
+const testVisionInputSchema = z.object({
+  provider: z.enum(["groq", "openrouter", "nvidia", "omniroute"]),
+  apiKey: z.string().min(1, "Chave de API necessária"),
+  model: z.string().min(1, "Nome do modelo necessário"),
+  baseUrl: z.string().nullable().optional(),
+});
+
+/**
+ * Testa a conexão e capacidade de leitura de imagem (visão multimodal) de um modelo
+ */
+export const testAiVisionModel = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => testVisionInputSchema.parse(d))
+  .handler(async ({ data }) => {
+    const startTime = Date.now();
+    try {
+      // Imagem PNG 1x1 transparente para validar capacidade multimodal sem tráfego excessivo
+      const dummyPixel =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+      const completion = await callAiChatCompletion({
+        provider: data.provider,
+        apiKey: data.apiKey.trim(),
+        model: data.model.trim(),
+        baseUrl: data.baseUrl,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "FitWell teste de visão. Confirme brevemente em poucas palavras que consegue processar imagens.",
+              },
+              {
+                type: "image_url",
+                image_url: { url: dummyPixel },
+              },
+            ],
+          },
+        ],
+        temperature: 0.2,
+        maxTokens: 50,
+      });
+
+      const json = completion as any;
+      if (json?.error) {
+        const msg =
+          json.error.message ||
+          (typeof json.error === "string" ? json.error : "Erro na API do provedor");
+        return {
+          success: false,
+          error: msg,
+          latencyMs: Date.now() - startTime,
+        };
+      }
+
+      const latencyMs = Date.now() - startTime;
+      const message =
+        json.choices?.[0]?.message?.content?.trim() || "Visão multimodal funcionando com sucesso!";
+
+      return {
+        success: true,
+        message,
+        latencyMs,
+      };
+    } catch (err: any) {
+      const latencyMs = Date.now() - startTime;
+      let errorMsg = err?.message || String(err) || "Erro ao testar modelo de visão";
+      try {
+        const parsed = JSON.parse(errorMsg);
+        if (parsed?.error?.message) errorMsg = parsed.error.message;
+      } catch {}
 
       return {
         success: false,

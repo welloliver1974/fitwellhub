@@ -2,11 +2,11 @@
 // Sem imports — testável em node. Extraído de ai-settings.functions.ts.
 
 export type AiProvider = "groq" | "openrouter" | "omniroute" | "nvidia";
-export type VisionAiProvider = "openrouter" | "omniroute" | "nvidia";
+export type VisionAiProvider = "groq" | "openrouter" | "omniroute" | "nvidia";
 
 export type AiSettings = {
   provider: AiProvider;
-  photo_provider: "openrouter" | "omniroute" | "nvidia" | null;
+  photo_provider: "groq" | "openrouter" | "omniroute" | "nvidia" | null;
   photo_model: string | null;
   groq_api_key: string | null;
   groq_model: string | null;
@@ -79,6 +79,7 @@ export function normalizeAiSettings(row?: AiSettingsRow | null): AiSettings {
   return {
     provider,
     photo_provider:
+      row?.photo_provider === "groq" ||
       row?.photo_provider === "openrouter" ||
       row?.photo_provider === "omniroute" ||
       row?.photo_provider === "nvidia"
@@ -133,11 +134,19 @@ export function getTextModel(provider: AiProvider, settings?: Partial<AiSettings
 }
 
 export function resolveVisionProvider(settings?: Partial<AiSettings> | null): VisionAiProvider {
+  if (settings?.photo_provider === "groq") return "groq";
   if (settings?.photo_provider === "openrouter") return "openrouter";
   if (settings?.photo_provider === "omniroute") return "omniroute";
   if (settings?.photo_provider === "nvidia") return "nvidia";
   if (settings?.provider === "omniroute") return "omniroute";
   if (settings?.provider === "nvidia") return "nvidia";
+  if (
+    settings?.provider === "groq" &&
+    settings?.groq_api_key?.trim() &&
+    !settings?.openrouter_api_key?.trim()
+  ) {
+    return "groq";
+  }
   return "openrouter";
 }
 
@@ -146,12 +155,22 @@ export function getVisionModel(
   settings?: Partial<AiSettings> | null,
 ): string {
   const saved = settings?.photo_model?.trim();
-  if (provider === "nvidia" && saved === "nvidia/llama-3.2-90b-vision-instruct") {
-    return "meta/llama-3.2-90b-vision-instruct";
+  if (provider === "nvidia") {
+    if (saved === "nvidia/llama-3.2-90b-vision-instruct") {
+      return "meta/llama-3.2-90b-vision-instruct";
+    }
+    return saved || "meta/llama-3.2-90b-vision-instruct";
   }
-  if (saved) return saved;
-  if (provider === "nvidia") return "meta/llama-3.2-90b-vision-instruct";
-  return "qwen/qwen2.5-vl-72b-instruct";
+  if (provider === "groq") {
+    return saved || "llama-3.2-90b-vision-preview";
+  }
+  if (saved) {
+    if (saved === "qwen/qwen2.5-vl-72b-instruct" || saved === "qwen2.5-vl-72b-instruct") {
+      return "qwen/qwen-2.5-vl-72b-instruct";
+    }
+    return saved;
+  }
+  return "qwen/qwen-2.5-vl-72b-instruct";
 }
 
 export function resolveAiApiKey(

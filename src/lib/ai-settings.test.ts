@@ -156,8 +156,11 @@ describe("normalizeAiSettings — foto do prato (visao)", () => {
   it("photo_provider invalido/ausente cai em null", () => {
     expect(normalizeAiSettings({ provider: "groq" }).photo_provider).toBeNull();
     expect(
-      normalizeAiSettings({ provider: "groq", photo_provider: "groq" } as never).photo_provider,
+      normalizeAiSettings({ provider: "groq", photo_provider: "invalido" } as never).photo_provider,
     ).toBeNull();
+    expect(
+      normalizeAiSettings({ provider: "groq", photo_provider: "groq" }).photo_provider,
+    ).toBe("groq");
   });
 });
 
@@ -167,6 +170,7 @@ describe("resolveVisionProvider/getVisionModel", () => {
       "openrouter",
     );
     expect(resolveVisionProvider({ provider: "groq", photo_provider: "nvidia" })).toBe("nvidia");
+    expect(resolveVisionProvider({ provider: "groq", photo_provider: "groq" })).toBe("groq");
   });
 
   it("segue provider compativel com visao quando foto esta em auto", () => {
@@ -175,6 +179,9 @@ describe("resolveVisionProvider/getVisionModel", () => {
       "omniroute",
     );
     expect(resolveVisionProvider({ provider: "groq", photo_provider: null })).toBe("openrouter");
+    expect(
+      resolveVisionProvider({ provider: "groq", photo_provider: null, groq_api_key: "gsk_123" }),
+    ).toBe("groq");
   });
 
   it("corrige modelo antigo da NVIDIA que gerava 404", () => {
@@ -183,10 +190,17 @@ describe("resolveVisionProvider/getVisionModel", () => {
     ).toBe("meta/llama-3.2-90b-vision-instruct");
   });
 
+  it("corrige modelo Qwen 2.5 VL sem hífen no OpenRouter", () => {
+    expect(
+      getVisionModel("openrouter", { photo_model: "qwen/qwen2.5-vl-72b-instruct" }),
+    ).toBe("qwen/qwen-2.5-vl-72b-instruct");
+  });
+
   it("usa defaults de visao por provider", () => {
     expect(getVisionModel("nvidia")).toBe("meta/llama-3.2-90b-vision-instruct");
-    expect(getVisionModel("openrouter")).toBe("qwen/qwen2.5-vl-72b-instruct");
-    expect(getVisionModel("omniroute")).toBe("qwen/qwen2.5-vl-72b-instruct");
+    expect(getVisionModel("groq")).toBe("llama-3.2-90b-vision-preview");
+    expect(getVisionModel("openrouter")).toBe("qwen/qwen-2.5-vl-72b-instruct");
+    expect(getVisionModel("omniroute")).toBe("qwen/qwen-2.5-vl-72b-instruct");
   });
 });
 

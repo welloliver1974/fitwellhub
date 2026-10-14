@@ -94,4 +94,73 @@ describe("sanitizeRawLabelData", () => {
 
     expect(labelSchema.safeParse(sanitized).success).toBe(true);
   });
+
+  it("reconhece chaves e sinônimos em português de tabelas ANVISA", () => {
+    const raw = {
+      produto: "Biscoito de Polvilho",
+      porcao: "30 g",
+      valor_energetico: "135 kcal",
+      proteinas: "1,2 g",
+      carboidratos: "24,0 g",
+      gorduras_totais: "3,8 g",
+    };
+    const sanitized = sanitizeRawLabelData(raw);
+    expect(sanitized.name).toBe("Biscoito de Polvilho");
+    expect(sanitized.serving_g).toBe(30);
+    expect(sanitized.calories).toBe(135);
+    expect(sanitized.protein_g).toBe(1.2);
+    expect(sanitized.carbs_g).toBe(24);
+    expect(sanitized.fat_g).toBe(3.8);
+    expect(labelSchema.safeParse(sanitized).success).toBe(true);
+  });
+
+  it("desaninhar objeto com tabela nutricional ou produto encapsulado", () => {
+    const raw = {
+      tabela_nutricional: {
+        porcao_g: 25,
+        calorias: 110,
+        proteina: 5,
+        carboidrato: 15,
+        gordura: 2.5,
+      },
+      produto: "Barra Proteica",
+    };
+    const sanitized = sanitizeRawLabelData(raw);
+    expect(sanitized.name).toBe("Barra Proteica");
+    expect(sanitized.serving_g).toBe(25);
+    expect(sanitized.calories).toBe(110);
+    expect(sanitized.protein_g).toBe(5);
+    expect(sanitized.carbs_g).toBe(15);
+    expect(sanitized.fat_g).toBe(2.5);
+  });
+
+  it("prioriza kcal quando o rótulo contém kJ e kcal no mesmo campo", () => {
+    const raw = {
+      name: "Chocolate Amargo",
+      serving_g: 25,
+      valor_energetico: "540 kJ / 129 kcal",
+      protein_g: 2,
+      carbs_g: 13,
+      fat_g: 8,
+    };
+    const sanitized = sanitizeRawLabelData(raw);
+    expect(sanitized.calories).toBe(129);
+  });
+
+  it("trata resposta em formato de array retornado pela IA", () => {
+    const raw = [
+      {
+        name: "Iogurte Natural",
+        serving_g: 170,
+        calories: 90,
+        protein_g: 7,
+        carbs_g: 9,
+        fat_g: 3,
+      },
+    ];
+    const sanitized = sanitizeRawLabelData(raw);
+    expect(sanitized.name).toBe("Iogurte Natural");
+    expect(sanitized.serving_g).toBe(170);
+    expect(sanitized.calories).toBe(90);
+  });
 });
