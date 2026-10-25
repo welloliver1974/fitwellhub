@@ -12,6 +12,7 @@ import {
 } from "@/server-fns/ai-settings.functions";
 import { buildCoachPlan, inferCoachObjective } from "@/lib/coach-plan";
 import { normalizeLabelMacros } from "@/lib/food-utils";
+import type { VisionAiProvider } from "@/lib/ai-settings";
 
 const inputSchema = z.object({
   query: z.string().trim().min(1).max(200),

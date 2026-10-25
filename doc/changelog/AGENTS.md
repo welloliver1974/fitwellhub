@@ -2,6 +2,19 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [25/10/2026] - Antigravity (Correção da Tela de Configurações / IA e Aprimoramento da Navegação)
+- **Correção de Crash de Renderização na Central de Configurações (`src/routes/app.ia.tsx`)**:
+  - Declaradas as variáveis computadas `effectiveVisionProvider` e `visionApiKey` no escopo do componente `AiSettingsPage`, eliminando o erro de execução `ReferenceError: effectiveVisionProvider is not defined` que impedia a abertura da tela.
+  - Reutilizada a lógica em `handleTestVision` e garantida compatibilidade com o provedor `omniroute` em `POPULAR_VISION_MODELS`.
+- **Aprimoramento da Navegação e Acesso a Configurações (`src/routes/app.tsx`)**:
+  - Adicionado atalho de acesso direto a Configurações (`SlidersHorizontal`) no cabeçalho superior (`header`), ao lado de lembretes.
+  - Renomeado o rótulo da aba na barra inferior de `"IA"` para `"Config"` para clareza imediata de acesso às configurações.
+- **Correções de Tipagem e Integração (`src/server-fns/`)**:
+  - Adicionado import do tipo `VisionAiProvider` em `src/server-fns/nutrition.functions.ts`.
+  - Corrigida a ordem de argumentos na invocação de `getTextModel(provider, aiSettings)` em `src/server-fns/telegram.functions.ts`.
+- **Validação Técnica**:
+  - TypeScript check validado sem erros nos arquivos afetados.
+
 ## [14/10/2026] - Antigravity (Configuração, Seleção e Teste em Tempo Real de Modelos de Visão Multimodal para OCR e Fotos)
 - **Central de Configuração de Visão Multimodal (`src/routes/app.ia.tsx`)**:
   - Nova seção dedicada **"2. Inteligência Visual (Foto do Prato & Tabelas Nutricionais)"**.

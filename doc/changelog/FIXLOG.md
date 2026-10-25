@@ -1,5 +1,26 @@
 # FIXLOG — FitWell Hub
 
+## Sessão: 25/10/2026 — Correção de Falha de Renderização na Central de Configurações / IA e Aprimoramento da Navegação
+
+### 🎯 Diagnóstico & Implementação
+1. **Problemas Identificados**:
+   - Tela de configurações não abria ao tentar navegar para `/app/ia`.
+   - Causa raiz: Referência a variáveis não declaradas (`effectiveVisionProvider` e `visionApiKey`) no JSX de `src/routes/app.ia.tsx`, disparando `ReferenceError: effectiveVisionProvider is not defined` no ciclo de renderização do React.
+   - Dificuldade de descoberta das configurações no app mobile, já que a aba inferior tinha o rótulo reduzido "IA" e não havia botão explícito de configurações no cabeçalho.
+2. **Solução Implementada**:
+   - **Central de Configurações (`src/routes/app.ia.tsx`)**:
+     - Declaradas as variáveis no escopo do componente `AiSettingsPage` com resolução reativa de provedor e chave de visão (`effectiveVisionProvider` e `visionApiKey`).
+     - Reutilização das variáveis computadas na função `handleTestVision` e inclusão de entrada padrão para `omniroute` em `POPULAR_VISION_MODELS`.
+   - **Navegação & Header (`src/routes/app.tsx`)**:
+     - Adicionado botão de atalho direto para Configurações (`SlidersHorizontal`) no cabeçalho superior.
+     - Renomeada a aba na barra inferior de `"IA"` para `"Config"` para clareza imediata.
+   - **Tipagens em Funções do Servidor**:
+     - Importado `VisionAiProvider` em `src/server-fns/nutrition.functions.ts`.
+     - Invertida a ordem de argumentos em `getTextModel(provider, aiSettings)` em `src/server-fns/telegram.functions.ts`.
+3. **Validação Técnica**:
+   - `npx tsc --noEmit` validado: 0 erros no componente e funções corrigidas.
+   - Testes unitários de `ai-settings.test.ts` 100% aprovados.
+
 ## Sessão: 14/10/2026 — Central de Configuração, Seleção e Teste em Tempo Real de Modelos de Visão Multimodal (OCR Rótulos & Fotos de Pratos)
 
 ### 🎯 Diagnóstico & Implementação

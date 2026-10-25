@@ -111,6 +111,7 @@ const POPULAR_VISION_MODELS: Record<string, Array<{ id: string; name: string; de
   nvidia: [
     { id: "meta/llama-3.2-90b-vision-instruct", name: "Llama 3.2 90B Vision NIM", desc: "Recomendado NVIDIA" },
   ],
+  omniroute: [],
 };
 
 function AiSettingsPage() {
@@ -149,6 +150,31 @@ function AiSettingsPage() {
     error?: string;
     latencyMs: number;
   } | null>(null);
+
+  // Provedor efetivo e chave de visão computados
+  const effectiveVisionProvider: VisionAiProvider =
+    photoProvider === "auto"
+      ? (provider === "nvidia"
+          ? "nvidia"
+          : provider === "omniroute"
+            ? "omniroute"
+            : provider === "groq" && groqKey.trim() && !openrouterKey.trim()
+              ? "groq"
+              : openrouterKey.trim()
+                ? "openrouter"
+                : groqKey.trim()
+                  ? "groq"
+                  : "openrouter")
+      : photoProvider;
+
+  const visionApiKey =
+    effectiveVisionProvider === "groq"
+      ? groqKey
+      : effectiveVisionProvider === "openrouter"
+        ? openrouterKey
+        : effectiveVisionProvider === "nvidia"
+          ? (nvidiaKey.trim() || openrouterKey.trim())
+          : omniKey;
 
   // Visualização de Chaves
   const [showKeys, setShowKeys] = useState(false);
@@ -350,34 +376,18 @@ function AiSettingsPage() {
 
   // Testar conexão e capacidade visual com imagem
   const handleTestVision = async () => {
-    const effectiveProvider: VisionAiProvider =
-      photoProvider === "auto"
-        ? (provider === "nvidia"
-            ? "nvidia"
-            : provider === "omniroute"
-              ? "omniroute"
-              : provider === "groq" && groqKey.trim() && !openrouterKey.trim()
-                ? "groq"
-                : openrouterKey.trim()
-                  ? "openrouter"
-                  : groqKey.trim()
-                    ? "groq"
-                    : "openrouter")
-        : photoProvider;
+    let apiKey = visionApiKey.trim();
+    if (effectiveVisionProvider === "omniroute" && !apiKey) {
+      apiKey = "local";
+    }
 
-    let apiKey = "";
-    if (effectiveProvider === "groq") apiKey = groqKey.trim();
-    else if (effectiveProvider === "openrouter") apiKey = openrouterKey.trim();
-    else if (effectiveProvider === "nvidia") apiKey = nvidiaKey.trim() || openrouterKey.trim();
-    else if (effectiveProvider === "omniroute") apiKey = omniKey.trim() || "local";
-
-    if (!apiKey && effectiveProvider !== "omniroute") {
+    if (!apiKey && effectiveVisionProvider !== "omniroute") {
       return toast.error(
-        `Preencha a chave de API do provedor de visão (${effectiveProvider.toUpperCase()}) antes de testar.`,
+        `Preencha a chave de API do provedor de visão (${effectiveVisionProvider.toUpperCase()}) antes de testar.`,
       );
     }
 
-    const effectiveModel = getVisionModel(effectiveProvider, {
+    const effectiveModel = getVisionModel(effectiveVisionProvider, {
       photo_model: photoModel.trim() || null,
     });
 
@@ -387,16 +397,16 @@ function AiSettingsPage() {
       const res = await testAiVisionModel({
         headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
         data: {
-          provider: effectiveProvider,
+          provider: effectiveVisionProvider,
           apiKey,
           model: effectiveModel,
-          baseUrl: effectiveProvider === "omniroute" ? customBaseUrl.trim() || null : null,
+          baseUrl: effectiveVisionProvider === "omniroute" ? customBaseUrl.trim() || null : null,
         },
       });
 
       setVisionTestResult(res);
       if (res.success) {
-        toast.success(`Visão (${effectiveProvider.toUpperCase()} - ${effectiveModel}): Conectado em ${res.latencyMs}ms!`);
+        toast.success(`Visão (${effectiveVisionProvider.toUpperCase()} - ${effectiveModel}): Conectado em ${res.latencyMs}ms!`);
       } else {
         toast.error(`Falha no teste de visão: ${res.error || "Erro desconhecido"}`);
       }
@@ -1126,7 +1136,7 @@ function AiSettingsPage() {
           </div>
 
           {/* Sugestões de Modelos para o Provedor Efetivo */}
-          {POPULAR_VISION_MODELS[effectiveVisionProvider]?.length > 0 && (
+          {Boolean(POPULAR_VISION_MODELS[effectiveVisionProvider]?.length) && (
             <div className="space-y-1.5">
               <Label className="text-[11px] text-muted-foreground">Modelos populares recomendados para {effectiveVisionProvider.toUpperCase()}:</Label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

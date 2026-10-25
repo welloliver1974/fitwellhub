@@ -986,7 +986,7 @@ export const executeHermesAction = createServerFn({ method: "POST" })
         const aiSettings = await fetchAiSettings(supabase, userId);
         const provider = resolveAiProvider(aiSettings);
         const apiKey = resolveAiApiKey(aiSettings, provider);
-        const model = getTextModel(aiSettings, provider);
+        const model = getTextModel(provider, aiSettings);
 
         if (apiKey) {
           const prompt = `Crie uma lista de 5 a 6 exercícios eficientes para um treino chamado "${workoutName}" com foco em "${focus}".

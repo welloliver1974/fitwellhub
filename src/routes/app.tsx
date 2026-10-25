@@ -52,7 +52,7 @@ function AppLayout() {
     { to: "/app/medidas", icon: Ruler, label: "Medidas" },
     { to: "/app/corpo", icon: Activity, label: "Corpo" },
     { to: "/app/chat", icon: MessageCircle, label: "Coach" },
-    { to: "/app/ia", icon: SlidersHorizontal, label: "IA" },
+    { to: "/app/ia", icon: SlidersHorizontal, label: "Config" },
   ] as const;
 
   return (
@@ -66,6 +66,11 @@ function AppLayout() {
             <span className="font-display font-bold">Fit Well Hub</span>
           </Link>
           <div className="flex items-center gap-1">
+            <RLink to="/app/ia">
+              <Button variant="ghost" size="icon" title="Configurações (IA & Integrações)">
+                <SlidersHorizontal className="h-4 w-4" />
+              </Button>
+            </RLink>
             <RLink to="/app/lembretes">
               <Button variant="ghost" size="icon" title="Lembretes">
                 <Bell className="h-4 w-4" />
