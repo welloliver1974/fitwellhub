@@ -2,6 +2,27 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [02/11/2026] - Antigravity (Treinos do Galaxy Watch + Bioimpedância do Relógio)
+- **Nova Tabela `watch_workouts` (`supabase/migrations/20261102_watch_workouts.sql`)**:
+  - Armazena sessões de exercício detectadas pelo Galaxy Watch (Esteira, Corrida, Musculação, Caminhada, Ciclismo…): tipo e código do exercício, título, início/fim, duração em minutos, calorias ativas, distância e FC média/máxima/mínima.
+  - `UNIQUE (user_id, session_id)` para upsert idempotente por sessão, índice `(user_id, log_date DESC)` e RLS `auth.uid() = user_id`.
+- **FitWell Bridge v0.3.0 (Android)**:
+  - Novas permissões: `READ_EXERCISE`, `READ_WEIGHT`, `READ_BODY_FAT`, `READ_LEAN_BODY_MASS`, `READ_BASAL_METABOLIC_RATE` (todas no conjunto *avançado* — nunca bloqueiam o sync de passos).
+  - `SyncHelper.trySyncWatchWorkouts()`: lê `ExerciseSessionRecord` de Hoje + Ontem e agrega, por sessão, calorias (`ACTIVE_CALORIES_TOTAL`), FC (`BPM_AVG/MAX/MIN`) e distância (`DISTANCE_TOTAL`). Mapeia o código do exercício para nome em português via `getExerciseTypeName()`.
+  - `SyncHelper.trySyncBioimpedance()`: lê a medição mais recente de `WeightRecord`, `BodyFatRecord`, `LeanBodyMassRecord` e `BasalMetabolicRateRecord` (janela de 7 dias) e grava em `bioimpedance_logs` **e** `body_weights` (update se já existir registro no dia).
+  - `SupabaseClient`: `upsertWatchWorkout()` e `syncBioimpedance()`.
+  - Diagnóstico da tela inicial ganhou as linhas `tvWorkouts` e `tvBioimpedance`.
+- **Card "Sono & Coração" (`src/components/watch-mirror-card.tsx`)**:
+  - Nova seção **"Treinos do relógio"** com ícone por modalidade, horário, duração, distância, FC do treino e calorias por sessão.
+  - Busca `daily_health_metrics` e `watch_workouts` em paralelo; tabela ausente = lista vazia, sem exceção.
+- **Novas Ações do Hermes (`src/server-fns/telegram.functions.ts`)**:
+  - `get_watch_workouts` — lista treinos do relógio (por dia ou últimos N dias) com totais de tempo e calorias.
+  - `get_health_metrics` agora também inclui a lista de treinos do dia.
+  - Regra 20 adicionada ao `hermesSystemInstruction` em `src/routes/app.ia.tsx`, com instrução explícita de **nunca somar as calorias do relógio à meta diária**.
+- **Validação Técnica**:
+  - `npm run build` aprovado; `.\gradlew.bat assembleDebug` aprovado; APK v0.3.0 instalado no dispositivo.
+  - Erros de `tsc` remanescentes são pré-existentes (`goals.water_ml`, `telegram_integrations`) e não pertencem a esta entrega.
+
 ## [02/11/2026] - Antigravity (Espelho do Relógio: Sono e Frequência Cardíaca do Galaxy Watch)
 - **Nova Tabela `daily_health_metrics` (`supabase/migrations/20261102_daily_health_metrics.sql`)**:
   - Armazena métricas consolidadas do Health Connect: sono total, profundo, REM, leve, acordado, horários de início/fim, FC de repouso, média, mínima e máxima.

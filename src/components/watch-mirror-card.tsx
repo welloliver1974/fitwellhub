@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/auth-context";
 import { getLocalDate } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Moon, Heart, Bed, Activity, Watch, RotateCw, Sparkles } from "lucide-react";
+import { Moon, Heart, Bed, Activity, Watch, RotateCw, Sparkles, Flame, Timer, MapPin } from "lucide-react";
 import { toast } from "sonner";
 
 interface WatchMirrorCardProps {
@@ -24,6 +24,49 @@ type HealthMetrics = {
   source: string | null;
   updated_at: string | null;
 };
+
+type WatchWorkout = {
+  id: string;
+  exercise_type: string;
+  title: string | null;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number | null;
+  calories_kcal: number | null;
+  distance_meters: number | null;
+  avg_heart_rate: number | null;
+  max_heart_rate: number | null;
+};
+
+const WORKOUT_ICONS: Record<string, string> = {
+  Esteira: "🏃",
+  Corrida: "🏃",
+  Caminhada: "🚶",
+  Musculação: "🏋️",
+  Calistenia: "🤸",
+  Ciclismo: "🚴",
+  "Bicicleta Ergométrica": "🚴",
+  Natação: "🏊",
+  HIIT: "⚡",
+  Pilates: "🧘",
+  Yoga: "🧘",
+  Remo: "🚣",
+  Elíptico: "🏃",
+  Alongamento: "🧘",
+  Trilha: "🥾",
+};
+
+function workoutIcon(type: string): string {
+  return WORKOUT_ICONS[type] ?? "💪";
+}
+
+function formatClock(iso: string): string {
+  return new Date(iso).toLocaleTimeString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 function formatDuration(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
@@ -48,6 +91,7 @@ export function WatchMirrorCard({ userId }: WatchMirrorCardProps) {
   const currentUserId = userId || user?.id;
 
   const [metrics, setMetrics] = useState<HealthMetrics | null>(null);
+  const [workouts, setWorkouts] = useState<WatchWorkout[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
@@ -57,12 +101,23 @@ export function WatchMirrorCard({ userId }: WatchMirrorCardProps) {
 
     try {
       const today = getLocalDate();
-      const { data, error } = await supabase
-        .from("daily_health_metrics")
-        .select("*")
-        .eq("user_id", currentUserId)
-        .eq("log_date", today)
-        .maybeSingle();
+      const [{ data, error }, { data: workoutsData }] = await Promise.all([
+        supabase
+          .from("daily_health_metrics")
+          .select("*")
+          .eq("user_id", currentUserId)
+          .eq("log_date", today)
+          .maybeSingle(),
+        // Tabela opcional: se não existir, o card continua funcionando sem treinos.
+        supabase
+          .from("watch_workouts")
+          .select(
+            "id, exercise_type, title, start_time, end_time, duration_minutes, calories_kcal, distance_meters, avg_heart_rate, max_heart_rate",
+          )
+          .eq("user_id", currentUserId)
+          .eq("log_date", today)
+          .order("start_time", { ascending: true }),
+      ]);
 
       if (error) {
         // Tabela ainda não sincronizada no projeto: silencioso e seguro.
@@ -71,13 +126,17 @@ export function WatchMirrorCard({ userId }: WatchMirrorCardProps) {
         setMetrics((data as HealthMetrics) ?? null);
       }
 
+      setWorkouts((workoutsData as WatchWorkout[] | null) ?? []);
+
       if (showToast) {
-        if (data) toast.success("Espelho do relógio atualizado!");
+        if (data || (workoutsData && workoutsData.length > 0))
+          toast.success("Espelho do relógio atualizado!");
         else toast.info("Ainda não há dados do relógio para hoje.");
       }
     } catch (e) {
-      console.warn("Aviso ao buscar daily_health_metrics:", e);
+      console.warn("Aviso ao buscar dados do relógio:", e);
       setMetrics(null);
+      setWorkouts([]);
     } finally {
       setLoading(false);
       setLoaded(true);
@@ -101,7 +160,8 @@ export function WatchMirrorCard({ userId }: WatchMirrorCardProps) {
 
   const hasSleep = totalSleepSec > 0;
   const hasHeart = metrics?.resting_heart_rate != null || metrics?.avg_heart_rate != null;
-  const hasAnyData = hasSleep || hasHeart;
+  const hasWorkouts = workouts.length > 0;
+  const hasAnyData = hasSleep || hasHeart || hasWorkouts;
 
   // Estimativa leve de recuperação, combinando sono e FC de repouso
   const recoveryLabel = (() => {
@@ -260,6 +320,65 @@ export function WatchMirrorCard({ userId }: WatchMirrorCardProps) {
                 <p className="text-[11px] text-muted-foreground">Aguardando medição</p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Treinos detectados pelo relógio (Esteira, Corrida, Musculação…) */}
+      {hasWorkouts && (
+        <div className="mt-3 rounded-xl border bg-secondary/30 p-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <Flame className="h-3.5 w-3.5 text-orange-500" />
+              Treinos do relógio
+            </span>
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-600 dark:text-orange-400">
+              {workouts.length} {workouts.length === 1 ? "sessão" : "sessões"}
+            </span>
+          </div>
+
+          <div className="space-y-1.5">
+            {workouts.map((w) => {
+              const name = w.title || w.exercise_type;
+              return (
+                <div
+                  key={w.id}
+                  className="flex items-center gap-2.5 rounded-lg bg-background/60 px-2.5 py-2"
+                >
+                  <span className="text-base leading-none shrink-0">{workoutIcon(w.exercise_type)}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold truncate">{name}</p>
+                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap mt-0.5">
+                      <span>{formatClock(w.start_time)}</span>
+                      {w.duration_minutes != null && (
+                        <span className="flex items-center gap-0.5">
+                          <Timer className="h-2.5 w-2.5" />
+                          {w.duration_minutes} min
+                        </span>
+                      )}
+                      {w.distance_meters != null && w.distance_meters > 0 && (
+                        <span className="flex items-center gap-0.5">
+                          <MapPin className="h-2.5 w-2.5" />
+                          {(w.distance_meters / 1000).toFixed(2)} km
+                        </span>
+                      )}
+                      {w.avg_heart_rate != null && (
+                        <span className="flex items-center gap-0.5 text-rose-500">
+                          <Heart className="h-2.5 w-2.5" />
+                          {w.avg_heart_rate}
+                          {w.max_heart_rate != null ? `–${w.max_heart_rate}` : ""} bpm
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {w.calories_kcal != null && (
+                    <span className="text-[11px] font-bold text-orange-600 dark:text-orange-400 shrink-0">
+                      {w.calories_kcal} kcal
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

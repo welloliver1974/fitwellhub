@@ -502,6 +502,7 @@ const hermesActionSchema = z.object({
     "get_steps",
     "get_sleep",
     "get_health_metrics",
+    "get_watch_workouts",
     "get_profile",
     "get_bioimpedance",
     "log_bioimpedance",
@@ -2838,7 +2839,22 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
       const restingHr = healthData?.resting_heart_rate ?? null;
       const avgHr = healthData?.avg_heart_rate ?? null;
 
-      const hasAnyData = stepsNum > 0 || totalSleepSec > 0 || restingHr != null || avgHr != null;
+      // Treinos gravados pelo Galaxy Watch no dia
+      const { data: dayWorkouts } = await supabase
+        .from("watch_workouts")
+        .select(
+          "exercise_type, duration_minutes, calories_kcal, distance_meters, avg_heart_rate, max_heart_rate, start_time",
+        )
+        .eq("user_id", userId)
+        .eq("log_date", targetDate)
+        .order("start_time", { ascending: true });
+
+      const hasAnyData =
+        stepsNum > 0 ||
+        totalSleepSec > 0 ||
+        restingHr != null ||
+        avgHr != null ||
+        (dayWorkouts?.length ?? 0) > 0;
 
       if (!hasAnyData) {
         return {
@@ -2875,6 +2891,28 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
         msg += `❤️ Frequência cardíaca: sem medições\n`;
       }
 
+      if (dayWorkouts && dayWorkouts.length > 0) {
+        msg += `\n🏃 **Treinos do relógio (${dayWorkouts.length}):**\n`;
+        for (const w of dayWorkouts) {
+          const time = new Date(w.start_time).toLocaleTimeString("pt-BR", {
+            timeZone: "America/Sao_Paulo",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          const parts = [`**${w.exercise_type}**`, `${w.duration_minutes ?? 0} min`];
+          if (w.calories_kcal) parts.push(`${w.calories_kcal} kcal`);
+          if (w.distance_meters) parts.push(`${(Number(w.distance_meters) / 1000).toFixed(2)} km`);
+          if (w.avg_heart_rate) {
+            parts.push(
+              w.max_heart_rate
+                ? `FC ${w.avg_heart_rate}–${w.max_heart_rate} bpm`
+                : `FC ${w.avg_heart_rate} bpm`,
+            );
+          }
+          msg += `• ${time} — ${parts.join(" · ")}\n`;
+        }
+      }
+
       // Leitura de recuperação simplificada para orientar o treino
       const readiness =
         totalSleepSec >= 25200 && (restingHr == null || restingHr <= 65)
@@ -2894,6 +2932,115 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
         sleep_duration_minutes: Math.round(totalSleepSec / 60),
         resting_heart_rate: restingHr,
         avg_heart_rate: avgHr,
+        message: msg,
+      };
+    }
+
+    // 19.3 AÇÃO: CONSULTAR TREINOS DO RELÓGIO ("Quais treinos eu fiz?", "Como foi minha esteira?")
+    if (data.action === "get_watch_workouts") {
+      const targetDate = data.payload.date ? String(data.payload.date) : getLocalDate();
+      const days = Math.min(30, Math.max(1, Number(data.payload.days) || 1));
+      const sinceDate = getLocalDateMinusDays(days - 1);
+
+      const { data: sessions, error: sessionsErr } = await supabase
+        .from("watch_workouts")
+        .select(
+          "log_date, exercise_type, title, start_time, end_time, duration_minutes, calories_kcal, distance_meters, avg_heart_rate, max_heart_rate, min_heart_rate",
+        )
+        .eq("user_id", userId)
+        .gte("log_date", sinceDate)
+        .order("start_time", { ascending: false });
+
+      if (sessionsErr) {
+        console.error("[Hermes] Erro ao buscar watch_workouts:", sessionsErr);
+        return {
+          success: false,
+          error: `Erro ao consultar treinos do relógio: ${sessionsErr.message}`,
+        };
+      }
+
+      const filtered = (sessions ?? []).filter((s: any) =>
+        days > 1 ? true : String(s.log_date) === targetDate,
+      );
+
+      if (filtered.length === 0) {
+        return {
+          success: true,
+          date: targetDate,
+          days,
+          has_data: false,
+          workouts: [],
+          message:
+            `⌚ Nenhum treino registrado pelo Galaxy Watch ` +
+            `${days > 1 ? `nos últimos ${days} dias` : targetDate === getLocalDate() ? "hoje" : `em ${targetDate}`}.\n\n` +
+            `Se você treinou, confira se o relógio estava no pulso e se o FitWell Bridge sincronizou.`,
+        };
+      }
+
+      const totalMinutes = filtered.reduce(
+        (acc: number, s: any) => acc + (Number(s.duration_minutes) || 0),
+        0,
+      );
+      const totalCalories = filtered.reduce(
+        (acc: number, s: any) => acc + (Number(s.calories_kcal) || 0),
+        0,
+      );
+
+      let msg = `🏃 **Treinos do relógio — ${days > 1 ? `últimos ${days} dias` : "hoje"}:**\n\n`;
+
+      for (const s of filtered) {
+        const d = new Date(s.start_time);
+        const dayLabel = d.toLocaleDateString("pt-BR", {
+          timeZone: "America/Sao_Paulo",
+          day: "2-digit",
+          month: "2-digit",
+        });
+        const time = d.toLocaleTimeString("pt-BR", {
+          timeZone: "America/Sao_Paulo",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        const name = s.title || s.exercise_type;
+        const parts = [`${s.duration_minutes ?? 0} min`];
+        if (s.calories_kcal) parts.push(`${s.calories_kcal} kcal`);
+        if (s.distance_meters) parts.push(`${(Number(s.distance_meters) / 1000).toFixed(2)} km`);
+        if (s.avg_heart_rate) {
+          parts.push(
+            s.max_heart_rate
+              ? `FC ${s.avg_heart_rate}–${s.max_heart_rate} bpm`
+              : `FC ${s.avg_heart_rate} bpm`,
+          );
+        }
+        msg += `• ${days > 1 ? `${dayLabel} ` : ""}${time} — **${name}** · ${parts.join(" · ")}\n`;
+      }
+
+      if (filtered.length > 1) {
+        msg += `\n📊 Total: **${totalMinutes} min** de treino`;
+        if (totalCalories > 0) msg += ` · **${totalCalories} kcal**`;
+        msg += ` em ${filtered.length} sessões.`;
+      }
+
+      return {
+        success: true,
+        date: targetDate,
+        days,
+        has_data: true,
+        count: filtered.length,
+        total_minutes: totalMinutes,
+        total_calories: totalCalories,
+        workouts: filtered.map((s: any) => ({
+          log_date: s.log_date,
+          exercise_type: s.exercise_type,
+          title: s.title,
+          start_time: s.start_time,
+          end_time: s.end_time,
+          duration_minutes: s.duration_minutes,
+          calories_kcal: s.calories_kcal,
+          distance_meters: s.distance_meters,
+          avg_heart_rate: s.avg_heart_rate,
+          max_heart_rate: s.max_heart_rate,
+          min_heart_rate: s.min_heart_rate,
+        })),
         message: msg,
       };
     }
