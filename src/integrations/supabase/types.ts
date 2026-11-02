@@ -814,6 +814,66 @@ export type Database = {
         };
         Relationships: [];
       };
+      daily_health_metrics: {
+        Row: {
+          id: string;
+          user_id: string;
+          log_date: string;
+          sleep_duration_seconds: number | null;
+          sleep_deep_seconds: number | null;
+          sleep_rem_seconds: number | null;
+          sleep_light_seconds: number | null;
+          sleep_awake_seconds: number | null;
+          sleep_start_time: string | null;
+          sleep_end_time: string | null;
+          resting_heart_rate: number | null;
+          avg_heart_rate: number | null;
+          min_heart_rate: number | null;
+          max_heart_rate: number | null;
+          source: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          log_date: string;
+          sleep_duration_seconds?: number | null;
+          sleep_deep_seconds?: number | null;
+          sleep_rem_seconds?: number | null;
+          sleep_light_seconds?: number | null;
+          sleep_awake_seconds?: number | null;
+          sleep_start_time?: string | null;
+          sleep_end_time?: string | null;
+          resting_heart_rate?: number | null;
+          avg_heart_rate?: number | null;
+          min_heart_rate?: number | null;
+          max_heart_rate?: number | null;
+          source?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          log_date?: string;
+          sleep_duration_seconds?: number | null;
+          sleep_deep_seconds?: number | null;
+          sleep_rem_seconds?: number | null;
+          sleep_light_seconds?: number | null;
+          sleep_awake_seconds?: number | null;
+          sleep_start_time?: string | null;
+          sleep_end_time?: string | null;
+          resting_heart_rate?: number | null;
+          avg_heart_rate?: number | null;
+          min_heart_rate?: number | null;
+          max_heart_rate?: number | null;
+          source?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;

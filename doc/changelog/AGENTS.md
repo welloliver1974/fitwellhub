@@ -2,6 +2,26 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [02/11/2026] - Antigravity (Espelho do Relógio: Sono e Frequência Cardíaca do Galaxy Watch)
+- **Nova Tabela `daily_health_metrics` (`supabase/migrations/20261102_daily_health_metrics.sql`)**:
+  - Armazena métricas consolidadas do Health Connect: sono total, profundo, REM, leve, acordado, horários de início/fim, FC de repouso, média, mínima e máxima.
+  - `UNIQUE (user_id, log_date)` para upsert idempotente, índice `(user_id, log_date DESC)` e RLS `auth.uid() = user_id`.
+  - Migration aplicada manualmente no SQL Editor do projeto Supabase em 02/11/2026.
+- **Novo Card "Sono & Coração" (`src/components/watch-mirror-card.tsx`)**:
+  - Exibe duração do sono com barra segmentada de estágios (profundo, REM, leve), FC de repouso, variação mín/máx e leitura simples de recuperação.
+  - Estados vazios amigáveis quando não há dados; nunca lança exceção se a tabela não existir.
+  - Inserido na aba **Hoje** (`src/routes/app.index.tsx`) via `<SafeBoundary>`, logo após o `StepsCard`, que foi **mantido intacto** (controles de Google Fit preservados).
+- **Novas Ações do Hermes (`src/server-fns/telegram.functions.ts`)**:
+  - `get_sleep` — resumo da noite com estágios do sono.
+  - `get_health_metrics` — visão integrada (passos + sono + FC) com leitura de prontidão para treino.
+  - Ambas adicionadas ao enum do `hermesActionSchema` e ao handler.
+  - Regras 18 e 19 adicionadas ao `hermesSystemInstruction` em `src/routes/app.ia.tsx`.
+- **Tipos (`src/integrations/supabase/types.ts`)**:
+  - Adicionadas as definições `Row` / `Insert` / `Update` de `daily_health_metrics`.
+- **Validação Técnica**:
+  - `npm run build` aprovado (cliente e SSR).
+  - Estrutura da tabela validada via PostgREST (HTTP 200 nas 17 colunas esperadas).
+
 ## [25/10/2026] - Antigravity (Correção da Tela de Configurações / IA e Aprimoramento da Navegação)
 - **Correção de Crash de Renderização na Central de Configurações (`src/routes/app.ia.tsx`)**:
   - Declaradas as variáveis computadas `effectiveVisionProvider` e `visionApiKey` no escopo do componente `AiSettingsPage`, eliminando o erro de execução `ReferenceError: effectiveVisionProvider is not defined` que impedia a abertura da tela.

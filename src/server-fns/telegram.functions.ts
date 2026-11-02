@@ -500,6 +500,8 @@ const hermesActionSchema = z.object({
     "get_weight",
     "log_steps",
     "get_steps",
+    "get_sleep",
+    "get_health_metrics",
     "get_profile",
     "get_bioimpedance",
     "log_bioimpedance",
@@ -2753,6 +2755,145 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
         active_calories: activeCal,
         distance_meters: distanceMeters,
         source: stepLog.source,
+        message: msg,
+      };
+    }
+
+    // 19.1 AÇÃO: CONSULTAR SONO ("Hermes, como foi meu sono?")
+    if (data.action === "get_sleep") {
+      const targetDate = data.payload.date ? String(data.payload.date) : getLocalDate();
+
+      const { data: healthData } = await supabase
+        .from("daily_health_metrics")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("log_date", targetDate)
+        .maybeSingle();
+
+      const totalSec = Number(healthData?.sleep_duration_seconds ?? 0);
+
+      if (!healthData || totalSec <= 0) {
+        return {
+          success: true,
+          date: targetDate,
+          has_data: false,
+          message:
+            `🌙 Não encontrei registro de sono do Galaxy Watch para ${targetDate === getLocalDate() ? "a noite passada" : targetDate}.\n\n` +
+            `Você dormiu com o relógio no pulso? Se sim, abra o FitWell Bridge e toque em "Sincronizar agora".`,
+        };
+      }
+
+      const totalH = Math.floor(totalSec / 3600);
+      const totalM = Math.floor((totalSec % 3600) / 60);
+      const deepMin = Math.round(Number(healthData.sleep_deep_seconds ?? 0) / 60);
+      const remMin = Math.round(Number(healthData.sleep_rem_seconds ?? 0) / 60);
+      const lightMin = Math.round(Number(healthData.sleep_light_seconds ?? 0) / 60);
+      const awakeMin = Math.round(Number(healthData.sleep_awake_seconds ?? 0) / 60);
+
+      const quality = totalSec >= 25200 ? "Excelente 😴" : totalSec >= 21600 ? "Boa 🙂" : "Curta ⚠️";
+
+      const msg =
+        `🌙 **Sono da Noite (${targetDate === getLocalDate() ? "hoje" : targetDate}):**\n\n` +
+        `• Duração total: **${totalH}h ${totalM}m** (${quality})\n` +
+        `• Sono profundo: **${deepMin} min**\n` +
+        `• Sono REM: **${remMin} min**\n` +
+        `• Sono leve: **${lightMin} min**\n` +
+        (awakeMin > 0 ? `• Tempo acordado: **${awakeMin} min**\n` : "");
+
+      return {
+        success: true,
+        date: targetDate,
+        has_data: true,
+        sleep_duration_minutes: Math.round(totalSec / 60),
+        sleep_deep_minutes: deepMin,
+        sleep_rem_minutes: remMin,
+        sleep_light_minutes: lightMin,
+        sleep_awake_minutes: awakeMin,
+        message: msg,
+      };
+    }
+
+    // 19.2 AÇÃO: CONSULTAR SAÚDE INTEGRADA DO RELÓGIO ("Como estão meus sinais hoje?")
+    if (data.action === "get_health_metrics") {
+      const targetDate = data.payload.date ? String(data.payload.date) : getLocalDate();
+
+      const [{ data: stepLog }, { data: healthData }] = await Promise.all([
+        supabase
+          .from("daily_steps_logs")
+          .select("steps, active_calories, source")
+          .eq("user_id", userId)
+          .eq("log_date", targetDate)
+          .maybeSingle(),
+        supabase
+          .from("daily_health_metrics")
+          .select("*")
+          .eq("user_id", userId)
+          .eq("log_date", targetDate)
+          .maybeSingle(),
+      ]);
+
+      const stepsNum = Number(stepLog?.steps ?? 0);
+      const activeCal = Number(stepLog?.active_calories ?? 0);
+      const totalSleepSec = Number(healthData?.sleep_duration_seconds ?? 0);
+      const restingHr = healthData?.resting_heart_rate ?? null;
+      const avgHr = healthData?.avg_heart_rate ?? null;
+
+      const hasAnyData = stepsNum > 0 || totalSleepSec > 0 || restingHr != null || avgHr != null;
+
+      if (!hasAnyData) {
+        return {
+          success: true,
+          date: targetDate,
+          has_data: false,
+          message:
+            `⌚ Não encontrei métricas do Galaxy Watch para ${targetDate === getLocalDate() ? "hoje" : targetDate}.\n\n` +
+            `Verifique se o FitWell Bridge está conectado e sincronizando.`,
+        };
+      }
+
+      let msg = `⌚ **Espelho do Relógio — ${targetDate === getLocalDate() ? "Hoje" : targetDate}:**\n\n`;
+
+      if (stepsNum > 0) {
+        msg += `👟 Passos: **${stepsNum.toLocaleString("pt-BR")}** (~${activeCal} kcal ativas)\n`;
+      }
+
+      if (totalSleepSec > 0) {
+        const h = Math.floor(totalSleepSec / 3600);
+        const m = Math.floor((totalSleepSec % 3600) / 60);
+        const deep = Math.round(Number(healthData?.sleep_deep_seconds ?? 0) / 60);
+        const rem = Math.round(Number(healthData?.sleep_rem_seconds ?? 0) / 60);
+        msg += `🌙 Sono: **${h}h ${m}m** (profundo: ${deep}m, REM: ${rem}m)\n`;
+      } else {
+        msg += `🌙 Sono: sem registro desta noite\n`;
+      }
+
+      if (restingHr != null) {
+        msg += `❤️ FC de repouso: **${restingHr} bpm**\n`;
+      } else if (avgHr != null) {
+        msg += `❤️ FC média do dia: **${avgHr} bpm**\n`;
+      } else {
+        msg += `❤️ Frequência cardíaca: sem medições\n`;
+      }
+
+      // Leitura de recuperação simplificada para orientar o treino
+      const readiness =
+        totalSleepSec >= 25200 && (restingHr == null || restingHr <= 65)
+          ? "Recuperação boa — treino normal liberado 💪"
+          : totalSleepSec > 0 && totalSleepSec < 21600
+            ? "Sono curto — considere reduzir a intensidade ou o volume hoje ⚠️"
+            : "Avalie a percepção de esforço antes de treinar.";
+
+      msg += `\n💡 ${readiness}`;
+
+      return {
+        success: true,
+        date: targetDate,
+        has_data: true,
+        steps: stepsNum,
+        active_calories: activeCal,
+        sleep_duration_minutes: Math.round(totalSleepSec / 60),
+        resting_heart_rate: restingHr,
+        avg_heart_rate: avgHr,
         message: msg,
       };
     }
