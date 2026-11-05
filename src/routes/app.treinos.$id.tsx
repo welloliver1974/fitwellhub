@@ -48,13 +48,20 @@ import {
   calculateCardioCalories,
   formatCardioSummary,
 } from "@/lib/cardio-utils";
+import { REST_OPTIONS, resolveRestSeconds } from "@/lib/rest-config";
 
 export const Route = createFileRoute("/app/treinos/$id")({
   component: WorkoutDetail,
 });
 
 type Workout = { id: string; name: string; workout_date: string };
-type Exercise = { id: string; name: string; position: number; notes?: string | null };
+type Exercise = {
+  id: string;
+  name: string;
+  position: number;
+  notes?: string | null;
+  rest_seconds?: number | null;
+};
 type WorkoutSet = {
   id: string;
   exercise_id: string;
@@ -85,6 +92,29 @@ const DEFAULT_CARDIO_ITEMS = [
   { id: "c-escada", name: "Simulador de escada" },
   { id: "c-remo", name: "Remo seco" },
 ];
+
+/**
+ * Carrega os exercícios da ficha tentando ler `rest_seconds`.
+ * Se a coluna ainda não existir no banco (migration pendente), refaz a consulta
+ * sem ela — assim a tela nunca quebra por causa da configuração de descanso.
+ */
+async function loadWorkoutExercises(workoutId: string): Promise<Exercise[]> {
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const withRest: any = await supabase
+    .from("exercises")
+    .select("id,name,position,notes,rest_seconds")
+    .eq("workout_id", workoutId)
+    .order("position");
+  if (!withRest.error) return (withRest.data ?? []) as Exercise[];
+
+  const legacy: any = await supabase
+    .from("exercises")
+    .select("id,name,position,notes")
+    .eq("workout_id", workoutId)
+    .order("position");
+  return (legacy.data ?? []) as Exercise[];
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+}
 
 function WorkoutDetail() {
   const { id } = Route.useParams();
@@ -134,7 +164,7 @@ function WorkoutDetail() {
     );
   };
 
-  const toggleCompleted = (setId: string) => {
+  const toggleCompleted = (setId: string, restSeconds?: number | null) => {
     setCompletedSets((prev) => {
       const next = new Set(prev);
       if (next.has(setId)) {
@@ -144,7 +174,8 @@ function WorkoutDetail() {
         if (typeof navigator !== "undefined" && "vibrate" in navigator) {
           try { navigator.vibrate(40); } catch {}
         }
-        startRest(restPreset); // Auto inicia o timer de descanso ao marcar
+        const rest = resolveRestSeconds(restSeconds);
+        if (rest > 0) startRest(rest); // Auto inicia o descanso do exercício
       }
       if (startedAt) saveDraft(next, setValues, startedAt);
       return next;
@@ -242,12 +273,8 @@ function WorkoutDetail() {
     const { data: w } = await q.maybeSingle();
     setWorkout(w as Workout | null);
 
-    const { data: ex } = await supabase
-      .from("exercises")
-      .select("id,name,position,notes")
-      .eq("workout_id", id)
-      .order("position");
-    setExercises((ex ?? []) as Exercise[]);
+    const ex = await loadWorkoutExercises(id);
+    setExercises(ex);
 
     // Carregar peso corporal mais recente para cálculo calórico do cardio
     if (user?.id) {
@@ -264,7 +291,7 @@ function WorkoutDetail() {
         });
     }
 
-    const exIds = (ex ?? []).map((e) => e.id);
+    const exIds = ex.map((e) => e.id);
     let loadedSets: WorkoutSet[] = [];
     if (exIds.length) {
       const { data: ss } = await supabase
@@ -588,6 +615,22 @@ function WorkoutDetail() {
       load();
     }
     setEditingExId(null);
+  };
+
+  const updateExerciseRest = async (exId: string, restSeconds: number) => {
+    setExercises((prev) =>
+      prev.map((item) => (item.id === exId ? { ...item, rest_seconds: restSeconds } : item)),
+    );
+    const { error } = await supabase
+      .from("exercises")
+      .update({ rest_seconds: restSeconds })
+      .eq("id", exId);
+    if (error) {
+      toast.error("Não foi possível salvar o descanso: " + error.message);
+      load();
+      return;
+    }
+    toast.success(`Descanso de ${restSeconds}s salvo neste exercício`);
   };
 
   if (!workout) return <p className="text-muted-foreground">Carregando…</p>;
@@ -974,6 +1017,25 @@ function WorkoutDetail() {
                     >
                       {isCardio ? "🏃 Cardio" : "🏋️ Musculação"}
                     </Button>
+                    {!isCardio && (
+                      <label
+                        className="flex items-center gap-1 text-[11px] text-muted-foreground"
+                        title="Descanso entre séries deste exercício"
+                      >
+                        <Timer className="h-3 w-3" />
+                        <select
+                          value={resolveRestSeconds(ex.rest_seconds)}
+                          onChange={(e) => updateExerciseRest(ex.id, Number(e.target.value))}
+                          className="h-6 rounded-md border border-border bg-background px-1 text-[11px] font-medium cursor-pointer"
+                        >
+                          {REST_OPTIONS.map((s) => (
+                            <option key={s} value={s}>
+                              {s}s
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
                     <Link to="/app/exercicios/$name" params={{ name: encodeURIComponent(ex.name) }}>
@@ -1062,7 +1124,7 @@ function WorkoutDetail() {
                           <input
                             type="checkbox"
                             checked={done}
-                            onChange={() => toggleCompleted(s.id)}
+                            onChange={() => toggleCompleted(s.id, isCardio ? 0 : ex.rest_seconds)}
                             className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
                           />
                         </div>
