@@ -174,8 +174,8 @@ function WorkoutDetail() {
         if (typeof navigator !== "undefined" && "vibrate" in navigator) {
           try { navigator.vibrate(40); } catch {}
         }
-        const rest = resolveRestSeconds(restSeconds);
-        if (rest > 0) startRest(rest); // Auto inicia o descanso do exercício
+        const rest = resolveRestSeconds(restSeconds, restPreset);
+        if (rest > 0) startRest(rest); // Descanso do exercício ou o preset escolhido
       }
       if (startedAt) saveDraft(next, setValues, startedAt);
       return next;
@@ -617,7 +617,7 @@ function WorkoutDetail() {
     setEditingExId(null);
   };
 
-  const updateExerciseRest = async (exId: string, restSeconds: number) => {
+  const updateExerciseRest = async (exId: string, restSeconds: number | null) => {
     setExercises((prev) =>
       prev.map((item) => (item.id === exId ? { ...item, rest_seconds: restSeconds } : item)),
     );
@@ -630,7 +630,11 @@ function WorkoutDetail() {
       load();
       return;
     }
-    toast.success(`Descanso de ${restSeconds}s salvo neste exercício`);
+    toast.success(
+      restSeconds === null
+        ? "Descanso voltou ao padrão do cronômetro"
+        : `Descanso de ${restSeconds}s salvo neste exercício`,
+    );
   };
 
   if (!workout) return <p className="text-muted-foreground">Carregando…</p>;
@@ -1024,10 +1028,16 @@ function WorkoutDetail() {
                       >
                         <Timer className="h-3 w-3" />
                         <select
-                          value={resolveRestSeconds(ex.rest_seconds)}
-                          onChange={(e) => updateExerciseRest(ex.id, Number(e.target.value))}
+                          value={ex.rest_seconds ?? ""}
+                          onChange={(e) =>
+                            updateExerciseRest(
+                              ex.id,
+                              e.target.value === "" ? null : Number(e.target.value),
+                            )
+                          }
                           className="h-6 rounded-md border border-border bg-background px-1 text-[11px] font-medium cursor-pointer"
                         >
+                          <option value="">Padrão</option>
                           {REST_OPTIONS.map((s) => (
                             <option key={s} value={s}>
                               {s}s

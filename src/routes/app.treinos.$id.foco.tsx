@@ -133,8 +133,8 @@ function FocusMode() {
         if (typeof navigator !== "undefined" && "vibrate" in navigator) {
           try { navigator.vibrate(40); } catch {}
         }
-        const rest = resolveRestSeconds(restSeconds);
-        if (rest > 0) startRestTimer(rest); // Auto inicia o descanso do exercício
+        const rest = resolveRestSeconds(restSeconds, restPreset);
+        if (rest > 0) startRestTimer(rest); // Descanso do exercício ou o preset escolhido
       }
       if (startedAt) saveDraft(next, setValues, startedAt);
       return next;
@@ -354,7 +354,7 @@ function FocusMode() {
     });
     if (error) return toast.error(error.message);
     if (!isCardio) {
-      const rest = resolveRestSeconds(ex.rest_seconds);
+      const rest = resolveRestSeconds(ex.rest_seconds, restPreset);
       if (rest > 0) {
         setRestSec(rest);
         setRestRunning(true);

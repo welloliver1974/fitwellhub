@@ -929,16 +929,26 @@ export const executeHermesAction = createServerFn({ method: "POST" })
 
       // Duplicar exercícios e séries associados
       for (const ex of sourceExercises || []) {
+        const newExRow: {
+          workout_id: string;
+          user_id: string;
+          name: string;
+          position: number;
+          notes: string | null;
+          rest_seconds?: number;
+        } = {
+          workout_id: duplicatedWorkout.id,
+          user_id: userId,
+          name: ex.name,
+          position: ex.position,
+          notes: ex.notes,
+        };
+        // Preserva o descanso configurado; se não houver, deixa o padrão do banco.
+        if (typeof ex.rest_seconds === "number") newExRow.rest_seconds = ex.rest_seconds;
+
         const { data: newEx } = await supabase
           .from("exercises")
-          .insert({
-            workout_id: duplicatedWorkout.id,
-            user_id: userId,
-            name: ex.name,
-            position: ex.position,
-            notes: ex.notes,
-            rest_seconds: ex.rest_seconds ?? 90,
-          })
+          .insert(newExRow)
           .select()
           .single();
 

@@ -1,4 +1,4 @@
-/** Valor padrão quando o exercício não tem descanso configurado. */
+/** Valor padrão de descanso quando ninguém configurou o exercício. */
 export const DEFAULT_REST_SECONDS = 90;
 
 /** Opções exibidas no seletor de descanso por exercício. */
@@ -9,14 +9,18 @@ export const CARDIO_REST_OPTIONS = [900, 1200, 1800, 2400] as const;
 
 /**
  * Resolve o descanso efetivo de um exercício.
- * Cardio não usa timer de musculação; qualquer valor inválido cai no padrão.
+ *
+ * Regra:
+ * - `0` é valor válido e significa "sem cronômetro" (cardio).
+ * - `null`/`undefined`/inválido => exercício sem configuração, então usamos o
+ *   preset escolhido pelo usuário na tela (comportamento antigo do app).
+ * - Qualquer valor entre 0 e 900 é respeitado.
  */
 export function resolveRestSeconds(
   restSeconds?: number | null,
-  isCardio = false,
+  fallbackSeconds: number = DEFAULT_REST_SECONDS,
 ): number {
-  if (isCardio) return 0;
-  const value = Number(restSeconds);
+  const value = restSeconds === null || restSeconds === undefined ? NaN : Number(restSeconds);
   if (Number.isFinite(value) && value >= 0 && value <= 900) return value;
-  return DEFAULT_REST_SECONDS;
+  return fallbackSeconds;
 }
