@@ -265,7 +265,7 @@ function WorkoutsPage() {
 
     const { data: exs } = await supabase
       .from("exercises")
-      .select("id,name,position,notes")
+      .select("id,name,position,notes,rest_seconds")
       .eq("workout_id", w.id)
       .order("position");
 
@@ -282,6 +282,8 @@ function WorkoutsPage() {
           name: ex.name,
           position: ex.position,
           notes: ex.notes,
+          // Preserva o descanso configurado do exercício na ficha duplicada
+          rest_seconds: ex.rest_seconds ?? 90,
           user_id: user.id,
           workout_id: newW.id
         })))

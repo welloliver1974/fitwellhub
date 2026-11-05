@@ -507,6 +507,8 @@ const hermesActionSchema = z.object({
     "get_bioimpedance",
     "log_bioimpedance",
     "get_workout_session",
+    "log_blood_pressure",
+    "get_blood_pressure",
   ]),
   payload: z.record(z.any()).default({}),
 });
@@ -894,7 +896,7 @@ export const executeHermesAction = createServerFn({ method: "POST" })
       // Carregar exercícios e séries da ficha modelo
       const { data: sourceExercises } = await supabase
         .from("exercises")
-        .select("id, name, position, notes")
+        .select("id, name, position, notes, rest_seconds")
         .eq("workout_id", sourceWorkout.id)
         .order("position");
 
@@ -935,6 +937,7 @@ export const executeHermesAction = createServerFn({ method: "POST" })
             name: ex.name,
             position: ex.position,
             notes: ex.notes,
+            rest_seconds: ex.rest_seconds ?? 90,
           })
           .select()
           .single();
@@ -2854,6 +2857,8 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
         totalSleepSec > 0 ||
         restingHr != null ||
         avgHr != null ||
+        healthData?.spo2_percentage != null ||
+        healthData?.blood_pressure_systolic != null ||
         (dayWorkouts?.length ?? 0) > 0;
 
       if (!hasAnyData) {
@@ -2889,6 +2894,15 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
         msg += `❤️ FC média do dia: **${avgHr} bpm**\n`;
       } else {
         msg += `❤️ Frequência cardíaca: sem medições\n`;
+      }
+
+      if (healthData?.spo2_percentage != null) {
+        msg += `🫁 Oxigenação (SpO2): **${Math.round(healthData.spo2_percentage)}%**\n`;
+      }
+
+      if (healthData?.blood_pressure_systolic != null && healthData?.blood_pressure_diastolic != null) {
+        const bpSource = (healthData as any)?.blood_pressure_source === "manual" ? " (manual)" : "";
+        msg += `🩺 Pressão arterial: **${healthData.blood_pressure_systolic}/${healthData.blood_pressure_diastolic} mmHg**${bpSource}\n`;
       }
 
       if (dayWorkouts && dayWorkouts.length > 0) {
@@ -3649,6 +3663,246 @@ Responda EXCLUSIVAMENTE em formato JSON com o schema:
         current: structuredSessions[0] || null,
         sessions: structuredSessions,
         message: msg.trim(),
+      };
+    }
+
+    // 24. AÇÃO: REGISTRAR PRESSÃO ARTERIAL ("Hermes, minha pressão deu 128 por 82")
+    if (data.action === "log_blood_pressure") {
+      const rawText = data.payload.raw_text ? String(data.payload.raw_text) : "";
+      let targetDate = data.payload.log_date || data.payload.date ? String(data.payload.log_date || data.payload.date) : "";
+      if (!targetDate && rawText) {
+        targetDate = inferDateFromRelativeText(rawText) || "";
+      }
+      if (!targetDate) {
+        targetDate = getLocalDate();
+      }
+
+      const parseVal = (v: any) => {
+        if (v == null || v === "") return null;
+        const n = Number(String(v).replace(",", "."));
+        return isNaN(n) ? null : n;
+      };
+
+      let systolic = parseVal(
+        data.payload.systolic ??
+        data.payload.sys ??
+        data.payload.sistolica ??
+        data.payload.maxima ??
+        data.payload.max
+      );
+      let diastolic = parseVal(
+        data.payload.diastolic ??
+        data.payload.dia ??
+        data.payload.diastolica ??
+        data.payload.minima ??
+        data.payload.min
+      );
+
+      // Parsing de texto livre se fornecido (ex: "128 por 82", "12/8", "120x80", "12 por 8", "125/85")
+      if ((systolic == null || diastolic == null) && rawText) {
+        const match = /(?:press[aã]o(?:\s+arterial)?|pa)?\s*([0-9]{1,3}(?:[.,][0-9])?)\s*(?:[xX/]|(?:\s*por\s*))\s*([0-9]{1,3}(?:[.,][0-9])?)/i.exec(rawText);
+        if (match && match[1] && match[2]) {
+          systolic = parseFloat(match[1].replace(",", "."));
+          diastolic = parseFloat(match[2].replace(",", "."));
+        }
+      }
+
+      // Normalização de notação abreviada brasileira (ex: 12 por 8 -> 120/80; 12.5 por 8 -> 125/80)
+      if (systolic != null && systolic < 30) {
+        systolic = Math.round(systolic * 10);
+      }
+      if (diastolic != null && diastolic < 25) {
+        diastolic = Math.round(diastolic * 10);
+      }
+
+      if (systolic != null) systolic = Math.round(systolic);
+      if (diastolic != null) diastolic = Math.round(diastolic);
+
+      if (
+        systolic == null ||
+        diastolic == null ||
+        isNaN(systolic) ||
+        isNaN(diastolic) ||
+        systolic < 60 ||
+        systolic > 250 ||
+        diastolic < 30 ||
+        diastolic > 150 ||
+        diastolic >= systolic
+      ) {
+        return {
+          success: false,
+          error:
+            "Valores de pressão arterial inválidos. Informe sistólica e diastólica em mmHg (ex: systolic: 120, diastolic: 80, ou '12 por 8').",
+        };
+      }
+
+      // Classificação segundo diretriz da Sociedade Brasileira de Cardiologia (SBC)
+      let classification = "Normal";
+      let classificationEmoji = "💚";
+      if (systolic < 120 && diastolic < 80) {
+        classification = "Ótima";
+        classificationEmoji = "💚";
+      } else if (systolic <= 129 && diastolic <= 84) {
+        classification = "Normal";
+        classificationEmoji = "💚";
+      } else if (systolic <= 139 || diastolic <= 89) {
+        classification = "Pré-hipertensão";
+        classificationEmoji = "⚠️";
+      } else if (systolic <= 159 || diastolic <= 99) {
+        classification = "Hipertensão Estágio 1";
+        classificationEmoji = "🟠";
+      } else if (systolic <= 179 || diastolic <= 109) {
+        classification = "Hipertensão Estágio 2";
+        classificationEmoji = "🔴";
+      } else {
+        classification = "Hipertensão Estágio 3 / Crise";
+        classificationEmoji = "🚨";
+      }
+
+      const nowIso = new Date().toISOString();
+      const basePayload: Record<string, any> = {
+        user_id: userId,
+        log_date: targetDate,
+        blood_pressure_systolic: systolic,
+        blood_pressure_diastolic: diastolic,
+        blood_pressure_time: nowIso,
+        updated_at: nowIso,
+      };
+
+      let { error: bpErr } = await supabase
+        .from("daily_health_metrics")
+        .upsert(
+          { ...basePayload, blood_pressure_source: "manual" },
+          { onConflict: "user_id,log_date" }
+        );
+
+      // Fallback: se a coluna blood_pressure_source ainda não existir no Supabase, salva sem ela
+      if (bpErr && /blood_pressure_source|column/i.test(bpErr.message ?? "")) {
+        ({ error: bpErr } = await supabase
+          .from("daily_health_metrics")
+          .upsert(basePayload, { onConflict: "user_id,log_date" }));
+      }
+
+      if (bpErr) {
+        console.error("[Hermes] Erro ao registrar pressão arterial:", bpErr);
+        return { success: false, error: "Falha ao gravar pressão arterial no banco de dados." };
+      }
+
+      const timeBrt = new Date(nowIso).toLocaleTimeString("pt-BR", {
+        timeZone: "America/Sao_Paulo",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+      const msg =
+        `🩺 **Pressão Arterial Registrada com Sucesso!**\n\n` +
+        `• Valor: **${systolic}/${diastolic} mmHg**\n` +
+        `• Classificação: ${classificationEmoji} **${classification}** (Diretriz SBC)\n` +
+        `• Data: **${targetDate === getLocalDate() ? "Hoje" : targetDate}** às **${timeBrt}**\n` +
+        `• Origem: Registro manual via Hermes\n\n` +
+        `O card de Sinais Vitais do FitWell Hub foi atualizado! 🎯`;
+
+      return {
+        success: true,
+        date: targetDate,
+        systolic,
+        diastolic,
+        classification,
+        time: timeBrt,
+        message: msg,
+      };
+    }
+
+    // 25. AÇÃO: CONSULTAR PRESSÃO ARTERIAL ("Hermes, qual foi minha última pressão?")
+    if (data.action === "get_blood_pressure") {
+      const rawText = data.payload.raw_text ? String(data.payload.raw_text) : "";
+      let targetDate = data.payload.date ? String(data.payload.date) : "";
+      if (!targetDate && rawText) {
+        targetDate = inferDateFromRelativeText(rawText) || "";
+      }
+
+      let metricRow: any = null;
+
+      if (targetDate) {
+        const { data: row } = await supabase
+          .from("daily_health_metrics")
+          .select("blood_pressure_systolic, blood_pressure_diastolic, blood_pressure_time, blood_pressure_source, log_date")
+          .eq("user_id", userId)
+          .eq("log_date", targetDate)
+          .maybeSingle();
+        metricRow = row;
+      } else {
+        // Busca a mais recente que tenha pressão arterial
+        const { data: rows } = await supabase
+          .from("daily_health_metrics")
+          .select("blood_pressure_systolic, blood_pressure_diastolic, blood_pressure_time, blood_pressure_source, log_date")
+          .eq("user_id", userId)
+          .not("blood_pressure_systolic", "is", null)
+          .order("log_date", { ascending: false })
+          .limit(1);
+        metricRow = rows?.[0] || null;
+      }
+
+      if (!metricRow || metricRow.blood_pressure_systolic == null || metricRow.blood_pressure_diastolic == null) {
+        return {
+          success: true,
+          has_data: false,
+          date: targetDate || getLocalDate(),
+          message: `🩺 Nenhuma aferição de pressão arterial encontrada no FitWell Hub${targetDate ? ` para ${targetDate}` : ""}.\n\nVocê pode me dizer ex: *"Hermes, minha pressão deu 120 por 80"* ou registrar direto no card do app!`,
+        };
+      }
+
+      const sys = Number(metricRow.blood_pressure_systolic);
+      const dia = Number(metricRow.blood_pressure_diastolic);
+      const rowDate = String(metricRow.log_date);
+      const rowTime = metricRow.blood_pressure_time
+        ? new Date(metricRow.blood_pressure_time).toLocaleTimeString("pt-BR", {
+            timeZone: "America/Sao_Paulo",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : null;
+
+      let classification = "Normal";
+      let classificationEmoji = "💚";
+      if (sys < 120 && dia < 80) {
+        classification = "Ótima";
+        classificationEmoji = "💚";
+      } else if (sys <= 129 && dia <= 84) {
+        classification = "Normal";
+        classificationEmoji = "💚";
+      } else if (sys <= 139 || dia <= 89) {
+        classification = "Pré-hipertensão";
+        classificationEmoji = "⚠️";
+      } else if (sys <= 159 || dia <= 99) {
+        classification = "Hipertensão Estágio 1";
+        classificationEmoji = "🟠";
+      } else if (sys <= 179 || dia <= 109) {
+        classification = "Hipertensão Estágio 2";
+        classificationEmoji = "🔴";
+      } else {
+        classification = "Hipertensão Estágio 3 / Crise";
+        classificationEmoji = "🚨";
+      }
+
+      const sourceLabel = metricRow.blood_pressure_source === "manual" ? "manual" : "Galaxy Watch";
+      const timeTag = rowTime ? ` às ${rowTime}` : "";
+
+      let msg = `🩺 **Pressão Arterial no FitWell Hub:**\n\n`;
+      msg += `• Valor: **${sys}/${dia} mmHg**\n`;
+      msg += `• Classificação: ${classificationEmoji} **${classification}**\n`;
+      msg += `• Aferição: **${rowDate === getLocalDate() ? "Hoje" : rowDate}**${timeTag} (${sourceLabel})\n`;
+
+      return {
+        success: true,
+        has_data: true,
+        date: rowDate,
+        systolic: sys,
+        diastolic: dia,
+        classification,
+        source: metricRow.blood_pressure_source || "health_connect",
+        time: rowTime,
+        message: msg,
       };
     }
 
