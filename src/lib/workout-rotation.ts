@@ -86,11 +86,22 @@ export function determineNextWorkout(params: {
       ? params.preferredOrder.map((l) => l.toUpperCase())
       : getSavedSplitRotation();
 
-  // Mapear treinos disponíveis por letra (se houver)
+  // Ordena as fichas da mais recente para a mais antiga antes de mapear as letras.
+  // Motivo: existem várias fichas com a mesma letra ("A - ..."), uma por dia de treino.
+  // Sem ordenação explícita, a sugestão podia cair numa cópia antiga do histórico.
+  const ordered = [...workouts].sort((a, b) => {
+    const byDate = String(b.workout_date ?? "").localeCompare(String(a.workout_date ?? ""));
+    if (byDate !== 0) return byDate;
+    return String(b.created_at ?? "").localeCompare(String(a.created_at ?? ""));
+  });
+
+  // Mapear treinos disponíveis por letra (se houver).
+  // A PRIMEIRA ocorrência vence — como a lista está em ordem decrescente,
+  // isso equivale a "a ficha mais recente de cada letra".
   const workoutsByLetter = new Map<string, WorkoutItem>();
-  for (const w of workouts) {
+  for (const w of ordered) {
     const letter = extractWorkoutLetter(w.name);
-    if (letter) {
+    if (letter && !workoutsByLetter.has(letter)) {
       workoutsByLetter.set(letter, w);
     }
   }
