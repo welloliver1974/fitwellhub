@@ -47,8 +47,12 @@ import {
 } from "@/server-fns/corpo.functions";
 import { toast } from "sonner";
 import { DualMetricChart } from "@/components/charts";
+import { WatchMirrorCard } from "@/components/watch-mirror-card";
 
 export const Route = createFileRoute("/app/corpo")({
+  validateSearch: (search: Record<string, unknown>): { tab?: string } => ({
+    tab: typeof search.tab === "string" ? search.tab : undefined,
+  }),
   component: CorpoPage,
 });
 
@@ -82,9 +86,12 @@ function calculateAge(birthDateStr: string): number {
 function CorpoPage() {
   const { user, session } = useAuth();
   const navigate = useNavigate();
+  const { tab: initialTab } = Route.useSearch();
 
-  // Active Tab
-  const [activeTab, setActiveTab] = useState("dados");
+  // Active Tab — permite abrir direto em Sinais Vitais (atalho do card da Home)
+  const [activeTab, setActiveTab] = useState(
+    initialTab === "vitals" ? "vitals" : "dados",
+  );
 
   // Profile Form State
   const [displayName, setDisplayName] = useState("");
@@ -555,7 +562,7 @@ function CorpoPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 gap-1 rounded-2xl bg-secondary/50 p-1 mb-6">
+        <TabsList className="grid w-full grid-cols-3 gap-1 rounded-2xl bg-secondary/50 p-1 mb-6">
           <TabsTrigger
             value="dados"
             className="rounded-xl font-bold text-xs py-2 flex items-center justify-center gap-1.5 data-[state=active]:bg-background data-[state=active]:text-primary transition-all cursor-pointer"
@@ -569,6 +576,13 @@ function CorpoPage() {
           >
             <Scale className="h-4 w-4 shrink-0" />
             <span>Bioimpedância</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="vitals"
+            className="rounded-xl font-bold text-xs py-2 flex items-center justify-center gap-1.5 data-[state=active]:bg-background data-[state=active]:text-primary transition-all cursor-pointer"
+          >
+            <Activity className="h-4 w-4 shrink-0" />
+            <span>Sinais Vitais</span>
           </TabsTrigger>
         </TabsList>
 
@@ -1241,6 +1255,11 @@ function CorpoPage() {
               </div>
             </>
           )}
+        </TabsContent>
+
+        {/* Tab C: Sinais Vitais do Galaxy Watch (Sono, FC, SpO2, Pressão e treinos) */}
+        <TabsContent value="vitals" className="space-y-6 focus-visible:outline-none">
+          <WatchMirrorCard userId={user?.id} />
         </TabsContent>
       </Tabs>
 

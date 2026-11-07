@@ -4,7 +4,16 @@ import { useAuth } from "@/lib/auth-context";
 import { getLocalDate } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Moon, Heart, Bed, Activity, Watch, RotateCw, Sparkles, Flame, Timer, MapPin } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Moon, Heart, Bed, Activity, Watch, RotateCw, Sparkles, Flame, Timer, MapPin, Wind, HeartPulse, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 interface WatchMirrorCardProps {
@@ -21,6 +30,12 @@ type HealthMetrics = {
   avg_heart_rate: number | null;
   min_heart_rate: number | null;
   max_heart_rate: number | null;
+  spo2_percentage: number | null;
+  spo2_min_percentage: number | null;
+  blood_pressure_systolic: number | null;
+  blood_pressure_diastolic: number | null;
+  blood_pressure_time: string | null;
+  blood_pressure_source: string | null;
   source: string | null;
   updated_at: string | null;
 };
@@ -95,6 +110,13 @@ export function WatchMirrorCard({ userId }: WatchMirrorCardProps) {
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
+  // Registro manual de pressão — necessário porque a Samsung Health não
+  // exporta pressão arterial para o Health Connect em várias versões.
+  const [bpOpen, setBpOpen] = useState(false);
+  const [bpSys, setBpSys] = useState("");
+  const [bpDia, setBpDia] = useState("");
+  const [bpSaving, setBpSaving] = useState(false);
+
   const loadData = async (showToast = false) => {
     if (!currentUserId) return;
     setLoading(true);
@@ -148,6 +170,72 @@ export function WatchMirrorCard({ userId }: WatchMirrorCardProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUserId]);
 
+  const saveBloodPressure = async () => {
+    if (!currentUserId) return;
+
+    const sys = parseInt(bpSys, 10);
+    const dia = parseInt(bpDia, 10);
+
+    if (!Number.isFinite(sys) || !Number.isFinite(dia)) {
+      toast.error("Informe os dois valores.");
+      return;
+    }
+    if (sys < 60 || sys > 250) {
+      toast.error("Sistólica deve estar entre 60 e 250 mmHg.");
+      return;
+    }
+    if (dia < 30 || dia > 150) {
+      toast.error("Diastólica deve estar entre 30 e 150 mmHg.");
+      return;
+    }
+    if (dia >= sys) {
+      toast.error("A diastólica precisa ser menor que a sistólica.");
+      return;
+    }
+
+    setBpSaving(true);
+    try {
+      const basePayload = {
+        user_id: currentUserId,
+        log_date: getLocalDate(),
+        blood_pressure_systolic: sys,
+        blood_pressure_diastolic: dia,
+        blood_pressure_time: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      let { error } = await supabase
+        .from("daily_health_metrics")
+        .upsert(
+          { ...basePayload, blood_pressure_source: "manual" },
+          { onConflict: "user_id,log_date" },
+        );
+
+      // Se a coluna blood_pressure_source ainda não existir no Supabase
+      // (migration pendente), salva mesmo assim — o valor é o que importa.
+      if (error && /blood_pressure_source|column/i.test(error.message ?? "")) {
+        ({ error } = await supabase
+          .from("daily_health_metrics")
+          .upsert(basePayload, { onConflict: "user_id,log_date" }));
+      }
+
+      if (error) throw error;
+
+      toast.success("Pressão registrada!");
+      setBpOpen(false);
+      setBpSys("");
+      setBpDia("");
+      await loadData();
+    } catch (e) {
+      console.error("Erro ao registrar pressão:", e);
+      toast.error(
+        "Não foi possível registrar. Rode a migration 20261103_spo2_blood_pressure.sql no Supabase.",
+      );
+    } finally {
+      setBpSaving(false);
+    }
+  };
+
   const totalSleepSec = metrics?.sleep_duration_seconds ?? 0;
   const deepSec = metrics?.sleep_deep_seconds ?? 0;
   const remSec = metrics?.sleep_rem_seconds ?? 0;
@@ -160,8 +248,12 @@ export function WatchMirrorCard({ userId }: WatchMirrorCardProps) {
 
   const hasSleep = totalSleepSec > 0;
   const hasHeart = metrics?.resting_heart_rate != null || metrics?.avg_heart_rate != null;
+  const hasSpo2 = metrics?.spo2_percentage != null;
+  const hasBloodPressure =
+    metrics?.blood_pressure_systolic != null && metrics?.blood_pressure_diastolic != null;
+  const hasVitals = hasSpo2 || hasBloodPressure;
   const hasWorkouts = workouts.length > 0;
-  const hasAnyData = hasSleep || hasHeart || hasWorkouts;
+  const hasAnyData = hasSleep || hasHeart || hasWorkouts || hasVitals;
 
   // Estimativa leve de recuperação, combinando sono e FC de repouso
   const recoveryLabel = (() => {
@@ -182,15 +274,17 @@ export function WatchMirrorCard({ userId }: WatchMirrorCardProps) {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-sm">Sono & Coração</span>
-              {metrics?.source === "health_connect" && (
+              <span className="font-semibold text-sm">Sinais Vitais & Sono</span>
+              {metrics?.source && (
                 <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                  Galaxy Watch
+                  {metrics.source === "samsung_health" ? "Samsung Health" : "Galaxy Watch"}
                 </span>
               )}
             </div>
             <p className="text-[11px] text-muted-foreground truncate">
-              Lido direto do Health Connect pelo FitWell Bridge
+              {metrics?.source === "samsung_health"
+                ? "Lido direto do Samsung Health pelo FitWell Bridge"
+                : "Lido direto do Health Connect pelo FitWell Bridge"}
             </p>
           </div>
         </div>
@@ -323,6 +417,139 @@ export function WatchMirrorCard({ userId }: WatchMirrorCardProps) {
           </div>
         </div>
       )}
+
+      {/* Sinais Vitais: Oxigenação (SpO2) e Pressão Arterial */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+        {/* Oxigenação no Sangue */}
+        <div className="rounded-xl border bg-secondary/30 p-3">
+          <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
+            <span className="font-medium flex items-center gap-1.5">
+              <Wind className="h-3.5 w-3.5 text-cyan-500" />
+              Oxigenação (SpO2)
+            </span>
+            {hasSpo2 && (
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-600 dark:text-cyan-400">
+                {metrics.spo2_percentage! >= 95 ? "Normal" : "Atenção"}
+              </span>
+            )}
+          </div>
+
+          {hasSpo2 ? (
+            <>
+              <div className="text-xl sm:text-2xl font-bold tracking-tight text-cyan-600 dark:text-cyan-400">
+                {Math.round(metrics.spo2_percentage!)}
+                <span className="text-xs font-normal text-muted-foreground ml-0.5">%</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                {metrics.spo2_min_percentage != null &&
+                metrics.spo2_min_percentage < metrics.spo2_percentage!
+                  ? `Mínima registrada: ${Math.round(metrics.spo2_min_percentage)}%`
+                  : "Saturação arterial de oxigênio"}
+              </p>
+            </>
+          ) : (
+            <div className="py-2">
+              <p className="text-lg font-bold text-muted-foreground">—</p>
+              <p className="text-[11px] text-muted-foreground">Aguardando medição do relógio</p>
+            </div>
+          )}
+        </div>
+
+        {/* Pressão Arterial — sempre visível, com registro manual */}
+        <div className="rounded-xl border bg-secondary/30 p-3">
+          <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
+            <span className="font-medium flex items-center gap-1.5">
+              <HeartPulse className="h-3.5 w-3.5 text-rose-500" />
+              Pressão Arterial
+            </span>
+            {hasBloodPressure && metrics.blood_pressure_time && (
+              <span className="text-[10px] text-muted-foreground">
+                {formatClock(metrics.blood_pressure_time)}
+                {metrics.blood_pressure_source === "manual" ? " · manual" : ""}
+              </span>
+            )}
+          </div>
+
+          {hasBloodPressure ? (
+            <>
+              <div className="text-xl sm:text-2xl font-bold tracking-tight text-rose-600 dark:text-rose-400">
+                {metrics.blood_pressure_systolic}
+                <span className="text-base font-normal text-muted-foreground mx-1">/</span>
+                {metrics.blood_pressure_diastolic}
+                <span className="text-xs font-normal text-muted-foreground ml-1">mmHg</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                {metrics.blood_pressure_systolic! <= 120 && metrics.blood_pressure_diastolic! <= 80
+                  ? "Ótima (Padrão 12/8)"
+                  : metrics.blood_pressure_systolic! <= 130 && metrics.blood_pressure_diastolic! <= 85
+                    ? "Normal"
+                    : "Aferição recente"}
+              </p>
+            </>
+          ) : (
+            <div className="py-2">
+              <p className="text-lg font-bold text-muted-foreground">—</p>
+              <p className="text-[11px] text-muted-foreground">Sem aferição registrada</p>
+            </div>
+          )}
+
+          <Dialog open={bpOpen} onOpenChange={setBpOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-1 -ml-2 h-7 text-xs text-primary gap-1"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setBpOpen(true);
+                }}
+              >
+                <Plus className="h-3 w-3" />
+                Registrar
+              </Button>
+            </DialogTrigger>
+            <DialogContent onClick={(e) => e.stopPropagation()}>
+              <DialogHeader>
+                <DialogTitle>Registrar pressão arterial</DialogTitle>
+              </DialogHeader>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Sistólica (máxima)</p>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="120"
+                    value={bpSys}
+                    onChange={(e) => setBpSys(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Diastólica (mínima)</p>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="80"
+                    value={bpDia}
+                    onChange={(e) => setBpDia(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <p className="text-[11px] text-muted-foreground">
+                Meça sentado, braço apoiado na altura do coração e em repouso por 5 minutos.
+              </p>
+
+              <DialogFooter>
+                <Button onClick={saveBloodPressure} disabled={bpSaving}>
+                  {bpSaving ? "Salvando…" : "Salvar"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
 
       {/* Treinos detectados pelo relógio (Esteira, Corrida, Musculação…) */}
       {hasWorkouts && (

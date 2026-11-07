@@ -2079,7 +2079,9 @@ Regras de Ação:
 17. Registrar Bioimpedância: Quando o usuário relatar dados de um novo exame de bioimpedância (ex: "anota meu exame: 85.5kg, 11.6% de gordura, 41.3kg de músculo, visceral 7, idade metabólica 50"), use a ferramenta 'fitwell_action' com action='log_bioimpedance' com weight_kg=85.5, body_fat_pct=11.6, muscle_mass_kg=41.3, visceral_fat=7, metabolic_age=50 (o app salva o exame e sincroniza o peso automaticamente).
 18. Consultar Sono do Galaxy Watch: Quando o usuário perguntar como dormiu, quantas horas dormiu ou sobre a qualidade do sono (ex: "Hermes, como foi meu sono?", "quantas horas dormi ontem?"), use a ferramenta 'fitwell_action' com action='get_sleep' (e opcionalmente date='YYYY-MM-DD'). Retorna duração total, sono profundo, REM, leve e tempo acordado. Se não houver registro, oriente o usuário a conferir se dormiu com o Galaxy Watch no pulso e sincronizou o FitWell Bridge.
 19. Consultar Espelho do Relógio (Sono + Coração + Passos + Treinos): Quando o usuário perguntar sobre recuperação, prontidão para treino, frequência cardíaca de repouso ou quiser um resumo geral do relógio (ex: "como está minha recuperação hoje?", "qual minha FC de repouso?", "me dá o resumo do relógio"), use a ferramenta 'fitwell_action' com action='get_health_metrics' (e opcionalmente date='YYYY-MM-DD'). Considere SEMPRE essas métricas ao sugerir intensidade, volume ou descanso no treino: sono curto (< 6h) ou FC de repouso elevada pedem cautela.
-20. Consultar Treinos Gravados pelo Galaxy Watch: Quando o usuário perguntar sobre cardios ou atividades que o relógio detectou sozinho (ex: "fiz esteira hoje?", "como foi meu cardio?", "quais treinos o relógio registrou essa semana?", "quantas calorias queimei na esteira?"), use a ferramenta 'fitwell_action' com action='get_watch_workouts' (opcionalmente days=N para os últimos N dias, ou date='YYYY-MM-DD'). Cada sessão traz tipo de exercício (Esteira, Corrida, Musculação…), duração, calorias ativas, distância e FC média/máxima do treino. IMPORTANTE: esses são treinos DETECTADOS PELO RELÓGIO, diferentes dos treinos estruturados do app (que usam action='get_workout_session'). Nunca some as calorias do relógio à meta de calorias diárias do usuário — a meta TDEE já considera a atividade; use esses dados apenas para contexto e orientação.`;
+20. Consultar Treinos Gravados pelo Galaxy Watch: Quando o usuário perguntar sobre cardios ou atividades que o relógio detectou sozinho (ex: "fiz esteira hoje?", "como foi meu cardio?", "quais treinos o relógio registrou essa semana?", "quantas calorias queimei na esteira?"), use a ferramenta 'fitwell_action' com action='get_watch_workouts' (opcionalmente days=N para os últimos N dias, ou date='YYYY-MM-DD'). Cada sessão traz tipo de exercício (Esteira, Corrida, Musculação…), duração, calorias ativas, distância e FC média/máxima do treino. IMPORTANTE: esses são treinos DETECTADOS PELO RELÓGIO, diferentes dos treinos estruturados do app (que usam action='get_workout_session'). Nunca some as calorias do relógio à meta de calorias diárias do usuário — a meta TDEE já considera a atividade; use esses dados apenas para contexto e orientação.
+21. Registrar Pressão Arterial: Quando o usuário relatar uma aferição de pressão (ex: "minha pressão deu 128 por 82", "minha pressão foi 12 por 8", "anota minha pressão 130/85"), use a ferramenta 'fitwell_action' com action='log_blood_pressure', systolic=128 e diastolic=82 (ou envie raw_text com a fala do usuário). Notações abreviadas como '12 por 8' são automaticamente convertidas para 120/80 mmHg. Salva no diário de saúde e classifica segundo as diretrizes da SBC.
+22. Consultar Pressão Arterial: Quando o usuário perguntar qual foi sua última pressão arterial ou como está a pressão (ex: "Hermes, qual foi minha última pressão?", "como está minha pressão arterial?"), use a ferramenta 'fitwell_action' com action='get_blood_pressure' (opcionalmente date='YYYY-MM-DD'). Retorna o valor, classificação da Sociedade Brasileira de Cardiologia e horário da aferição.`;
 
   if (loading) {
     return (
@@ -2316,11 +2318,25 @@ Regras de Ação:
               Exemplo: <em>"Anota meu exame: 85.5kg, 11.6% gordura, 41.3kg músculo, visceral 7"</em>. Registra no banco, calcula variações vs exame anterior e sincroniza o peso.
             </div>
           </div>
-          <div className="p-2.5 rounded-lg bg-background border border-border/60 space-y-1 sm:col-span-2">
+          <div className="p-2.5 rounded-lg bg-background border border-border/60 space-y-1">
             <div className="font-semibold text-foreground">14. Consultar Detalhes do Treino (Cargas, Séries & Cardio)</div>
             <div className="text-[11px] text-muted-foreground">
               Ação: <code>action: "get_workout_session"</code><br />
               Exemplo: <em>"Hermes, quais foram as cargas do meu treino de costas de hoje?"</em>. Retorna a sessão com todas as séries, cargas executadas (kg), repetições, anotações de cardio e volume total acumulado.
+            </div>
+          </div>
+          <div className="p-2.5 rounded-lg bg-background border border-border/60 space-y-1">
+            <div className="font-semibold text-foreground">15. Registrar Pressão Arterial</div>
+            <div className="text-[11px] text-muted-foreground">
+              Ação: <code>action: "log_blood_pressure"</code><br />
+              Exemplo: <em>"Hermes, minha pressão deu 128 por 82"</em> ou <em>"12 por 8"</em>. Grava sistólica e diastólica, classifica segundo a SBC e atualiza o card de Sinais Vitais no app.
+            </div>
+          </div>
+          <div className="p-2.5 rounded-lg bg-background border border-border/60 space-y-1 sm:col-span-2">
+            <div className="font-semibold text-foreground">16. Consultar Pressão Arterial</div>
+            <div className="text-[11px] text-muted-foreground">
+              Ação: <code>action: "get_blood_pressure"</code><br />
+              Exemplo: <em>"Hermes, qual foi minha última pressão?"</em> ou <em>"como está minha pressão hoje?"</em>. Retorna valor, horário, origem (relógio ou manual) e classificação da SBC.
             </div>
           </div>
         </div>

@@ -2,6 +2,67 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [07/11/2026] - Claude Code (Home enxuta: resumo do relógio + aba Sinais Vitais em Corpo)
+
+- **Problema**: o card "Sinais Vitais & Sono" ocupava mais de uma tela na Home, que já tinha brief do coach, calorias, macros, passos, treino, água, peso, relatório e heatmap. Somado a isso, o Bridge passou a ler o Samsung Health direto e cada métrica nova empurrava o conteúdo acionável para baixo.
+- **Nova separação**:
+  - **Home** → `WatchVitalsSummary` (`src/components/watch-vitals-summary.tsx`): card compacto com 4 números (Sono, FC, SpO2, Pressão) e atalho "Detalhes". Não renderiza quando não há dados, então não deixa espaço vazio.
+  - **Corpo** → terceira aba **"Sinais Vitais"** com o `WatchMirrorCard` completo (estágios do sono, faixa de FC, SpO2, pressão com registro manual e treinos do relógio).
+- **Rota `app.corpo`**: ganhou `validateSearch` com `{ tab?: string }`; `?tab=vitals` abre direto na aba nova. O card da Home linka para lá.
+- **Badge de origem**: antes só aparecia com `source = 'health_connect'`. Agora exibe **"Samsung Health"** ou **"Galaxy Watch"**, com subtítulo correspondente.
+- **Validação**: `npm run build` aprovado (client e SSR); `tsc` sem erros nos arquivos alterados.
+- **Deploy**: `https://fitwellhub.welloliver.workers.dev` — Version ID `a1f6d527-3068-4d3c-8d84-6a49fadd9433`.
+
+### Complemento — fonte única de treinos no FitWell Bridge (Android)
+
+- **Causa-raiz da duplicata**: `trySyncWatchWorkouts` (Health Connect) e `trySyncSamsungWorkouts` (Samsung Health) rodavam sempre. Como o `session_id` difere (`samsung:<início>` vs. id do HC), o upsert criava **duas linhas** para a mesma caminhada — na tela apareciam "Caminhada 29 min · 17 kcal" e "Walking 26 min · 178 kcal" com a mesma distância.
+- **Correção (`SyncHelper.performDualSync`)**: o Samsung Health é tentado primeiro e, quando entrega sessões, o Health Connect é ignorado. Se o Samsung não trouxer nada, o Health Connect volta a ser a fonte.
+- **Limpeza das duplicatas antigas**: `cleanup-duplicate-workouts.sql` — remove linhas da rota do Health Connect (gravadas como `source = 'galaxy_watch'`, não `'health_connect'`) com início a menos de 30 min de uma linha `samsung_health` no mesmo dia. Executado em 07/11/2026: 3 linhas apagadas (05, 06 e 07/11), com backup em `backup-duplicate-workouts-2026-11-07.json`.
+- **Nome do treino**: o Samsung entrega o tipo em inglês ("Walking"); `getSamsungExerciseTypeName` converte para o mesmo vocabulário do Health Connect ("Caminhada").
+- **Validado no aparelho em 07/11/2026**: APK instalado pelo usuário; após um sync real, a sessão de 07/11 ficou só com `samsung_health` (`exercise_type = 'Caminhada'`) e nenhuma linha `galaxy_watch` reapareceu. A duplicata está resolvida ponta a ponta.
+
+## [03/11/2026] - Antigravity (Oxigenação SpO2 e Pressão Arterial do Galaxy Watch)
+
+- **Migration `20261103_spo2_blood_pressure.sql`** (aplicar manualmente no SQL Editor):
+  - Adiciona a `daily_health_metrics`: `spo2_percentage`, `spo2_min_percentage`, `blood_pressure_systolic`, `blood_pressure_diastolic`, `blood_pressure_time`.
+- **FitWell Bridge v0.4.0 (Android)**:
+  - Novas permissões `READ_OXYGEN_SATURATION` e `READ_BLOOD_PRESSURE` no manifest e no conjunto *avançado* (não bloqueiam o sync de passos).
+  - `SyncHelper.trySyncHealthMetrics()` passou a ler `OxygenSaturationRecord` numa janela unificada de **18h de D-1 até 24h de D**, capturando tanto a aferição manual do dia quanto a medição automática do sono. Leituras fora de 50–100% são descartadas como artefato de sensor.
+  - `BloodPressureRecord`: busca a última aferição dos **últimos 30 dias** e guarda o horário real da medição em `blood_pressure_time` (aferições são esporádicas, então o dia do registro não coincide com o dia do sync). Valores fora de 60–250 mmHg sistólica / 30–150 diastólica são descartados.
+  - `SupabaseClient.upsertHealthMetrics()`: novos campos no payload + **fallback defensivo**: se o PostgREST responder 400 por coluna inexistente (migration pendente), reenvia sem os campos novos para não quebrar o sync de sono/FC.
+  - Diagnóstico da tela inicial ganhou as linhas `tvOxygenSaturation` e `tvBloodPressure`.
+- **Card "Sinais Vitais & Sono" (`src/components/watch-mirror-card.tsx`)** (antes "Sono & Coração"):
+  - Dois cards novos: **Oxigenação (SpO2)** com % atual, mínima da noite e selo Normal/Atenção; **Pressão Arterial** com sistólica/diastólica, horário da aferição e classificação simples.
+  - `hasAnyData` agora considera sinais vitais — o card não cai mais no estado vazio quando só há SpO2/PA.
+- **Hermes (`src/server-fns/telegram.functions.ts`)**:
+  - `get_health_metrics` passou a reportar `🫁 Oxigenação (SpO2)` e `🩺 Pressão arterial`, e considera ambos em `hasAnyData`.
+- **Limitação documentada**: o **estresse da Samsung não é acessível** — o Health Connect não possui tipo de registro para estresse (confirmado na listagem dos 45 record types da `connect-client:1.1.0`). ECG também não (sem record type; o Samsung Health Monitor trata como exame regulado). Alternativa futura: `HeartRateVariabilityRmssdRecord` para um indicador de variabilidade/recuperação.
+- **Validação Técnica**:
+  - `npm run build` aprovado (cliente e SSR); `.\gradlew.bat assembleDebug` aprovado (APK v0.4.0).
+  - Deploy em `https://fitwellhub.welloliver.workers.dev` — Version ID `1b74f63f-e5cb-4e28-9562-6b6c5b96e568`.
+  - **Pendente**: rodar a migration no Supabase e instalar o APK v0.4.0.
+
+### Complemento — registro manual de pressão (mesmo dia)
+
+- **Diagnóstico**: mesmo com o app autorizado e os toggles do Samsung Health ligados, o Health Connect continuou sem nenhum `BloodPressureRecord`. Verificação via PostgREST confirmou que as colunas novas existiam (HTTP 200) e a linha de diagnóstico do bridge exibia "Sem medição hoje" (não "Conceder Permissões") — ou seja, o problema está no elo **Samsung Health → Health Connect**, que nessa versão de firmware não exporta pressão arterial.
+- **Migration `20261103_blood_pressure_source.sql`**: adiciona `blood_pressure_source TEXT DEFAULT 'health_connect'` para distinguir aferição do relógio (`health_connect`) de digitada (`manual`). **Aplicada e confirmada via PostgREST (HTTP 200)**.
+- **Card "Sinais Vitais & Sono"**: a seção de sinais vitais passou a ser **sempre renderizada** (antes sumia sem dados). O bloco de pressão agora exibe estado vazio com o botão **"+ Registrar"**, que abre um diálogo com sistólica/diastólica e orientação de medição. Validação no cliente: sistólica 60–250, diastólica 30–150 e diastólica < sistólica.
+- **Resiliência**: se a coluna `blood_pressure_source` ainda não existir, o upsert é refeito sem ela — o valor é gravado de qualquer forma.
+- **Deploy**: Version ID `ceac0fdb-fb00-4831-8b13-4119ab6ff6be`.
+- **Nota de precedência**: o sync do bridge usa `resolution=merge-duplicates`, então um valor manual **não** é apagado nas rodadas seguintes enquanto o Health Connect não fornecer pressão. Se a Samsung passar a exportar, o valor do relógio sobrescreve o manual.
+
+### Complemento 2 — Hermes Telegram: Registro e Consulta de Pressão Arterial (mesmo dia)
+
+- **Novas Ações no Endpoint Unificado do Hermes (`src/server-fns/telegram.functions.ts`)**:
+  - `log_blood_pressure`: permite ao usuário registrar pressão arterial por texto ou áudio (ex: *"Hermes, minha pressão deu 128 por 82"*, *"pressão 12 por 8"*, *"120/80"*). Faz parsing inteligente de texto livre e converte automaticamente a notação brasileira (ex: `12` -> `120`, `8` -> `80`). Valida limites clínicos (sistólica 60–250, diastólica 30–150, diastólica < sistólica), classifica segundo as diretrizes da SBC (Ótima, Normal, Pré-hipertensão, Hipertensão Estágio 1/2/3) e grava em `daily_health_metrics` com `blood_pressure_source = 'manual'` (com fallback se a coluna ainda não existir).
+  - `get_blood_pressure`: consulta a última pressão arterial registrada ou a de uma data específica (`date`), retornando valor, classificação SBC, data/hora e fonte (relógio ou manual).
+  - Atualização em `get_health_metrics`: agora indica `(manual)` quando a pressão do resumo do relógio foi registrada manualmente.
+- **Instruções e Interface do Hermes Agent (`src/routes/app.ia.tsx`)**:
+  - Adicionadas regras 21 e 22 ao `hermesSystemInstruction` (prompt pronto para copiar).
+  - Adicionados cards 15 e 16 na listagem de tools do Hermes dentro do app.
+- **Validação Técnica**: `npm run build` aprovado com sucesso (cliente e SSR compilados).
+- **Deploy**: `https://fitwellhub.welloliver.workers.dev` — Version ID `0975f78c-663d-4841-b471-0c5ffccf2444`.
+
 ## [02/11/2026] - Antigravity (Treinos do Galaxy Watch + Bioimpedância do Relógio)
 - **Nova Tabela `watch_workouts` (`supabase/migrations/20261102_watch_workouts.sql`)**:
   - Armazena sessões de exercício detectadas pelo Galaxy Watch (Esteira, Corrida, Musculação, Caminhada, Ciclismo…): tipo e código do exercício, título, início/fim, duração em minutos, calorias ativas, distância e FC média/máxima/mínima.

@@ -830,6 +830,12 @@ export type Database = {
           avg_heart_rate: number | null;
           min_heart_rate: number | null;
           max_heart_rate: number | null;
+          spo2_percentage: number | null;
+          spo2_min_percentage: number | null;
+          blood_pressure_systolic: number | null;
+          blood_pressure_diastolic: number | null;
+          blood_pressure_time: string | null;
+          blood_pressure_source: string | null;
           source: string | null;
           created_at: string;
           updated_at: string;
@@ -849,6 +855,12 @@ export type Database = {
           avg_heart_rate?: number | null;
           min_heart_rate?: number | null;
           max_heart_rate?: number | null;
+          spo2_percentage?: number | null;
+          spo2_min_percentage?: number | null;
+          blood_pressure_systolic?: number | null;
+          blood_pressure_diastolic?: number | null;
+          blood_pressure_time?: string | null;
+          blood_pressure_source?: string | null;
           source?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -868,6 +880,12 @@ export type Database = {
           avg_heart_rate?: number | null;
           min_heart_rate?: number | null;
           max_heart_rate?: number | null;
+          spo2_percentage?: number | null;
+          spo2_min_percentage?: number | null;
+          blood_pressure_systolic?: number | null;
+          blood_pressure_diastolic?: number | null;
+          blood_pressure_time?: string | null;
+          blood_pressure_source?: string | null;
           source?: string | null;
           created_at?: string;
           updated_at?: string;

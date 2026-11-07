@@ -42,7 +42,7 @@ import { toast } from "sonner";
 import { Heatmap } from "@/components/Heatmap";
 import { DailyBriefingCard } from "@/components/daily-briefing-card";
 import { StepsCard } from "@/components/steps-card";
-import { WatchMirrorCard } from "@/components/watch-mirror-card";
+import { WatchVitalsSummary } from "@/components/watch-vitals-summary";
 import { SafeBoundary } from "@/components/safe-boundary";
 import { determineNextWorkout } from "@/lib/workout-rotation";
 
@@ -451,9 +451,9 @@ function TodayPage() {
         <StepsCard userId={user?.id} dailyStepGoal={10000} />
       </SafeBoundary>
 
-      {/* Espelho do Galaxy Watch: Sono e Frequência Cardíaca (FitWell Bridge) */}
-      <SafeBoundary name="WatchMirrorCard">
-        <WatchMirrorCard userId={user?.id} />
+      {/* Resumo compacto do Galaxy Watch — o detalhe completo fica em Corpo > Sinais Vitais */}
+      <SafeBoundary name="WatchVitalsSummary">
+        <WatchVitalsSummary userId={user?.id} />
       </SafeBoundary>
 
       {/* Card de Destaque: Treino de Hoje & Exercícios Realizados */}

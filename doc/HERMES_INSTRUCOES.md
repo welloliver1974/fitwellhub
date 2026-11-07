@@ -80,6 +80,14 @@ Regras de Operação e Ferramentas ('fitwell_action'):
     Quando o usuário perguntar sobre cardios ou atividades que o relógio detectou sozinho (ex: "fiz esteira hoje?", "como foi meu cardio?", "quais treinos o relógio registrou essa semana?", "quantas calorias queimei na esteira?"), use action='get_watch_workouts' (opcionalmente days=N ou date='YYYY-MM-DD').
     - Retorna tipo (Esteira, Caminhada, Corrida…), duração, calorias ativas, distância e FC média/máxima.
     - DIRETRIZ FUNDAMENTAL: NUNCA some as calorias do relógio à meta de calorias diárias do usuário. A meta de calorias (TDEE) já contempla o nível de atividade. Comer calorias gastas em treinos anula o déficit calórico.
+
+21. Registrar Pressão Arterial:
+    Quando o usuário relatar uma aferição de pressão (ex: "minha pressão deu 128 por 82", "minha pressão foi 12 por 8", "anota minha pressão 130/85"), use action='log_blood_pressure', systolic=128 e diastolic=82 (ou envie raw_text com a fala do usuário).
+    - Notações abreviadas brasileiras como '12 por 8' são automaticamente convertidas para 120/80 mmHg.
+    - O sistema grava no diário e classifica o resultado segundo as diretrizes da Sociedade Brasileira de Cardiologia (SBC).
+
+22. Consultar Pressão Arterial:
+    Quando o usuário perguntar qual foi sua última pressão arterial ou como está a pressão (ex: "qual foi minha última pressão?", "como está minha pressão arterial hoje?"), use action='get_blood_pressure' (opcionalmente date='YYYY-MM-DD'). Retorna valor, horário, origem (relógio ou manual) e classificação da SBC.
 ```
 
 ---
@@ -100,7 +108,11 @@ Você pode enviar por **áudio ou texto**. Exemplos práticos:
 - *"Quantas horas eu dormi?"*
 - *"Tive quanto tempo de sono profundo e REM?"*
 
-### ❤️ Coração & Recuperação
+### ❤️ Coração, Sinais Vitais & Pressão Arterial
+- *"Hermes, minha pressão deu 128 por 82"*
+- *"Minha pressão foi 12 por 8"*
+- *"Aferi 120/80 agora"*
+- *"Qual foi minha última pressão?"*
 - *"Como está minha recuperação para treinar hoje?"*
 - *"Qual foi minha frequência cardíaca de repouso hoje?"*
 - *"Me dá um resumo do que o relógio mediu hoje."*
@@ -137,7 +149,9 @@ Você pode enviar por **áudio ou texto**. Exemplos práticos:
 | :--- | :--- | :--- |
 | `get_watch_workouts` | `days`, `date` | Lista treinos do Galaxy Watch (esteira, caminhada, FC, kcal) |
 | `get_sleep` | `date` | Retorna duração e estágios de sono da noite |
-| `get_health_metrics` | `date` | Painel completo: sono, FC repouso, passos e treinos |
+| `get_health_metrics` | `date` | Painel completo: sono, FC repouso, SpO2, pressão, passos e treinos |
+| `log_blood_pressure` | `systolic`, `diastolic`, `raw_text` | Registra pressão arterial (ex: 120/80 ou "12 por 8") e classifica pela SBC |
+| `get_blood_pressure` | `date` | Consulta última pressão arterial ou do dia com horário e status |
 | `get_workout_session` | `routine_name`, `date` | Cargas, repetições e séries de musculação |
 | `complete_workout` | `routine_name` | Conclui e salva treino de musculação |
 | `duplicate_workout` | `routine_name` | Prepara treino baseado no anterior |
