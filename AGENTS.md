@@ -2,7 +2,7 @@
 
 > Este é o web app do projeto. A documentação mestra (o que é o sistema inteiro, arquitetura, banco de dados, armadilhas e decisões) está em:
 >
-> **`E:\Apps\health-sync-clone\AGENTS.md`**
+> **`E:\Apps\health-sync-clone\android-bridge\docs\AGENTS.md`**
 >
 > Leia aquele arquivo primeiro. Este aqui cobre apenas o que é específico do web app.
 
