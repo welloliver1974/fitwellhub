@@ -1,5 +1,27 @@
 # FIXLOG — FitWell Hub
 
+## Sessão: 10/11/2026 — Restauração do Descanso Individualizado por Exercício (sobrescrita pelo Syncthing)
+
+### 🎯 Diagnóstico & Implementação
+1. **Problema Identificado**:
+   - O seletor de descanso por exercício (feature de 05/11 — commits `510c01e`, `771d95b`, `8d372c8`) desapareceu da ficha de treino (`src/routes/app.treinos.$id.tsx`).
+   - Causa raiz: o arquivo foi sobrescrito por uma cópia antiga vinda do notebook Windows (`PIFC52I`) via Syncthing, que chegou como `app.treinos.$id.sync-conflict-20261110-002115-PIFC52I.tsx`. O arquivo ativo voltou com 1139 linhas em CRLF e sem o `rest_seconds`.
+   - Agravantes: a branch `feat/watch-vitals-summary` estava 4 commits atrás da `main` (sem as 3 commits do descanso), e o Syncthing sincronizava até o `.git/` (index, HEAD, COMMIT_EDITMSG), gerando arquivos `*sync-conflict*` que viravam rotas fantasma no build.
+2. **Solução Implementada**:
+   - `src/routes/app.treinos.$id.tsx` restaurado a partir da `main` e **reaplicado o ajuste mobile de 09/11** (`fecf08f`, `ede6e68`): `flex-col sm:flex-row` no cabeçalho, `text-xl sm:text-3xl` + `break-words` no título, `whitespace-nowrap` no seletor de cardio.
+   - Merge da `main` na branch de deploy (commit `f5cd423`), trazendo `src/lib/rest-config.ts`, a migration `20261105_exercise_rest_seconds.sql` e os ajustes em `foco.tsx`, `index.tsx` e `telegram.functions.ts`.
+   - Arquivo normalizado para LF (estava integralmente em CRLF) e 76 arquivos de ruído de fim de linha revertidos.
+   - 9 arquivos `*sync-conflict*` movidos para `backups/sync-conflicts-20261110/`; `.stignore` da pasta `Apps` passou a ignorar `.git`, `node_modules`, `dist` e `*sync-conflict-*`.
+3. **Validação Técnica**:
+   - `npm run build` ✓ (5.08s) antes e depois do deploy.
+   - Deploy Cloudflare Workers: versão `cf4cf609-ac15-4513-ba8f-f7872a9fe557` em 100% do tráfego.
+   - Verificado no bundle servido por `fitwellhub.welloliver.workers.dev`: `rest_seconds`, `text-xl sm:text-3xl`, `break-words` e o texto "Descanso entre séries deste exercício" presentes.
+   - `SUPABASE_SERVICE_ROLE_KEY` confirmado como secret após o deploy (não foi removido pelo `wrangler deploy`).
+   - Dados preservados: coluna `exercises.rest_seconds` presente e populada (ex.: Remada curvada 120s, Puxada alta 90s).
+
+### ⚠️ Risco Remanescente
+   - A pasta `Apps` no Syncthing é `receiveonly` na VM: alterações feitas aqui podem ser sobrescritas pela cópia do notebook no próximo pull. O repositório está no GitHub (`f5cd423`), então a recuperação é um `git checkout`, mas o notebook deve rodar `git pull` para convergir.
+
 ## Sessão: 25/10/2026 — Correção de Falha de Renderização na Central de Configurações / IA e Aprimoramento da Navegação
 
 ### 🎯 Diagnóstico & Implementação
