@@ -2,6 +2,12 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [09/11/2026] - Codex (Seletor de atividade responsivo no cadastro de exercício)
+
+- **Problema**: no diálogo “Novo exercício”, o título “Tipo de atividade” e os botões “Musculação” / “Cardio” eram mantidos na mesma linha, podendo exceder a largura do diálogo em telas de celular.
+- **Correção**: em telas estreitas, o título agora fica acima dos botões; os botões podem quebrar linha e mantêm seus rótulos inteiros. Em telas maiores, o arranjo horizontal é preservado.
+- **Backup pré-alteração**: `backups/app.treinos.$id.tsx.2026-11-09.bak`.
+
 ## [07/11/2026] - Claude Code (Home enxuta: resumo do relógio + aba Sinais Vitais em Corpo)
 
 - **Problema**: o card "Sinais Vitais & Sono" ocupava mais de uma tela na Home, que já tinha brief do coach, calorias, macros, passos, treino, água, peso, relatório e heatmap. Somado a isso, o Bridge passou a ler o Samsung Health direto e cada métrica nova empurrava o conteúdo acionável para baixo.

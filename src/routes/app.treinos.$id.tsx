@@ -730,13 +730,13 @@ function WorkoutDetail() {
 
               {/* Seletor de Tipo e Parâmetros de Cardio */}
               <div className="p-3 border-t bg-muted/20 flex flex-col gap-2.5">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <span className="text-xs font-medium text-foreground">Tipo de atividade:</span>
-                  <div className="flex items-center gap-1 bg-muted p-0.5 rounded-lg border">
+                  <div className="flex max-w-full flex-wrap items-center gap-1 bg-muted p-0.5 rounded-lg border">
                     <button
                       type="button"
                       className={cn(
-                        "px-2.5 py-1 text-xs rounded-md transition-all font-medium cursor-pointer",
+                        "px-2.5 py-1 text-xs rounded-md transition-all font-medium cursor-pointer whitespace-nowrap",
                         !isCardioType
                           ? "bg-background text-foreground shadow-xs"
                           : "text-muted-foreground hover:text-foreground"
@@ -748,7 +748,7 @@ function WorkoutDetail() {
                     <button
                       type="button"
                       className={cn(
-                        "px-2.5 py-1 text-xs rounded-md transition-all font-medium cursor-pointer",
+                        "px-2.5 py-1 text-xs rounded-md transition-all font-medium cursor-pointer whitespace-nowrap",
                         isCardioType
                           ? "bg-amber-500 text-white shadow-xs"
                           : "text-muted-foreground hover:text-foreground"
