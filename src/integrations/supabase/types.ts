@@ -193,6 +193,7 @@ export type Database = {
           name: string;
           notes: string | null;
           position: number;
+          rest_seconds: number | null;
           user_id: string;
           workout_id: string;
         };
@@ -201,6 +202,7 @@ export type Database = {
           id?: string;
           name: string;
           notes?: string | null;
+          rest_seconds?: number | null;
           position?: number;
           user_id: string;
           workout_id: string;
@@ -211,6 +213,7 @@ export type Database = {
           name?: string;
           notes?: string | null;
           position?: number;
+          rest_seconds?: number | null;
           user_id?: string;
           workout_id?: string;
         };

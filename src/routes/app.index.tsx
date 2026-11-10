@@ -198,7 +198,11 @@ function TodayPage() {
       supabase
         .from("workouts")
         .select("id, name, created_at, workout_date")
-        .eq("user_id", userId),
+        .eq("user_id", userId)
+        // Desempate determinístico: entre fichas com a mesma letra (ex.: "A - ..."),
+        // a rotação usa sempre a mais recente — nunca uma cópia antiga do histórico.
+        .order("workout_date", { ascending: false })
+        .order("created_at", { ascending: false }),
       supabase
         .from("workout_sessions")
         .select("id, workout_id, name, completed_at")

@@ -265,7 +265,7 @@ function WorkoutsPage() {
 
     const { data: exs } = await supabase
       .from("exercises")
-      .select("id,name,position,notes")
+      .select("id,name,position,notes,rest_seconds")
       .eq("workout_id", w.id)
       .order("position");
 
@@ -278,13 +278,26 @@ function WorkoutsPage() {
 
       const { data: newExs, error: exErr } = await supabase
         .from("exercises")
-        .insert(exs.map((ex) => ({
-          name: ex.name,
-          position: ex.position,
-          notes: ex.notes,
-          user_id: user.id,
-          workout_id: newW.id
-        })))
+        .insert(exs.map((ex) => {
+          const row: {
+            name: string;
+            position: number;
+            notes: string | null;
+            user_id: string;
+            workout_id: string;
+            rest_seconds?: number;
+          } = {
+            name: ex.name,
+            position: ex.position,
+            notes: ex.notes,
+            user_id: user.id,
+            workout_id: newW.id,
+          };
+          // Só envia o descanso quando o exercício de origem tem valor configurado.
+          // Sem valor, a cópia herda o padrão do banco (mantém o comportamento antigo).
+          if (typeof ex.rest_seconds === "number") row.rest_seconds = ex.rest_seconds;
+          return row;
+        }))
         .select("id,name");
 
       if (exErr) return toast.error("Erro ao duplicar exercícios");

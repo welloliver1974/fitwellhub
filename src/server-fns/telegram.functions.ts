@@ -896,7 +896,7 @@ export const executeHermesAction = createServerFn({ method: "POST" })
       // Carregar exercícios e séries da ficha modelo
       const { data: sourceExercises } = await supabase
         .from("exercises")
-        .select("id, name, position, notes")
+        .select("id, name, position, notes, rest_seconds")
         .eq("workout_id", sourceWorkout.id)
         .order("position");
 
@@ -929,15 +929,26 @@ export const executeHermesAction = createServerFn({ method: "POST" })
 
       // Duplicar exercícios e séries associados
       for (const ex of sourceExercises || []) {
+        const newExRow: {
+          workout_id: string;
+          user_id: string;
+          name: string;
+          position: number;
+          notes: string | null;
+          rest_seconds?: number;
+        } = {
+          workout_id: duplicatedWorkout.id,
+          user_id: userId,
+          name: ex.name,
+          position: ex.position,
+          notes: ex.notes,
+        };
+        // Preserva o descanso configurado; se não houver, deixa o padrão do banco.
+        if (typeof ex.rest_seconds === "number") newExRow.rest_seconds = ex.rest_seconds;
+
         const { data: newEx } = await supabase
           .from("exercises")
-          .insert({
-            workout_id: duplicatedWorkout.id,
-            user_id: userId,
-            name: ex.name,
-            position: ex.position,
-            notes: ex.notes,
-          })
+          .insert(newExRow)
           .select()
           .single();
 

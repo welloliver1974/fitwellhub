@@ -22,12 +22,19 @@ import {
   calculateCardioCalories,
   formatCardioSummary,
 } from "@/lib/cardio-utils";
+import { resolveRestSeconds } from "@/lib/rest-config";
 
 export const Route = createFileRoute("/app/treinos/$id/foco")({
   component: FocusMode,
 });
 
-type Exercise = { id: string; name: string; position: number; notes?: string | null };
+type Exercise = {
+  id: string;
+  name: string;
+  position: number;
+  notes?: string | null;
+  rest_seconds?: number | null;
+};
 type WorkoutSet = {
   id: string;
   exercise_id: string;
@@ -116,7 +123,7 @@ function FocusMode() {
     }
   }, []);
 
-  const toggleCompleted = (setId: string) => {
+  const toggleCompleted = (setId: string, restSeconds?: number | null) => {
     setCompletedSets((prev) => {
       const next = new Set(prev);
       if (next.has(setId)) {
@@ -126,7 +133,8 @@ function FocusMode() {
         if (typeof navigator !== "undefined" && "vibrate" in navigator) {
           try { navigator.vibrate(40); } catch {}
         }
-        startRestTimer(restPreset); // Auto inicia o timer com tempo absoluto
+        const rest = resolveRestSeconds(restSeconds, restPreset);
+        if (rest > 0) startRestTimer(rest); // Descanso do exercício ou o preset escolhido
       }
       if (startedAt) saveDraft(next, setValues, startedAt);
       return next;
@@ -197,12 +205,23 @@ function FocusMode() {
       .maybeSingle();
     if (w) setWorkoutName(w.name);
 
-    const { data: ex } = await supabase
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const withRest: any = await supabase
       .from("exercises")
-      .select("id,name,position,notes")
+      .select("id,name,position,notes,rest_seconds")
       .eq("workout_id", id)
       .order("position");
-    setExercises((ex ?? []) as Exercise[]);
+    const ex: Exercise[] = (
+      withRest.error
+        ? (await supabase
+            .from("exercises")
+            .select("id,name,position,notes")
+            .eq("workout_id", id)
+            .order("position")).data
+        : withRest.data
+    ) ?? [];
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+    setExercises(ex);
 
     // Carregar peso corporal mais recente para cálculo calórico
     if (user?.id) {
@@ -335,8 +354,11 @@ function FocusMode() {
     });
     if (error) return toast.error(error.message);
     if (!isCardio) {
-      setRestSec(restPreset);
-      setRestRunning(true);
+      const rest = resolveRestSeconds(ex.rest_seconds, restPreset);
+      if (rest > 0) {
+        setRestSec(rest);
+        setRestRunning(true);
+      }
     }
     load();
   };
@@ -620,7 +642,7 @@ function FocusMode() {
                         <input
                           type="checkbox"
                           checked={done}
-                          onChange={() => toggleCompleted(s.id)}
+                          onChange={() => toggleCompleted(s.id, isCurrentCardio ? 0 : ex.rest_seconds)}
                           className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
                         />
                       </div>
