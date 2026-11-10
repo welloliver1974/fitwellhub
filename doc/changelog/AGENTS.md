@@ -7,6 +7,8 @@ Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hu
 - **Problema**: no diálogo “Novo exercício”, o título “Tipo de atividade” e os botões “Musculação” / “Cardio” eram mantidos na mesma linha, podendo exceder a largura do diálogo em telas de celular.
 - **Correção**: em telas estreitas, o título agora fica acima dos botões; os botões podem quebrar linha e mantêm seus rótulos inteiros. Em telas maiores, o arranjo horizontal é preservado.
 - **Backup pré-alteração**: `backups/app.treinos.$id.tsx.2026-11-09.bak`.
+- **Validação e publicação**: `npm run build` concluído; deploy publicado no Cloudflare Workers em `https://fitwellhub.welloliver.workers.dev`, versão `5c12d0f7-b783-471d-9dc3-2ba5dafe0c25`.
+- **Git**: commit `fecf08f` enviado para `origin/feat/watch-vitals-summary`.
 
 ## [07/11/2026] - Claude Code (Home enxuta: resumo do relógio + aba Sinais Vitais em Corpo)
 
