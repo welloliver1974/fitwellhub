@@ -2,6 +2,12 @@
 
 Registro de ações realizadas por agentes autônomos (IA) no projeto FitWell Hub.
 
+## [09/11/2026] - Codex (Cabeçalho responsivo na tela de treino)
+
+- **Problema**: em celulares, o título do treino e os controles do cabeçalho disputavam a mesma linha, fazendo o botão “Exercício” ultrapassar a largura disponível; ocorria também no Treino C.
+- **Correção**: o cabeçalho agora empilha título e ações em telas estreitas, reduz o título no celular e permite que nomes longos quebrem linha. Em telas maiores, mantém o arranjo horizontal.
+- **Escopo**: `src/routes/app.treinos.$id.tsx`, usado por todas as fichas de treino.
+
 ## [09/11/2026] - Codex (Seletor de atividade responsivo no cadastro de exercício)
 
 - **Problema**: no diálogo “Novo exercício”, o título “Tipo de atividade” e os botões “Musculação” / “Cardio” eram mantidos na mesma linha, podendo exceder a largura do diálogo em telas de celular.

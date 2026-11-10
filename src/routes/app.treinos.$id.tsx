@@ -624,8 +624,8 @@ function WorkoutDetail() {
         </Button>
       </div>
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           {editingName ? (
             <Input
               value={editNameValue}
@@ -635,12 +635,12 @@ function WorkoutDetail() {
                 if (e.key === "Escape") cancelNameEdit();
               }}
               onBlur={saveNameEdit}
-              className="text-3xl font-display font-bold h-auto py-1 px-2 w-64"
+              className="text-xl sm:text-3xl font-display font-bold h-auto py-1 px-2 w-full max-w-64"
               autoFocus
             />
           ) : (
             <>
-              <h1 className="text-3xl font-display font-bold">{workout.name}</h1>
+              <h1 className="text-xl sm:text-3xl font-display font-bold break-words">{workout.name}</h1>
               <Button variant="ghost" size="icon" onClick={startEditingName} className="h-7 w-7">
                 <PencilLine className="h-3.5 w-3.5 text-muted-foreground" />
               </Button>
@@ -650,7 +650,7 @@ function WorkoutDetail() {
             {formatLocalDate(workout.workout_date)}
           </p>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex w-fit items-center gap-1 self-end sm:self-auto">
           <Link to="/app/treinos/$id/foco" params={{ id }}>
             <Button size="icon" variant="outline" title="Modo foco">
               <Maximize2 className="h-4 w-4" />
