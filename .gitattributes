@@ -1,0 +1,18 @@
+# Normaliza fim de linha em todo o repositório.
+# Sem isso, o Git for Windows (core.autocrlf=true) converte os arquivos
+# para CRLF e o Syncthing propaga essa versão para a VM Linux, sujando o
+# working tree com milhares de linhas de diff fantasma.
+* text=auto eol=lf
+
+# Binários: nunca converter.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.pdf binary
+*.xlsx binary
+*.zip binary
